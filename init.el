@@ -16,27 +16,34 @@
   (show-paren-mode 1)
   (tool-bar-mode -1)
   (menu-bar-mode -1)
+  (defalias 'yes-or-no-p 'y-or-n-p)
 
   (setq hippie-expand-try-functions-list '(try-expand-dabbrev try-expand-dabbrev-all-buffers try-expand-dabbrev-from-kill try-complete-file-name-partially try-complete-file-name))
 
   ;; packages
-
-  (setq evil-search-module 'evil-search)
-
   (install-packages '(
 		      ;; evil packages
 		      evil
 		      evil-commentary
 		      evil-indent-plus
+		      evil-surround
+		      evil-exchange
 
 		      ;; non-evil
 		      avy
 		      magit
+		      flycheck
 		      ))
 
+  (setq-default flycheck-disabled-checkers '(perl-perlcritic))
+
+  (setq evil-search-module 'evil-search)
   (evil-mode)
   (evil-commentary-mode)
   (evil-indent-plus-default-bindings)
+  (global-evil-surround-mode)
+  (setq magit-display-buffer-function
+      #'magit-display-buffer-fullframe-status-v1)
 
   ;; key bindings
   (global-set-key "\C-ch" help-map)
@@ -50,8 +57,14 @@
     (nmap "C-w C-w" 'ace-window)
     (nmap "-" (lambda () (interactive) (dired ".")))
     (nmap "C-c C-c" 'avy-goto-word-or-subword-1)
+    (nmap "RET" 'save-buffer)
     (nmap "U U" 'magit-status)
+    (nmap ", f" 'imenu)
+    (nmap "SPC" 'find-file-in-project)
     (imap "TAB" 'hippie-expand)
+
+    (nmap "] q" 'next-error)
+    (nmap "[ q" 'previous-error)
 
     (after "dired"
       (define-key dired-mode-map (kbd "-") 'dired-up-directory)
