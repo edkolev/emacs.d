@@ -17,6 +17,9 @@
   (tool-bar-mode -1)
   (menu-bar-mode -1)
   (defalias 'yes-or-no-p 'y-or-n-p)
+  (require 'recentf)
+  (recentf-mode t)
+  (setq recentf-max-saved-items 50)
 
   (setq hippie-expand-try-functions-list '(try-expand-dabbrev try-expand-dabbrev-all-buffers try-expand-dabbrev-from-kill try-complete-file-name-partially try-complete-file-name))
 
@@ -45,6 +48,15 @@
   (setq magit-display-buffer-function
       #'magit-display-buffer-fullframe-status-v1)
 
+  ;; utils
+
+  (defun ido-recentf-open ()
+      "Use `ido-completing-read' to \\[find-file] a recent file"
+        (interactive)
+          (if (find-file (ido-completing-read "Find recent file: " recentf-list))
+                  (message "Opening file...")
+                  (message "Aborting")))
+
   ;; key bindings
   (global-set-key "\C-ch" help-map)
 
@@ -60,9 +72,15 @@
     (nmap "RET" 'save-buffer)
     (nmap "U U" 'magit-status)
     (nmap ", f" 'imenu)
-    (nmap "SPC" 'find-file-in-project)
-    (imap "TAB" 'hippie-expand)
+    (nmap "g SPC" 'find-file-in-project)
+    (nmap "SPC" 'ido-recentf-open)
+    (nmap "C-c o c" 'hl-line-mode)
 
+    (imap "TAB" 'hippie-expand)
+    (imap "C-e" 'end-of-line)
+    (imap "C-a" 'beginning-of-line-text)
+
+    (nmap "[ Q" 'first-error)
     (nmap "] q" 'next-error)
     (nmap "[ q" 'previous-error)
 
