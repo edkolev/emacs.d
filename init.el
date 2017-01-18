@@ -66,6 +66,9 @@
   (defun imap (lhs rhs) (define-key evil-insert-state-map (kbd lhs) rhs))
 
   (after "evil"
+    (setq evil-vsplit-window-right t)
+    (setq evil-split-window-below t)
+
     (nmap "C-w C-w" 'ace-window)
     (nmap "-" (lambda () (interactive) (dired ".")))
     (nmap "C-c C-c" 'avy-goto-word-or-subword-1)
@@ -75,14 +78,18 @@
     (nmap "g SPC" 'find-file-in-project)
     (nmap "SPC" 'ido-recentf-open)
     (nmap "C-c o c" 'hl-line-mode)
-
-    (imap "TAB" 'hippie-expand)
-    (imap "C-e" 'end-of-line)
-    (imap "C-a" 'beginning-of-line-text)
+    (nmap "C-c C-b" 'ibuffer)
+    (nmap "C-c C-r" 'ido-recentf-open)
 
     (nmap "[ Q" 'first-error)
     (nmap "] q" 'next-error)
     (nmap "[ q" 'previous-error)
+    (nmap "C-u" 'evil-scroll-up)
+
+    (imap "TAB" 'hippie-expand)
+    (imap "C-e" 'end-of-line)
+    (imap "C-a" 'beginning-of-line-text)
+    (imap "C-u" (lambda () (interactive) (evil-delete (point-at-bol) (point))))
 
     (after "dired"
       (define-key dired-mode-map (kbd "-") 'dired-up-directory)
