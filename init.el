@@ -20,6 +20,7 @@
   (require 'recentf)
   (recentf-mode t)
   (setq recentf-max-saved-items 50)
+  (setq ffip-prefer-ido-mode t)
 
   (setq hippie-expand-try-functions-list '(try-expand-dabbrev try-expand-dabbrev-all-buffers try-expand-dabbrev-from-kill try-complete-file-name-partially try-complete-file-name))
 
@@ -49,7 +50,6 @@
       #'magit-display-buffer-fullframe-status-v1)
 
   ;; utils
-
   (defun ido-recentf-open ()
       "Use `ido-completing-read' to \\[find-file] a recent file"
         (interactive)
@@ -88,11 +88,19 @@
       (define-key dired-mode-map (kbd "-") 'dired-up-directory)
       ))
 
-
   ;; perl
-  (add-hook 'cperl-mode-hook (progn
+  (defalias 'perl-mode 'cperl-mode)
+
+  (add-hook 'cperl-mode-hook (lambda ()
 			       (nmap "C-p" 'perl-beginning-of-function)
 			       (nmap "C-n" 'perl-end-of-function)
+
+             (set-face-background 'cperl-hash-face nil)
+             (set-face-foreground 'cperl-hash-face nil)
+             (set-face-background 'cperl-array-face nil)
+             (set-face-foreground 'cperl-array-face nil)
+             (setq cperl-invalid-face nil) ;; extra whitespace TODO show this in normal mode only
+             (flycheck-mode t)
 			       ))
   )
 
