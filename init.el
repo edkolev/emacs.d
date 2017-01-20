@@ -118,6 +118,12 @@
   :ensure t
   :config (evil-exchange-cx-install))
 
+(use-package evil-replace-with-register
+  :ensure t
+  :config
+  (setq evil-replace-with-register-key (kbd "gr"))
+  (evil-replace-with-register-install))
+
 (use-package evil-anzu
   :config (global-anzu-mode))
 
