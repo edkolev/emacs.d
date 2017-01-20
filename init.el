@@ -22,6 +22,11 @@
 					 try-complete-file-name-partially
 					 try-complete-file-name))
 
+(setq-default indent-tabs-mode nil)
+(setq-default tab-width 8)
+
+(defvar default-tags-table-function '(lambda () (expand-file-name ".git/etags" "/usr/local/")))
+
 ;; use-package
 (unless (package-installed-p 'use-package)
   (package-refresh-contents)
@@ -30,6 +35,7 @@
   (require 'use-package))
 (setq use-package-verbose t)
 
+;; packages
 (use-package general ;; https://gitlab.com/KNX32542/dotfiles/blob/master/emacs/.emacs.d/init.el
   :ensure t
   :config
@@ -176,8 +182,8 @@
 ;; perl
 (defalias 'perl-mode 'cperl-mode)
 (add-hook 'cperl-mode-hook (lambda ()
-			     (nmap "C-p" 'perl-beginning-of-function)
-			     (nmap "C-n" 'perl-end-of-function)
+			     (general-nmap "C-p" 'perl-beginning-of-function)
+			     (general-nmap "C-n" 'perl-end-of-function)
 			     (set-face-background 'cperl-hash-face nil)
 			     (set-face-foreground 'cperl-hash-face nil)
 			     (set-face-background 'cperl-array-face nil)
