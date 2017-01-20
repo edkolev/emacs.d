@@ -1,4 +1,3 @@
-;; TODO https://github.com/jwiegley/use-package
 
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "http://melpa.org/packages/") t)
@@ -119,6 +118,7 @@
 (use-package recentf
   :config
   (setq recentf-max-saved-items 50)
+  :init
   (recentf-mode)
   :general
   (general-nmap "C-c C-r" '(lambda ()
@@ -163,6 +163,13 @@
   (setq company-idle-delay 0.5))
   ; (add-hook 'evil-insert-state-exit-hook 'company-abort)
 
+(use-package flx-ido
+  :config
+  (ido-mode 1)
+  (ido-everywhere 1)
+  (flx-ido-mode 1)
+  (setq ido-use-faces nil))
+
 ;; elisp
 (add-hook 'emacs-lisp-mode-hook #'(lambda () (modify-syntax-entry ?- "w")))
 
@@ -179,11 +186,6 @@
 			     ))
 
 ;; TODO
-;; flx-ido
-;; (setq ido-enable-flex-matching t)
-;; (flx-ido-mode 1)
-;; (setq ido-use-faces nil)
-
 ;; ESC to NORMAL even from emacs state
 ;; TODO (define-key evil-emacs-state-map [escape] 'evil-normal-state)
 ; (setq ffip-prefer-ido-mode t)
