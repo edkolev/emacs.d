@@ -1,113 +1,190 @@
+;; TODO https://github.com/jwiegley/use-package
 
-;; (package-initialize)
+(require 'package)
+(add-to-list 'package-archives '("melpa" . "http://melpa.org/packages/") t)
+(package-initialize)
 
 (setq gc-cons-threshold (* 10 1024 1024))
 
-(let ((gc-cons-threshold (* 256 1024 1024))
-      (file-name-handler-alist nil))
+;; settings
+(setq custom-file (expand-file-name "custom-file.el" user-emacs-directory))
+(setq inhibit-startup-screen t)
+(setq make-backup-files nil)
+(fset 'yes-or-no-p 'y-or-n-p)
 
-  (load (expand-file-name "package-utils.el" user-emacs-directory))
+(when (fboundp 'tool-bar-mode) (tool-bar-mode -1))
+(when (fboundp 'menu-bar-mode) (menu-bar-mode -1))
 
-  ;; settings
-  (setq custom-file (expand-file-name "custom-file.el" user-emacs-directory))
-  (setq inhibit-startup-screen t)
-  (setq make-backup-files nil)
-  (save-place-mode 1) 
-  (show-paren-mode 1)
-  (tool-bar-mode -1)
-  (menu-bar-mode -1)
-  (defalias 'yes-or-no-p 'y-or-n-p)
-  (require 'recentf)
-  (recentf-mode t)
-  (setq recentf-max-saved-items 50)
-  (setq ffip-prefer-ido-mode t)
+(global-set-key "\C-ch" help-map)
 
-  (setq hippie-expand-try-functions-list '(try-expand-dabbrev try-expand-dabbrev-all-buffers try-expand-dabbrev-from-kill try-complete-file-name-partially try-complete-file-name))
+(setq hippie-expand-try-functions-list '(try-expand-dabbrev
+					 try-expand-dabbrev-all-buffers
+					 try-expand-dabbrev-from-kill
+					 try-complete-file-name-partially
+					 try-complete-file-name))
 
-  ;; packages
-  (install-packages '(
-		      ;; evil packages
-		      evil
-		      evil-commentary
-		      evil-indent-plus
-		      evil-surround
-		      evil-exchange
+;; use-package
+(unless (package-installed-p 'use-package)
+  (package-refresh-contents)
+  (package-install 'use-package))
+(eval-when-compile
+  (require 'use-package))
+(setq use-package-verbose t)
 
-		      ;; non-evil
-		      avy
-		      magit
-		      flycheck
-		      ))
+(use-package general ;; https://gitlab.com/KNX32542/dotfiles/blob/master/emacs/.emacs.d/init.el
+  :ensure t
+  :config
+  (general-evil-setup))
 
-  (setq-default flycheck-disabled-checkers '(perl-perlcritic))
+(setq evil-search-module 'evil-search 
+      ;; don't let modes override the INSERT state
+      evil-overriding-maps nil
+      evil-intercept-maps nil)
 
-  (setq evil-search-module 'evil-search)
+(use-package evil
+  :ensure t
+  :config
+  (setq evil-vsplit-window-right t)
+  (setq evil-split-window-below t)
   (evil-mode)
-  (evil-commentary-mode)
-  (evil-indent-plus-default-bindings)
-  (global-evil-surround-mode)
-  (setq magit-display-buffer-function
-      #'magit-display-buffer-fullframe-status-v1)
 
-  ;; utils
-  (defun ido-recentf-open ()
-      "Use `ido-completing-read' to \\[find-file] a recent file"
-        (interactive)
-          (if (find-file (ido-completing-read "Find recent file: " recentf-list))
-                  (message "Opening file...")
-                  (message "Aborting")))
+  (general-nmap "RET" 'save-buffer)
+  (general-nmap "[ Q" 'first-error)
+  (general-nmap "] q" 'next-error)
+  (general-nmap "[ q" 'previous-error)
+  (general-nmap "C-u" 'evil-scroll-up)
+  (general-nmap "] e" (lambda (arg) (interactive "*p") (move-text-down arg)))
+  (general-nmap "[ e" (lambda (arg) (interactive "*p") (move-text-up arg)))
+  (general-nmap "-"   (lambda () (interactive) (dired ".")))
+  (general-nmap ", w" 'evil-window-vsplit)
+   
+  (general-nmap "g SPC" 'find-file-in-project)
+  (general-nmap "C-c C-b" 'list-buffers)
 
-  ;; key bindings
-  (global-set-key "\C-ch" help-map)
+  ;; TODO
+  ;; [ SPC
+  ;; ] SPC
 
-  (defalias 'after 'with-eval-after-load)
+  ;; navigate b/w emacs windows and tmux panes
+  (defun evgeni-window-navigate (emacs-cmd tmux-cmd)
+    (condition-case nil
+	(funcall emacs-cmd)
+      (error (if (getenv "TMUX") (shell-command-to-string tmux-cmd)))))
+  (general-nmap "C-h" (lambda () (interactive) (evgeni-window-navigate 'windmove-left "tmux select-pane -L")))
+  (general-nmap "C-j" (lambda () (interactive) (evgeni-window-navigate 'windmove-down "tmux select-pane -D")))
+  (general-nmap "C-k" (lambda () (interactive) (evgeni-window-navigate 'windmove-up "tmux select-pane -U")))
+  (general-nmap "C-l" (lambda () (interactive) (evgeni-window-navigate 'windmove-right "tmux select-pane -R")))
 
-  (defun nmap (lhs rhs) (define-key evil-normal-state-map (kbd lhs) rhs))
-  (defun imap (lhs rhs) (define-key evil-insert-state-map (kbd lhs) rhs))
+  ;; insert state
+  (general-imap "TAB" 'hippie-expand)
+  (general-imap "C-e" 'end-of-line)
+  (general-imap "C-a" 'beginning-of-line-text)
+  (general-imap "C-u" (lambda () (interactive) (evil-delete (point-at-bol) (point))))
 
-  (after "evil"
-    (setq evil-vsplit-window-right t)
-    (setq evil-split-window-below t)
-
-    (nmap "C-w C-w" 'ace-window)
-    (nmap "-" (lambda () (interactive) (dired ".")))
-    (nmap "C-c C-c" 'avy-goto-word-or-subword-1)
-    (nmap "RET" 'save-buffer)
-    (nmap "U U" 'magit-status)
-    (nmap ", f" 'imenu)
-    (nmap "g SPC" 'find-file-in-project)
-    (nmap "SPC" 'ido-recentf-open)
-    (nmap "C-c o c" 'hl-line-mode)
-    (nmap "C-c C-b" 'ibuffer)
-    (nmap "C-c C-r" 'ido-recentf-open)
-
-    (nmap "[ Q" 'first-error)
-    (nmap "] q" 'next-error)
-    (nmap "[ q" 'previous-error)
-    (nmap "C-u" 'evil-scroll-up)
-
-    (imap "TAB" 'hippie-expand)
-    (imap "C-e" 'end-of-line)
-    (imap "C-a" 'beginning-of-line-text)
-    (imap "C-u" (lambda () (interactive) (evil-delete (point-at-bol) (point))))
-
-    (after "dired"
-      (define-key dired-mode-map (kbd "-") 'dired-up-directory)
-      ))
-
-  ;; perl
-  (defalias 'perl-mode 'cperl-mode)
-
-  (add-hook 'cperl-mode-hook (lambda ()
-			       (nmap "C-p" 'perl-beginning-of-function)
-			       (nmap "C-n" 'perl-end-of-function)
-
-             (set-face-background 'cperl-hash-face nil)
-             (set-face-foreground 'cperl-hash-face nil)
-             (set-face-background 'cperl-array-face nil)
-             (set-face-foreground 'cperl-array-face nil)
-             (setq cperl-invalid-face nil) ;; extra whitespace TODO show this in normal mode only
-             (flycheck-mode t)
-			       ))
+  ;; toggles
+  (general-nmap "C-c o c" 'hl-line-mode)
   )
+
+
+(use-package imenu-anywhere
+  :ensure t
+  :general
+  (general-nmap ", f" 'ido-imenu-anywhere))
+
+(use-package ace-window
+  :ensure t
+  :general
+  (general-nmap "C-w C-w" 'ace-window))
+
+(use-package avy
+  :ensure t
+  :general
+  (general-nmap "C-c C-c" 'avy-goto-word-or-subword-1))
+
+(use-package evil-surround
+  :ensure t
+  :config (global-evil-surround-mode))
+
+(use-package evil-commentary
+  :ensure t
+  :config (evil-commentary-mode))
+
+(use-package evil-exchange
+  :ensure t
+  :config (evil-exchange-cx-install))
+
+(use-package evil-anzu
+  :config (global-anzu-mode))
+
+(use-package recentf
+  :config
+  (setq recentf-max-saved-items 50)
+  (recentf-mode)
+  :general
+  (general-nmap "C-c C-r" '(lambda ()
+				   (interactive)
+				   (find-file (ido-completing-read "Find recent file: " recentf-list)))))
+(use-package evil-indent-plus
+  :ensure t
+  :config (evil-indent-plus-default-bindings))
+
+(use-package paren
+  :config (show-paren-mode))
+
+(use-package saveplace
+  :config (save-place-mode))
+
+(use-package dired
+  :config
+  (define-key dired-mode-map (kbd "-") 'dired-up-directory))
+
+(use-package magit
+  :ensure t
+  :config
+  (setq magit-display-buffer-function #'magit-display-buffer-fullframe-status-v1) ;; use current window
+  :general
+  (general-nmap "U U" 'magit-status))
+
+(use-package evil-magit
+  :ensure t)
+
+(use-package flycheck
+  :ensure t
+  :config
+  ;; (flycheck-mode t)
+  (setq-default flycheck-disabled-checkers '(perl-perlcritic)))
+
+(use-package company
+  :ensure t
+  :config
+  (global-company-mode 1)
+  (define-key company-active-map (kbd "C-n") 'company-select-next)
+  (define-key company-active-map (kbd "C-p") 'company-select-previous)
+  (setq company-idle-delay 0.5))
+  ; (add-hook 'evil-insert-state-exit-hook 'company-abort)
+
+;; elisp
+(add-hook 'emacs-lisp-mode-hook #'(lambda () (modify-syntax-entry ?- "w")))
+
+;; perl
+(defalias 'perl-mode 'cperl-mode)
+(add-hook 'cperl-mode-hook (lambda ()
+			     (nmap "C-p" 'perl-beginning-of-function)
+			     (nmap "C-n" 'perl-end-of-function)
+			     (set-face-background 'cperl-hash-face nil)
+			     (set-face-foreground 'cperl-hash-face nil)
+			     (set-face-background 'cperl-array-face nil)
+			     (set-face-foreground 'cperl-array-face nil)
+			     (setq cperl-invalid-face nil) ;; extra whitespace TODO show this in normal mode only
+			     ))
+
+;; TODO
+;; flx-ido
+;; (setq ido-enable-flex-matching t)
+;; (flx-ido-mode 1)
+;; (setq ido-use-faces nil)
+
+;; ESC to NORMAL even from emacs state
+;; TODO (define-key evil-emacs-state-map [escape] 'evil-normal-state)
+; (setq ffip-prefer-ido-mode t)
 
