@@ -8,8 +8,14 @@
 ;; settings
 (setq custom-file (expand-file-name "custom-file.el" user-emacs-directory))
 (setq inhibit-startup-screen t)
-(setq make-backup-files nil)
+(setq backup-inhibited t)
+(setq auto-save-default nil)
+(setq custom-safe-themes t)
 (fset 'yes-or-no-p 'y-or-n-p)
+;; initial *scratch* buffer
+(setf initial-scratch-message ""
+      initial-major-mode 'emacs-lisp-mode)
+
 
 (when (fboundp 'tool-bar-mode) (tool-bar-mode -1))
 (when (fboundp 'menu-bar-mode) (menu-bar-mode -1))
@@ -35,13 +41,26 @@
   (require 'use-package))
 (setq use-package-verbose t)
 
+;; theme packages
+(use-package spacemacs-theme :ensure t :defer t)
+(use-package molokai-theme :ensure t :defer t)
+; (use-package aurora-theme :ensure t :defer t)
+(use-package color-theme-sanityinc-tomorrow :ensure t :defer t)
+(use-package gruvbox-theme :ensure t :defer t)
+(use-package material-theme :ensure t :defer t)
+(use-package molokai-theme :ensure t :defer t)
+(use-package monokai-theme :ensure t :defer t)
+(use-package zenburn-theme :ensure t :defer t)
+(use-package darktooth-theme :ensure t :defer t)
+(use-package seoul256-theme :ensure t :defer t)
+
 ;; packages
 (use-package general ;; https://gitlab.com/KNX32542/dotfiles/blob/master/emacs/.emacs.d/init.el
   :ensure t
   :config
   (general-evil-setup))
 
-(setq evil-search-module 'evil-search 
+(setq evil-search-module 'isearch ;; 'evil-search 
       ;; don't let modes override the INSERT state
       evil-overriding-maps nil
       evil-intercept-maps nil)
@@ -58,17 +77,13 @@
   (general-nmap "] q" 'next-error)
   (general-nmap "[ q" 'previous-error)
   (general-nmap "C-u" 'evil-scroll-up)
-  (general-nmap "] e" (lambda (arg) (interactive "*p") (move-text-down arg)))
-  (general-nmap "[ e" (lambda (arg) (interactive "*p") (move-text-up arg)))
-  (general-nmap "-"   (lambda () (interactive) (dired ".")))
   (general-nmap ", w" 'evil-window-vsplit)
    
   (general-nmap "g SPC" 'find-file-in-project)
-  (general-nmap "C-c C-b" 'list-buffers)
+  (general-nmap "C-c C-b" 'ido-switch-buffer)
 
-  ;; TODO
-  ;; [ SPC
-  ;; ] SPC
+  (general-nmap "] SPC" (lambda (count) (interactive "p") (dotimes (_ count) (save-excursion (evil-insert-newline-below)))))
+  (general-nmap "[ SPC" (lambda (count) (interactive "p") (dotimes (_ count) (save-excursion (evil-insert-newline-above)))))
 
   ;; navigate b/w emacs windows and tmux panes
   (defun evgeni-window-navigate (emacs-cmd tmux-cmd)
@@ -81,7 +96,6 @@
   (general-nmap "C-l" (lambda () (interactive) (evgeni-window-navigate 'windmove-right "tmux select-pane -R")))
 
   ;; insert state
-  (general-imap "TAB" 'hippie-expand)
   (general-imap "C-e" 'end-of-line)
   (general-imap "C-a" 'beginning-of-line-text)
   (general-imap "C-u" (lambda () (interactive) (evil-delete (point-at-bol) (point))))
@@ -89,7 +103,6 @@
   ;; toggles
   (general-nmap "C-c o c" 'hl-line-mode)
   )
-
 
 (use-package imenu-anywhere
   :ensure t
@@ -104,7 +117,7 @@
 (use-package avy
   :ensure t
   :general
-  (general-nmap "C-c C-c" 'avy-goto-word-or-subword-1))
+  (general-nmap "C-c C-g" 'avy-goto-word-or-subword-1))
 
 (use-package evil-surround
   :ensure t
@@ -136,7 +149,8 @@
   (general-nmap "C-c C-r" '(lambda ()
 				   (interactive)
 				   (find-file (ido-completing-read "Find recent file: " recentf-list)))))
-(use-package evil-indent-plus
+
+(use-package evil-indent-plus ;; indent object
   :ensure t
   :config (evil-indent-plus-default-bindings))
 
@@ -148,6 +162,7 @@
 
 (use-package dired
   :config
+  (general-nmap "-"   (lambda () (interactive) (dired ".")))
   (define-key dired-mode-map (kbd "-") 'dired-up-directory))
 
 (use-package magit
@@ -155,10 +170,17 @@
   :config
   (setq magit-display-buffer-function #'magit-display-buffer-fullframe-status-v1) ;; use current window
   :general
-  (general-nmap "U U" 'magit-status))
+  (general-nmap "U U" 'magit-status)
+  ;; :init
 
-(use-package evil-magit
-  :ensure t)
+  ; (with-eval-after-load 'magit
+  ;   (magit-add-section-hook 'magit-status-sections-hook 'magit-insert-unstaged-changes nil t)
+  ;   (remove-hook 'magit-status-sections-hook 'magit-insert-stash-index)
+  ;   )
+  ; ;; TODO - 1. dont show stash; 2. show untracked files after unstaged
+  ; ;; (magit-add-section-hook 'magit-status-sections-hook 'magit-insert-status-headers nil t)
+
+  )
 
 (use-package flycheck
   :ensure t
@@ -182,8 +204,23 @@
   (flx-ido-mode 1)
   (setq ido-use-faces nil))
 
+(use-package org
+  :defer t
+  :ensure t)
+
+(use-package move-text
+  :ensure t
+  :general
+  (general-nmap "] e" (lambda (arg) (interactive "*p") (move-text-down arg)))
+  (general-nmap "[ e" (lambda (arg) (interactive "*p") (move-text-up arg))))
+
 ;; elisp
-(add-hook 'emacs-lisp-mode-hook #'(lambda () (modify-syntax-entry ?- "w")))
+(add-hook 'emacs-lisp-mode-hook (lambda ()
+                                  (modify-syntax-entry ?- "w")
+                                  (define-key emacs-lisp-mode-map (kbd "C-c C-c") #'eval-defun)))
+
+(add-hook 'lisp-interaction-mode-hook (lambda ()
+                                        (define-key lisp-interaction-mode-map (kbd "C-c C-c") 'eval-defun)))
 
 ;; perl
 (defalias 'perl-mode 'cperl-mode)
