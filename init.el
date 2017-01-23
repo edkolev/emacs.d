@@ -54,6 +54,11 @@
 (use-package darktooth-theme :ensure t :defer t)
 (use-package seoul256-theme :ensure t :defer t)
 
+;; dark variants  Range:   233 (darkest) ~ 239 (lightest) ;; Default: 237
+;; light variants Range:   252 (darkest) ~ 256 (lightest) ;; Default: 253
+(setq seoul256-background 253)
+(load-theme 'seoul256 t)
+
 ;; packages
 (use-package general ;; https://gitlab.com/KNX32542/dotfiles/blob/master/emacs/.emacs.d/init.el
   :ensure t
