@@ -95,6 +95,9 @@
   (general-nmap "[ m" 'beginning-of-defun)
   (general-nmap "] m" 'end-of-defun)
 
+  (general-nmap "C-W C-]" 'xref-find-definitions)
+  (general-nmap "C-]" 'xref-find-definitions-other-window)
+
   ;; navigate b/w emacs windows and tmux panes
   (defun evgeni-window-navigate (emacs-cmd tmux-cmd)
     (condition-case nil
@@ -253,12 +256,6 @@
   (general-nmap "] e" (lambda (arg) (interactive "*p") (move-text-down arg)))
   (general-nmap "[ e" (lambda (arg) (interactive "*p") (move-text-up arg))))
 
-(use-package dumb-jump
-  :ensure t
-  :general
-  (general-nmap "C-W C-]" 'dumb-jump-go-other-window)
-  (general-nmap "C-]" 'dumb-jump-go))
-
 ;; elisp
 (add-hook 'emacs-lisp-mode-hook (lambda ()
                                   (modify-syntax-entry ?- "w")
@@ -276,8 +273,6 @@
                              (set-face-foreground 'cperl-array-face nil)
                              (setq cperl-invalid-face nil) ;; extra whitespace TODO show this in normal mode only
                              ))
-
-
 
 ;; TODO
 ; (setq ffip-prefer-ido-mode t)
