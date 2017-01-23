@@ -23,10 +23,10 @@
 (global-set-key "\C-ch" help-map)
 
 (setq hippie-expand-try-functions-list '(try-expand-dabbrev
-					 try-expand-dabbrev-all-buffers
-					 try-expand-dabbrev-from-kill
-					 try-complete-file-name-partially
-					 try-complete-file-name))
+                                         try-expand-dabbrev-all-buffers
+                                         try-expand-dabbrev-from-kill
+                                         try-complete-file-name-partially
+                                         try-complete-file-name))
 
 (setq-default indent-tabs-mode nil)
 (setq-default tab-width 8)
@@ -90,10 +90,15 @@
   (general-nmap "] SPC" (lambda (count) (interactive "p") (dotimes (_ count) (save-excursion (evil-insert-newline-below)))))
   (general-nmap "[ SPC" (lambda (count) (interactive "p") (dotimes (_ count) (save-excursion (evil-insert-newline-above)))))
 
+  (general-nmap "C-p" 'beginning-of-defun)
+  (general-nmap "C-n" 'end-of-defun)
+  (general-nmap "[ m" 'beginning-of-defun)
+  (general-nmap "] m" 'end-of-defun)
+
   ;; navigate b/w emacs windows and tmux panes
   (defun evgeni-window-navigate (emacs-cmd tmux-cmd)
     (condition-case nil
-	(funcall emacs-cmd)
+  (funcall emacs-cmd)
       (error (if (getenv "TMUX") (shell-command-to-string tmux-cmd)))))
   (general-nmap "C-h" (lambda () (interactive) (evgeni-window-navigate 'windmove-left "tmux select-pane -L")))
   (general-nmap "C-j" (lambda () (interactive) (evgeni-window-navigate 'windmove-down "tmux select-pane -D")))
@@ -105,14 +110,17 @@
   (general-imap "C-a" 'beginning-of-line-text)
   (general-imap "C-u" (lambda () (interactive) (evil-delete (point-at-bol) (point))))
 
+  ;; function text object
+  (evil-define-text-object evgeni-inner-defun (count &optional beg end type)
+    (save-excursion
+      (mark-defun)
+      (evil-range (region-beginning) (region-end) type :expanded t)))
+  (define-key evil-inner-text-objects-map "m" 'evgeni-inner-defun)
+  (define-key evil-outer-text-objects-map "m" 'evgeni-inner-defun)
+
   ;; toggles
   (general-nmap "C-c o c" 'hl-line-mode)
   )
-
-(use-package imenu-anywhere
-  :ensure t
-  :general
-  (general-nmap ", f" 'ido-imenu-anywhere))
 
 (use-package ace-window
   :ensure t
@@ -152,8 +160,8 @@
   (recentf-mode)
   :general
   (general-nmap "C-c C-r" '(lambda ()
-				   (interactive)
-				   (find-file (ido-completing-read "Find recent file: " recentf-list)))))
+           (interactive)
+           (find-file (ido-completing-read "Find recent file: " recentf-list)))))
 
 (use-package evil-indent-plus ;; indent object
   :ensure t
@@ -166,26 +174,24 @@
   :config (save-place-mode))
 
 (use-package dired
-  :config
+  :general
   (general-nmap "-"   (lambda () (interactive) (dired ".")))
+  :config
   (define-key dired-mode-map (kbd "-") 'dired-up-directory))
 
 (use-package magit
   :ensure t
-  :defer t
   :config
   (setq magit-display-buffer-function #'magit-display-buffer-fullframe-status-v1) ;; use current window fullscreen
   :general
   (general-nmap "U U" 'magit-status)
   ;; :init
-
   ; (with-eval-after-load 'magit
   ;   (magit-add-section-hook 'magit-status-sections-hook 'magit-insert-unstaged-changes nil t)
   ;   (remove-hook 'magit-status-sections-hook 'magit-insert-stash-index)
   ;   )
   ; ;; TODO - 1. dont show stash; 2. show untracked files after unstaged
   ; ;; (magit-add-section-hook 'magit-status-sections-hook 'magit-insert-status-headers nil t)
-
   )
 
 (use-package flycheck
@@ -211,6 +217,7 @@
   (define-key company-active-map (kbd "C-n") 'company-select-next)
   (define-key company-active-map (kbd "C-p") 'company-select-previous)
   (define-key company-active-map (kbd "TAB") 'company-complete-selection)
+  (define-key company-active-map (kbd "RET") nil)
   (global-company-mode t))
 
 (use-package company-dabbrev
@@ -226,6 +233,16 @@
   (flx-ido-mode 1)
   (setq ido-use-faces nil))
 
+(use-package idomenu
+  :ensure t
+  :general
+  (general-nmap ", f" 'idomenu))
+
+(use-package ido-vertical-mode
+  :ensure t
+  :config
+  (ido-vertical-mode t))
+
 (use-package org
   :defer t
   :ensure t)
@@ -235,6 +252,12 @@
   :general
   (general-nmap "] e" (lambda (arg) (interactive "*p") (move-text-down arg)))
   (general-nmap "[ e" (lambda (arg) (interactive "*p") (move-text-up arg))))
+
+(use-package dumb-jump
+  :ensure t
+  :general
+  (general-nmap "C-W C-]" 'dumb-jump-go-other-window)
+  (general-nmap "C-]" 'dumb-jump-go))
 
 ;; elisp
 (add-hook 'emacs-lisp-mode-hook (lambda ()
@@ -247,14 +270,14 @@
 ;; perl
 (defalias 'perl-mode 'cperl-mode)
 (add-hook 'cperl-mode-hook (lambda ()
-			     (general-nmap "C-p" 'perl-beginning-of-function)
-			     (general-nmap "C-n" 'perl-end-of-function)
-			     (set-face-background 'cperl-hash-face nil)
-			     (set-face-foreground 'cperl-hash-face nil)
-			     (set-face-background 'cperl-array-face nil)
-			     (set-face-foreground 'cperl-array-face nil)
-			     (setq cperl-invalid-face nil) ;; extra whitespace TODO show this in normal mode only
-			     ))
+                             (set-face-background 'cperl-hash-face nil)
+                             (set-face-foreground 'cperl-hash-face nil)
+                             (set-face-background 'cperl-array-face nil)
+                             (set-face-foreground 'cperl-array-face nil)
+                             (setq cperl-invalid-face nil) ;; extra whitespace TODO show this in normal mode only
+                             ))
+
+
 
 ;; TODO
 ; (setq ffip-prefer-ido-mode t)
