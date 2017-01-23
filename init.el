@@ -167,8 +167,9 @@
 
 (use-package magit
   :ensure t
+  :defer t
   :config
-  (setq magit-display-buffer-function #'magit-display-buffer-fullframe-status-v1) ;; use current window
+  (setq magit-display-buffer-function #'magit-display-buffer-fullframe-status-v1) ;; use current window fullscreen
   :general
   (general-nmap "U U" 'magit-status)
   ;; :init
@@ -190,12 +191,28 @@
 
 (use-package company
   :ensure t
+  :defer 1
+  :init
+  (setf company-idle-delay 0
+        company-minimum-prefix-length 2
+        company-show-numbers t
+        company-selection-wrap-around t
+        company-backends (list #'company-capf
+                               (list #'company-dabbrev-code
+                                     #'company-keywords)
+                               #'company-files
+                               #'company-dabbrev))
   :config
-  (global-company-mode 1)
   (define-key company-active-map (kbd "C-n") 'company-select-next)
   (define-key company-active-map (kbd "C-p") 'company-select-previous)
-  (setq company-idle-delay 0.5))
-  ; (add-hook 'evil-insert-state-exit-hook 'company-abort)
+  (define-key company-active-map (kbd "TAB") 'company-complete-selection)
+  (global-company-mode t))
+
+(use-package company-dabbrev
+  :init
+  (setf company-dabbrev-ignore-case 'keep-prefix
+        company-dabbrev-ignore-invisible t
+        company-dabbrev-downcase nil))
 
 (use-package flx-ido
   :config
@@ -235,7 +252,5 @@
 			     ))
 
 ;; TODO
-;; ESC to NORMAL even from emacs state
-;; TODO (define-key evil-emacs-state-map [escape] 'evil-normal-state)
 ; (setq ffip-prefer-ido-mode t)
 
