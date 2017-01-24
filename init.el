@@ -11,6 +11,7 @@
 (setq backup-inhibited t)
 (setq auto-save-default nil)
 (setq custom-safe-themes t)
+(set-default 'truncate-lines nil)
 (fset 'yes-or-no-p 'y-or-n-p)
 ;; initial *scratch* buffer
 (setf initial-scratch-message ""
@@ -95,9 +96,6 @@
   (general-nmap "[ m" 'beginning-of-defun)
   (general-nmap "] m" 'end-of-defun)
 
-  (general-nmap "C-W C-]" 'xref-find-definitions)
-  (general-nmap "C-]" 'xref-find-definitions-other-window)
-
   ;; navigate b/w emacs windows and tmux panes
   (defun evgeni-window-navigate (emacs-cmd tmux-cmd)
     (condition-case nil
@@ -123,6 +121,7 @@
 
   ;; toggles
   (general-nmap "C-c o c" 'hl-line-mode)
+  (general-nmap "C-c o w" 'toggle-truncate-lines)
   )
 
 (use-package ace-window
@@ -199,6 +198,8 @@
 
 (use-package flycheck
   :ensure t
+  :general
+  (general-nmap "C-c o f" 'flycheck-mode)
   :config
   ;; (flycheck-mode t)
   (setq-default flycheck-disabled-checkers '(perl-perlcritic)))
@@ -255,6 +256,14 @@
   :general
   (general-nmap "] e" (lambda (arg) (interactive "*p") (move-text-down arg)))
   (general-nmap "[ e" (lambda (arg) (interactive "*p") (move-text-up arg))))
+
+(use-package xref
+  :general
+  (general-nmap "C-]" 'xref-find-definitions)
+  (general-nmap "C-W C-]" 'xref-find-definitions-other-window)
+  (general-evil-define-key 'normal xref--xref-buffer-mode-map "q" 'delete-window)
+  (general-evil-define-key 'normal xref--xref-buffer-mode-map "C-n" 'xref-next-line)
+  (general-evil-define-key 'normal xref--xref-buffer-mode-map "C-p" 'xref-prev-line))
 
 ;; elisp
 (add-hook 'emacs-lisp-mode-hook (lambda ()
