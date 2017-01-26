@@ -11,7 +11,7 @@
 (setq backup-inhibited t)
 (setq auto-save-default nil)
 (setq custom-safe-themes t)
-(set-default 'truncate-lines nil)
+(setq-default truncate-lines t)
 (fset 'yes-or-no-p 'y-or-n-p)
 ;; initial *scratch* buffer
 (setf initial-scratch-message ""
@@ -34,6 +34,15 @@
 
 (defvar default-tags-table-function '(lambda () (expand-file-name ".git/etags" "/usr/local/")))
 
+(defmacro lambda! (&rest body)
+  "Shortcut for interactive lambdas"
+  `(lambda () (interactive) ,@body))
+
+(defmacro ex! (cmd func)
+  "Shortcut for defining ex commands"
+  `(with-eval-after-load 'evil
+     (evil-ex-define-cmd ,cmd ,func)))
+
 ;; use-package
 (unless (package-installed-p 'use-package)
   (package-refresh-contents)
@@ -54,6 +63,7 @@
 (use-package zenburn-theme :ensure t :defer t)
 (use-package darktooth-theme :ensure t :defer t)
 (use-package seoul256-theme :ensure t :defer t)
+(use-package doom-themes :ensure t :defer t)
 
 ;; dark variants  Range:   233 (darkest) ~ 239 (lightest) ;; Default: 237
 ;; light variants Range:   252 (darkest) ~ 256 (lightest) ;; Default: 253
@@ -66,12 +76,9 @@
   :config
   (general-evil-setup))
 
-(setq evil-search-module 'isearch ;; 'evil-search 
-      ;; don't let modes override the INSERT state
-      evil-overriding-maps nil
-      evil-intercept-maps nil)
-
 (use-package evil
+  :init
+  (setq evil-search-module 'isearch)
   :ensure t
   :config
   (setq evil-vsplit-window-right t)
@@ -101,10 +108,10 @@
     (condition-case nil
   (funcall emacs-cmd)
       (error (if (getenv "TMUX") (shell-command-to-string tmux-cmd)))))
-  (general-nmap "C-h" (lambda () (interactive) (evgeni-window-navigate 'windmove-left "tmux select-pane -L")))
-  (general-nmap "C-j" (lambda () (interactive) (evgeni-window-navigate 'windmove-down "tmux select-pane -D")))
-  (general-nmap "C-k" (lambda () (interactive) (evgeni-window-navigate 'windmove-up "tmux select-pane -U")))
-  (general-nmap "C-l" (lambda () (interactive) (evgeni-window-navigate 'windmove-right "tmux select-pane -R")))
+  (general-nmap "C-h" (lambda! (evgeni-window-navigate 'windmove-left "tmux select-pane -L")))
+  (general-nmap "C-j" (lambda! (evgeni-window-navigate 'windmove-down "tmux select-pane -D")))
+  (general-nmap "C-k" (lambda! (evgeni-window-navigate 'windmove-up "tmux select-pane -U")))
+  (general-nmap "C-l" (lambda! (evgeni-window-navigate 'windmove-right "tmux select-pane -R")))
 
   ;; insert state
   (general-imap "C-e" 'end-of-line)
@@ -161,9 +168,8 @@
   :init
   (recentf-mode)
   :general
-  (general-nmap "C-c C-r" '(lambda ()
-           (interactive)
-           (find-file (ido-completing-read "Find recent file: " recentf-list)))))
+  (general-nmap "C-c C-r" (lambda! (find-file (ido-completing-read "Find recent file: " recentf-list))))
+  (general-nmap "SPC" (lambda! (find-file (ido-completing-read "Find recent file: " recentf-list)))))
 
 (use-package evil-indent-plus ;; indent object
   :ensure t
@@ -183,17 +189,12 @@
 
 (use-package magit
   :ensure t
-  :config
-  (setq magit-display-buffer-function #'magit-display-buffer-fullframe-status-v1) ;; use current window fullscreen
   :general
   (general-nmap "U U" 'magit-status)
-  ;; :init
-  ; (with-eval-after-load 'magit
-  ;   (magit-add-section-hook 'magit-status-sections-hook 'magit-insert-unstaged-changes nil t)
-  ;   (remove-hook 'magit-status-sections-hook 'magit-insert-stash-index)
-  ;   )
-  ; ;; TODO - 1. dont show stash; 2. show untracked files after unstaged
-  ; ;; (magit-add-section-hook 'magit-status-sections-hook 'magit-insert-status-headers nil t)
+  :config
+  (remove-hook 'magit-status-sections-hook 'magit-insert-stashes) ;; don't show stashes
+  (magit-add-section-hook 'magit-status-sections-hook
+                          'magit-insert-untracked-files 'magit-insert-staged-changes 1) ;; lower untracked
   )
 
 (use-package flycheck
@@ -222,7 +223,11 @@
   (define-key company-active-map (kbd "C-p") 'company-select-previous)
   (define-key company-active-map (kbd "TAB") 'company-complete-selection)
   (define-key company-active-map (kbd "RET") nil)
-  (global-company-mode t))
+  (global-company-mode t)
+  :general
+  (general-imap "C-x C-f" 'company-files)
+  (general-imap "C-x C-]" 'company-tags)
+  )
 
 (use-package company-dabbrev
   :init
@@ -235,6 +240,7 @@
   (ido-mode 1)
   (ido-everywhere 1)
   (flx-ido-mode 1)
+  (setq ido-enable-flex-matching t)
   (setq ido-use-faces nil))
 
 (use-package idomenu
@@ -245,6 +251,7 @@
 (use-package ido-vertical-mode
   :ensure t
   :config
+  (setq ido-vertical-define-keys 'C-n-and-C-p-only)
   (ido-vertical-mode t))
 
 (use-package org
@@ -265,6 +272,25 @@
   (general-evil-define-key 'normal xref--xref-buffer-mode-map "C-n" 'xref-next-line)
   (general-evil-define-key 'normal xref--xref-buffer-mode-map "C-p" 'xref-prev-line))
 
+(use-package narrow
+  :init
+  (with-eval-after-load 'evil
+    (evil-ex-define-cmd "dn[arrow]" 'narrow-to-defun)
+    (evil-ex-define-cmd "wi[den]" 'widen)))
+
+(use-package wgrep
+  :ensure t
+  :init
+  (ex! "wgrep[toggle]" 'wgrep-toggle-readonly-area))
+
+(use-package shackle
+  :ensure t
+  :config
+  (shackle-mode 1)
+  (setq shackle-rules
+        '(
+          ("*xref*"            :align below :size 0.4 :noselect t)
+          )))
 ;; elisp
 (add-hook 'emacs-lisp-mode-hook (lambda ()
                                   (modify-syntax-entry ?- "w")
