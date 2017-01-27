@@ -79,7 +79,8 @@
 (use-package evil
   :init
   (setq evil-search-module 'isearch)
-  :ensure t
+  (setq evil-ex-complete-emacs-commands nil)
+  :ensure 
   :config
   (setq evil-vsplit-window-right t)
   (setq evil-split-window-below t)
@@ -161,6 +162,15 @@
 
 (use-package evil-anzu
   :config (global-anzu-mode))
+
+(use-package evil-ediff
+  :ensure t)
+
+(use-package evil-magit
+  :ensure t
+  :after magit
+  :init
+  (setq evil-magit-want-horizontal-movement t))
 
 (use-package recentf
   :config
