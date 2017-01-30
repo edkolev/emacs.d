@@ -16,7 +16,7 @@
 ;; initial *scratch* buffer
 (setf initial-scratch-message ""
       initial-major-mode 'emacs-lisp-mode)
-
+(setq linum-format "%d ")
 
 (when (fboundp 'tool-bar-mode) (tool-bar-mode -1))
 (when (fboundp 'menu-bar-mode) (menu-bar-mode -1))
@@ -54,21 +54,40 @@
 ;; theme packages
 (use-package spacemacs-theme :ensure t :defer t)
 (use-package molokai-theme :ensure t :defer t)
-; (use-package aurora-theme :ensure t :defer t)
 (use-package color-theme-sanityinc-tomorrow :ensure t :defer t)
 (use-package gruvbox-theme :ensure t :defer t)
 (use-package material-theme :ensure t :defer t)
 (use-package molokai-theme :ensure t :defer t)
 (use-package monokai-theme :ensure t :defer t)
-(use-package zenburn-theme :ensure t :defer t)
 (use-package darktooth-theme :ensure t :defer t)
 (use-package seoul256-theme :ensure t :defer t)
 (use-package doom-themes :ensure t :defer t)
+(use-package ujelly-theme :ensure t :defer t)
+(use-package zenburn-theme :ensure t :defer t)
+
+(load-theme 'leuven t)
 
 ;; dark variants  Range:   233 (darkest) ~ 239 (lightest) ;; Default: 237
 ;; light variants Range:   252 (darkest) ~ 256 (lightest) ;; Default: 253
-(setq seoul256-background 253)
-(load-theme 'seoul256 t)
+;; (setq seoul256-background 253)
+;; (set-face-bold-p 'bold nil) ;; disable bold
+
+;; (load-theme 'zenburn t)
+;; (require 'color)
+
+;; (let ((bg (face-attribute 'default :background)))
+;;   (custom-set-faces
+;;    `(company-preview-common ((t (:background ,(color-lighten-name bg 10)))))
+;;    `(company-preview ((t (:background ,(color-lighten-name bg 5)))))))
+
+
+;; (let ((bg (face-attribute 'default :background)))
+;;   (custom-theme-set-faces
+;;    'zenburn
+;;    `(company-preview-common ((t (:background ,(color-lighten-name bg 10)))))
+;;    `(company-preview ((t (:background ,(color-lighten-name bg 5)))))
+;;    `(company-tooltip-selection ((t (:inherit font-lock-function-name-face))))
+;;    `(company-tooltip-common ((t (:inherit font-lock-constant-face))))))
 
 ;; packages
 (use-package general ;; https://gitlab.com/KNX32542/dotfiles/blob/master/emacs/.emacs.d/init.el
@@ -92,22 +111,76 @@
   (general-nmap "[ q" 'previous-error)
   (general-nmap "C-u" 'evil-scroll-up)
   (general-nmap ", w" 'evil-window-vsplit)
-   
+  (general-nmap "g m" 'evil-make)
+  (general-nmap "g RET" 'evil-make)
+
   (general-nmap "g SPC" 'find-file-in-project)
   (general-nmap "C-c C-b" 'ido-switch-buffer)
 
   (general-nmap "] SPC" (lambda (count) (interactive "p") (dotimes (_ count) (save-excursion (evil-insert-newline-below)))))
   (general-nmap "[ SPC" (lambda (count) (interactive "p") (dotimes (_ count) (save-excursion (evil-insert-newline-above)))))
 
+  (evil-define-command my-colorscheme (&optional theme)
+    :repeat nil
+    (interactive "<a>")
+    (if theme
+        (load-theme (intern theme) t)
+      (call-interactively 'load-theme))
+    )
+  (evil-ex-define-cmd "colo[rscheme]" 'my-colorscheme)
+
+  (defun my-collection-fn (str pred flag)
+    (completion-table-dynamic (lambda (prefix) (list "aa" "bb")))
+    ;; (str)
+    ;; (completion-table-dynamic (lambda (prefix) (mapcar 'symbol-name (custom-available-themes))))
+    ;; (completion-table-dynamic (lambda (arg) nil))
+
+    )
+
+  (evil-ex-define-argument-type thm
+    "Defines an argument type which can take theme names."
+    :collection (lambda () (completion-table-dynamic (lambda (prefix) (list "aa" "bb"))))
+    )
+
+  (evil-define-interactive-code "<thm>"
+    "A valid evil state."
+    :ex-arg thm
+    (list (when (evil-ex-p) evil-ex-argument)))
+
+  (evil-ex-define-cmd "xx" 'my-colorscheme1)
+
+  (evil-define-command my-colorscheme1 (&optional theme)
+    :repeat nil
+    (interactive "<thm>")
+    (if theme
+        (message theme)
+      )
+    )
+
+  ;; tyank & tput
+  (when (getenv "TMUX")
+    (evil-define-command evgeni-tyank (begin end)
+      (interactive "<r>")
+      (shell-command (concat "tmux set-buffer " (shell-quote-argument (buffer-substring begin end))))
+      )
+    (evil-ex-define-cmd "tput" (lambda () (interactive)
+                                 (save-excursion
+                                   (end-of-line)
+                                   (newline)
+                                   (insert (shell-command-to-string "tmux show-buffer")))))
+    (evil-ex-define-cmd "tyank" 'evgeni-tyank)
+    )
+
   (general-nmap "C-p" 'beginning-of-defun)
   (general-nmap "C-n" 'end-of-defun)
   (general-nmap "[ m" 'beginning-of-defun)
   (general-nmap "] m" 'end-of-defun)
+  (general-nmap "0" 'evil-first-non-blank)
 
   ;; navigate b/w emacs windows and tmux panes
   (defun evgeni-window-navigate (emacs-cmd tmux-cmd)
     (condition-case nil
-  (funcall emacs-cmd)
+        (funcall emacs-cmd)
       (error (if (getenv "TMUX") (shell-command-to-string tmux-cmd)))))
   (general-nmap "C-h" (lambda! (evgeni-window-navigate 'windmove-left "tmux select-pane -L")))
   (general-nmap "C-j" (lambda! (evgeni-window-navigate 'windmove-down "tmux select-pane -D")))
@@ -130,6 +203,16 @@
   ;; toggles
   (general-nmap "C-c o c" 'hl-line-mode)
   (general-nmap "C-c o w" 'toggle-truncate-lines)
+  (general-nmap "C-c o n" 'linum-mode)
+
+  ;; cursor in terminal
+  (cond
+   ((getenv "TMUX")
+    (add-hook 'evil-insert-state-entry-hook (lambda () (send-string-to-terminal "\ePtmux;\e\e]50;CursorShape=1\x7\e\\")))
+    (add-hook 'evil-insert-state-exit-hook  (lambda () (send-string-to-terminal "\ePtmux;\e\e]50;CursorShape=0\x7\e\\"))))
+   ((not (display-graphic-p))
+    (add-hook 'evil-insert-state-entry-hook (lambda () (send-string-to-terminal "\e]50;CursorShape=1\x7")))
+    (add-hook 'evil-insert-state-exit-hook  (lambda () (send-string-to-terminal "\e]50;CursorShape=0\x7")))))
   )
 
 (use-package ace-window
@@ -163,9 +246,6 @@
 (use-package evil-anzu
   :config (global-anzu-mode))
 
-(use-package evil-ediff
-  :ensure t)
-
 (use-package evil-magit
   :ensure t
   :after magit
@@ -173,13 +253,24 @@
   (setq evil-magit-want-horizontal-movement t))
 
 (use-package recentf
-  :config
-  (setq recentf-max-saved-items 50)
   :init
+  (setq recentf-max-saved-items 50)
   (recentf-mode)
+
+  (defun evgeni-find-buffer-or-file (file-or-buffer)
+    (let* ((bufnames (mapcar #'buffer-name (buffer-list)))
+           (is-buffer (member file-or-buffer bufnames)))
+      (cond
+       (is-buffer (switch-to-buffer file-or-buffer))
+       (t (find-file file-or-buffer)))))
+
   :general
-  (general-nmap "C-c C-r" (lambda! (find-file (ido-completing-read "Find recent file: " recentf-list))))
-  (general-nmap "SPC" (lambda! (find-file (ido-completing-read "Find recent file: " recentf-list)))))
+  (general-nmap "SPC" (lambda () (interactive) (evgeni-find-buffer-or-file
+                                                (ido-completing-read
+                                                 "Find recent file: "
+                                                 (append (mapcar #'buffer-name (buffer-list)) recentf-list)))))
+
+  )
 
 (use-package evil-indent-plus ;; indent object
   :ensure t
