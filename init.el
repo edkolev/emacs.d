@@ -13,10 +13,8 @@
 (setq custom-safe-themes t)
 (setq-default truncate-lines t)
 (fset 'yes-or-no-p 'y-or-n-p)
-;; initial *scratch* buffer
 (setf initial-scratch-message ""
       initial-major-mode 'emacs-lisp-mode)
-(setq linum-format "%d ")
 
 (when (fboundp 'tool-bar-mode) (tool-bar-mode -1))
 (when (fboundp 'menu-bar-mode) (menu-bar-mode -1))
@@ -56,21 +54,27 @@
 (use-package molokai-theme :ensure t :defer t)
 (use-package color-theme-sanityinc-tomorrow :ensure t :defer t)
 (use-package gruvbox-theme :ensure t :defer t)
-(use-package material-theme :ensure t :defer t)
-(use-package molokai-theme :ensure t :defer t)
-(use-package monokai-theme :ensure t :defer t)
 (use-package darktooth-theme :ensure t :defer t)
 (use-package seoul256-theme :ensure t :defer t)
 (use-package doom-themes :ensure t :defer t)
 (use-package ujelly-theme :ensure t :defer t)
 (use-package zenburn-theme :ensure t :defer t)
+(use-package eclipse-theme :ensure t :defer t)
+(use-package flatui-theme :ensure t :defer t)
 
-(load-theme 'leuven t)
+(use-package plan9-theme :ensure t :defer t)
+(use-package twilight-bright-theme :ensure t :defer t)
+(use-package espresso-theme :ensure t :defer t)
+(use-package soft-stone-theme :ensure t :defer t)
+(use-package flatui-theme :ensure t :defer t)
+(use-package faff-theme :ensure t :defer t)
 
 ;; dark variants  Range:   233 (darkest) ~ 239 (lightest) ;; Default: 237
 ;; light variants Range:   252 (darkest) ~ 256 (lightest) ;; Default: 253
 ;; (setq seoul256-background 253)
-;; (set-face-bold-p 'bold nil) ;; disable bold
+(set-face-bold-p 'bold nil) ;; disable bold
+;; (load-theme 'seoul256 t)
+(load-theme 'leuven)
 
 ;; (load-theme 'zenburn t)
 ;; (require 'color)
@@ -120,44 +124,30 @@
   (general-nmap "] SPC" (lambda (count) (interactive "p") (dotimes (_ count) (save-excursion (evil-insert-newline-below)))))
   (general-nmap "[ SPC" (lambda (count) (interactive "p") (dotimes (_ count) (save-excursion (evil-insert-newline-above)))))
 
-  (evil-define-command my-colorscheme (&optional theme)
+  (general-nmap "C-p" 'beginning-of-defun)
+  (general-nmap "C-n" 'end-of-defun)
+  (general-nmap "[ m" 'beginning-of-defun)
+  (general-nmap "] m" 'end-of-defun)
+  (general-nmap "0" 'evil-first-non-blank)
+
+  ;; :source
+  (evil-ex-define-cmd "so[urce]" 'evgeni-source)
+  (evil-define-command evgeni-source (&optional file)
+    (interactive "<f>")
+    (if file
+        (load-file file)
+      (load-file (concat user-emacs-directory "init.el"))))
+
+  ;; :colorscheme
+  (evil-ex-define-cmd "colo[rscheme]" 'evgeni-colorscheme)
+  (evil-define-command evgeni-colorscheme (&optional theme)
     :repeat nil
     (interactive "<a>")
     (if theme
         (load-theme (intern theme) t)
-      (call-interactively 'load-theme))
-    )
-  (evil-ex-define-cmd "colo[rscheme]" 'my-colorscheme)
+      (call-interactively 'load-theme)))
 
-  (defun my-collection-fn (str pred flag)
-    (completion-table-dynamic (lambda (prefix) (list "aa" "bb")))
-    ;; (str)
-    ;; (completion-table-dynamic (lambda (prefix) (mapcar 'symbol-name (custom-available-themes))))
-    ;; (completion-table-dynamic (lambda (arg) nil))
-
-    )
-
-  (evil-ex-define-argument-type thm
-    "Defines an argument type which can take theme names."
-    :collection (lambda () (completion-table-dynamic (lambda (prefix) (list "aa" "bb"))))
-    )
-
-  (evil-define-interactive-code "<thm>"
-    "A valid evil state."
-    :ex-arg thm
-    (list (when (evil-ex-p) evil-ex-argument)))
-
-  (evil-ex-define-cmd "xx" 'my-colorscheme1)
-
-  (evil-define-command my-colorscheme1 (&optional theme)
-    :repeat nil
-    (interactive "<thm>")
-    (if theme
-        (message theme)
-      )
-    )
-
-  ;; tyank & tput
+  ;; :tyank & :tput
   (when (getenv "TMUX")
     (evil-define-command evgeni-tyank (begin end)
       (interactive "<r>")
@@ -168,14 +158,7 @@
                                    (end-of-line)
                                    (newline)
                                    (insert (shell-command-to-string "tmux show-buffer")))))
-    (evil-ex-define-cmd "tyank" 'evgeni-tyank)
-    )
-
-  (general-nmap "C-p" 'beginning-of-defun)
-  (general-nmap "C-n" 'end-of-defun)
-  (general-nmap "[ m" 'beginning-of-defun)
-  (general-nmap "] m" 'end-of-defun)
-  (general-nmap "0" 'evil-first-non-blank)
+    (evil-ex-define-cmd "tyank" 'evgeni-tyank))
 
   ;; navigate b/w emacs windows and tmux panes
   (defun evgeni-window-navigate (emacs-cmd tmux-cmd)
@@ -203,7 +186,6 @@
   ;; toggles
   (general-nmap "C-c o c" 'hl-line-mode)
   (general-nmap "C-c o w" 'toggle-truncate-lines)
-  (general-nmap "C-c o n" 'linum-mode)
 
   ;; cursor in terminal
   (cond
@@ -242,9 +224,6 @@
   :config
   (setq evil-replace-with-register-key (kbd "gr"))
   (evil-replace-with-register-install))
-
-(use-package evil-anzu
-  :config (global-anzu-mode))
 
 (use-package evil-magit
   :ensure t
@@ -331,10 +310,30 @@
   )
 
 (use-package company-dabbrev
+  :after company
   :init
-  (setf company-dabbrev-ignore-case 'keep-prefix
+  (setf company-dabbrev-ignore-case t
         company-dabbrev-ignore-invisible t
         company-dabbrev-downcase nil))
+
+(use-package company-dabbrev-code
+  :after company
+  :config
+  (setq company-dabbrev-code-other-buffers t)
+  (setq company-dabbrev-code-ignore-case t))
+
+(use-package company-keywords
+  :after company
+  :config
+  (add-to-list
+   'company-keywords-alist
+   '(haskell-mode
+     "undefined" "as" "case" "ccall" "class" "contained" "data" "default"
+     "deriving" "do" "else" "error" "export" "family" "foreign" "hiding"
+     "if" "import" "in" "infix" "infixl" "infixr" "instance" "let"
+     "module" "newtype" "of" "qualified" "safe" "stdcall" "then" "trace"
+     "type" "undefined" "unsafe" "where"
+     )))
 
 (use-package flx-ido
   :config
@@ -346,8 +345,7 @@
 
 (use-package idomenu
   :ensure t
-  :general
-  (general-nmap ", f" 'idomenu))
+  :commands (idomenu))
 
 (use-package ido-vertical-mode
   :ensure t
@@ -373,16 +371,63 @@
   (general-evil-define-key 'normal xref--xref-buffer-mode-map "C-n" 'xref-next-line)
   (general-evil-define-key 'normal xref--xref-buffer-mode-map "C-p" 'xref-prev-line))
 
+(use-package abbrev
+  :config
+  (setq save-abbrevs 'silently)
+  (setq-default abbrev-mode t))
+
 (use-package narrow
+  :commands (narrow-to-region narrow-to-defun widen)
   :init
-  (with-eval-after-load 'evil
-    (evil-ex-define-cmd "dn[arrow]" 'narrow-to-defun)
-    (evil-ex-define-cmd "wi[den]" 'widen)))
+  (evil-define-command evgeni-narrow-or-widen (begin end)
+    (interactive "<r>")
+    (cond ((region-active-p) (narrow-to-region begin end))
+          ((buffer-narrowed-p) (widen))
+          (t (narrow-to-defun))))
+  (ex! "narrow" 'evgeni-narrow-or-widen))
 
 (use-package wgrep
+  :commands wgrep-change-to-wgrep-mode
   :ensure t
   :init
-  (ex! "wgrep[toggle]" 'wgrep-toggle-readonly-area))
+  (ex! "wgrep" 'wgrep-change-to-wgrep-mode)
+  (ex! "wgrep-finish" 'wgrep-finish-edit))
+
+(use-package linum
+  :general
+  (general-nmap "C-c o n" 'linum-mode)
+  :config
+  (setq linum-format "%d "))
+
+(use-package compile
+  :commands compile
+  :config
+  (setq compilation-ask-about-save nil)
+  (defun evgeni-close-compile-win-if-successful (buffer string)
+    (when (and
+           (buffer-live-p buffer)
+           (string-match "compilation" (buffer-name buffer))
+           (string-match "finished" string)
+           (not
+            (with-current-buffer buffer
+              (goto-char (point-min))
+              (search-forward "warning" nil t))))
+      (delete-windows-on buffer)))
+
+  (add-hook 'compilation-finish-functions 'evgeni-close-compile-win-if-successful)
+
+  (add-hook 'haskell-mode-hook (lambda ()
+                                 (set (make-local-variable 'compile-command)
+                                      (concat "stack --silent ghc -- -e :q " (shell-quote-argument buffer-file-name)))))
+  (add-hook 'cperl-mode-hook (lambda ()
+                               (set (make-local-variable 'compile-command)
+                                    (concat "perl -w -Mstrict -c " (shell-quote-argument buffer-file-name))))))
+
+(use-package aggressive-indent
+  :ensure t
+  :commands aggressive-indent-mode
+  :init
+  (add-hook 'emacs-lisp-mode-hook 'aggressive-indent-mode))
 
 (use-package shackle
   :ensure t
@@ -391,24 +436,45 @@
   (setq shackle-rules
         '(
           ("*xref*"            :align below :size 0.4 :noselect t)
+          ("*Help*"            :align below :size 16  :select t)
+          ("*Backtrace*"       :align below :size 25  :noselect t)
+          ("*Flycheck error messages*" :align below :size 0.25)
+          ("*compilation*" :align below :size 0.25)
+          ("*grep*" :align below :size 0.25)
           )))
+
+(use-package imenu-anywhere
+  :commands ido-imenu-anywhere
+  :ensure t)
+
 ;; elisp
 (add-hook 'emacs-lisp-mode-hook (lambda ()
                                   (modify-syntax-entry ?- "w")
+                                  (modify-syntax-entry ?! "w")
                                   (define-key emacs-lisp-mode-map (kbd "C-c C-c") #'eval-defun)))
 
-(add-hook 'lisp-interaction-mode-hook (lambda ()
-                                        (define-key lisp-interaction-mode-map (kbd "C-c C-c") 'eval-defun)))
 
-;; perl
-(defalias 'perl-mode 'cperl-mode)
-(add-hook 'cperl-mode-hook (lambda ()
+(use-package cperl-mode
+  :commands cperl-mode
+  :load-path "extra-packages"
+  :mode (("\\.pl$"   . cperl-mode)
+         ("\\.pm$"   . cperl-mode)
+         ("\\.t$"    . cperl-mode)
+         ("\\.html$" . cperl-mode))
+  :config
+  (setq cperl-invalid-face nil
+        cperl-indent-subs-specially nil
+        cperl-indent-parens-as-block t
+        cperl-indent-subs-specially nil)
+  :init
+  (add-hook 'cperl-mode-hook (lambda ()
+                               (modify-syntax-entry ?_ "w")
                              (set-face-background 'cperl-hash-face nil)
                              (set-face-foreground 'cperl-hash-face nil)
                              (set-face-background 'cperl-array-face nil)
                              (set-face-foreground 'cperl-array-face nil)
-                             (setq cperl-invalid-face nil) ;; extra whitespace TODO show this in normal mode only
-                             ))
+                               )))
+
 
 ;; TODO
 ; (setq ffip-prefer-ido-mode t)
