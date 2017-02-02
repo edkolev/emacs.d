@@ -100,13 +100,13 @@
   (general-evil-setup))
 
 (use-package evil
+  :ensure t
   :init
   (setq evil-search-module 'isearch)
   (setq evil-ex-complete-emacs-commands nil)
-  :ensure 
-  :config
   (setq evil-vsplit-window-right t)
   (setq evil-split-window-below t)
+  :config
   (evil-mode)
 
   (general-nmap "RET" 'save-buffer)
@@ -115,8 +115,6 @@
   (general-nmap "[ q" 'previous-error)
   (general-nmap "C-u" 'evil-scroll-up)
   (general-nmap ", w" 'evil-window-vsplit)
-  (general-nmap "g m" 'evil-make)
-  (general-nmap "g RET" 'evil-make)
 
   (general-nmap "g SPC" 'find-file-in-project)
   (general-nmap "C-c C-b" 'ido-switch-buffer)
@@ -159,6 +157,8 @@
                                    (newline)
                                    (insert (shell-command-to-string "tmux show-buffer")))))
     (evil-ex-define-cmd "tyank" 'evgeni-tyank))
+
+  (general-nmap "Y" (lambda () (interactive) (evil-yank (point) (point-at-eol))))
 
   ;; navigate b/w emacs windows and tmux panes
   (defun evgeni-window-navigate (emacs-cmd tmux-cmd)
@@ -207,6 +207,10 @@
   :general
   (general-nmap "C-c C-g" 'avy-goto-word-or-subword-1))
 
+(use-package ivy
+  :commands (ivy-completing-read)
+  :ensure t)
+
 (use-package evil-surround
   :ensure t
   :config (global-evil-surround-mode))
@@ -231,6 +235,9 @@
   :init
   (setq evil-magit-want-horizontal-movement t))
 
+(defun evgeni-filter (condp lst)
+  (delq nil
+        (mapcar (lambda (x) (and (funcall condp x) x)) lst)))
 (use-package recentf
   :init
   (setq recentf-max-saved-items 50)
@@ -245,9 +252,9 @@
 
   :general
   (general-nmap "SPC" (lambda () (interactive) (evgeni-find-buffer-or-file
-                                                (ido-completing-read
+                                                (ivy-completing-read
                                                  "Find recent file: "
-                                                 (append (mapcar #'buffer-name (buffer-list)) recentf-list)))))
+                                                 (append (evgeni-filter (lambda (bufname) (not (string-prefix-p " " bufname))) (mapcar #'buffer-name (buffer-list))) recentf-list)))))
 
   )
 
@@ -271,11 +278,25 @@
   :ensure t
   :general
   (general-nmap "U U" 'magit-status)
+  (general-nmap "U w" 'magit-stage-file)
   :config
   (remove-hook 'magit-status-sections-hook 'magit-insert-stashes) ;; don't show stashes
   (magit-add-section-hook 'magit-status-sections-hook
                           'magit-insert-untracked-files 'magit-insert-staged-changes 1) ;; lower untracked
+
+  (define-key magit-mode-map "e" 'vdiff-magit-dwim)
+  (define-key magit-mode-map "E" 'vdiff-magit-popup)
   )
+
+(use-package vdiff
+  :ensure t
+  :commands (vdiff-files
+             vdiff-files3
+             vdiff-buffers
+             vdiff-buffers3
+             vdiff-magit-dwim
+             vdiff-magit-popup))
+
 
 (use-package flycheck
   :ensure t
@@ -354,7 +375,7 @@
   (ido-vertical-mode t))
 
 (use-package org
-  :defer t
+  :disabled t
   :ensure t)
 
 (use-package move-text
@@ -399,10 +420,21 @@
   :config
   (setq linum-format "%d "))
 
-(use-package compile
-  :commands compile
+(use-package smart-compile
+  :ensure t
+  :commands smart-compile
+  :general
+  (general-nmap "g m" 'smart-compile)
+  (general-nmap "g RET" 'smart-compile)
   :config
+  (setq compilation-read-command nil)
   (setq compilation-ask-about-save nil)
+  (setq smart-compile-check-makefile nil)
+  (setq smart-compile-alist '((cperl-mode . "perl -w -Mstrict -c %f")
+                              (haskell-mode . "stack --silent ghc -- -e :q %f")
+                              (emacs-lisp-mode    . (emacs-lisp-byte-compile))
+                              ))
+
   (defun evgeni-close-compile-win-if-successful (buffer string)
     (when (and
            (buffer-live-p buffer)
@@ -416,12 +448,8 @@
 
   (add-hook 'compilation-finish-functions 'evgeni-close-compile-win-if-successful)
 
-  (add-hook 'haskell-mode-hook (lambda ()
-                                 (set (make-local-variable 'compile-command)
-                                      (concat "stack --silent ghc -- -e :q " (shell-quote-argument buffer-file-name)))))
-  (add-hook 'cperl-mode-hook (lambda ()
-                               (set (make-local-variable 'compile-command)
-                                    (concat "perl -w -Mstrict -c " (shell-quote-argument buffer-file-name))))))
+  (ex! "mak[e]" 'smart-compile)
+  )
 
 (use-package aggressive-indent
   :ensure t
@@ -448,11 +476,12 @@
   :ensure t)
 
 ;; elisp
-(add-hook 'emacs-lisp-mode-hook (lambda ()
+(use-package elisp-mode
+  :config
+  (define-key emacs-lisp-mode-map (kbd "C-c C-c") #'eval-defun)
+  (add-hook 'emacs-lisp-mode-hook (lambda ()
                                   (modify-syntax-entry ?- "w")
-                                  (modify-syntax-entry ?! "w")
-                                  (define-key emacs-lisp-mode-map (kbd "C-c C-c") #'eval-defun)))
-
+                                    (modify-syntax-entry ?! "w"))))
 
 (use-package cperl-mode
   :commands cperl-mode
@@ -465,17 +494,47 @@
   (setq cperl-invalid-face nil
         cperl-indent-subs-specially nil
         cperl-indent-parens-as-block t
-        cperl-indent-subs-specially nil)
-  :init
+        cperl-indent-subs-specially nil
+        cperl-close-paren-offset -3 ;; can't be set from .dir-locals.el?
+        cperl-indent-level 2
+        ;; cperl-continued-statement-offset 4
+        ;; cperl-tab-always-indent t)
+        )
+
+  (defun evgeni-perl-dump ()
+    (interactive)
+    (let ((word (thing-at-point 'word)))
+      (save-excursion (end-of-line)
+                      (newline-and-indent)
+                      (insert (concat "use Data::Dump qw(pp); warn '" word ": ' . pp($" word ") . \"\\n\";")))))
+  (general-define-key :keymaps 'local :states 'normal "] d" 'evgeni-perl-dump)
+
+  (unbind-key "{" cperl-mode-map)
+  (unbind-key "[" cperl-mode-map)
+  (unbind-key "(" cperl-mode-map)
+  (unbind-key "<" cperl-mode-map)
+  (unbind-key "}" cperl-mode-map)
+  (unbind-key "]" cperl-mode-map)
+  (unbind-key ")" cperl-mode-map)
+  (unbind-key ";" cperl-mode-map)
+  (unbind-key ":" cperl-mode-map)
+  (unbind-key "\C-j" cperl-mode-map)
+  (unbind-key "TAB" cperl-mode-map)
+
   (add-hook 'cperl-mode-hook (lambda ()
                                (modify-syntax-entry ?_ "w")
                              (set-face-background 'cperl-hash-face nil)
                              (set-face-foreground 'cperl-hash-face nil)
                              (set-face-background 'cperl-array-face nil)
                              (set-face-foreground 'cperl-array-face nil)
-                               )))
+                               (electric-pair-mode)))
 
 
-;; TODO
-; (setq ffip-prefer-ido-mode t)
+(use-package intero
+  :ensure t
+  :commands intero-mode)
 
+(use-package whitespace
+  :config
+  :commands whitespace-mode
+  (setq whitespace-style '(face tabs trailing)))
