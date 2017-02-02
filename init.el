@@ -116,7 +116,6 @@
   (general-nmap "C-u" 'evil-scroll-up)
   (general-nmap ", w" 'evil-window-vsplit)
 
-  (general-nmap "g SPC" 'find-file-in-project)
   (general-nmap "C-c C-b" 'ido-switch-buffer)
 
   (general-nmap "] SPC" (lambda (count) (interactive "p") (dotimes (_ count) (save-excursion (evil-insert-newline-below)))))
@@ -228,6 +227,12 @@
   :config
   (setq evil-replace-with-register-key (kbd "gr"))
   (evil-replace-with-register-install))
+
+(use-package evil-visualstar
+  :ensure t
+  :defer 1
+  :config
+  (global-evil-visualstar-mode))
 
 (use-package evil-magit
   :ensure t
@@ -402,10 +407,18 @@
   :init
   (evil-define-command evgeni-narrow-or-widen (begin end)
     (interactive "<r>")
-    (cond ((region-active-p) (narrow-to-region begin end))
+    (cond ((region-active-p)
+           (deactivate-mark)
+           (let ((indbuf (clone-indirect-buffer nil nil)))
+             (with-current-buffer indbuf
+               (narrow-to-region begin end))
+             (switch-to-buffer indbuf)))
           ((buffer-narrowed-p) (widen))
-          (t (narrow-to-defun))))
-  (ex! "narrow" 'evgeni-narrow-or-widen))
+          (t (let ((indbuf (clone-indirect-buffer nil nil)))
+               (with-current-buffer indbuf
+                 (narrow-to-defun))
+               (switch-to-buffer indbuf)))))
+  (ex! "na[rrow]" 'evgeni-narrow-or-widen))
 
 (use-package wgrep
   :commands wgrep-change-to-wgrep-mode
