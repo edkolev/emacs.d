@@ -230,7 +230,6 @@
 
 (use-package evil-visualstar
   :ensure t
-  :defer 1
   :config
   (global-evil-visualstar-mode))
 
@@ -282,8 +281,10 @@
 (use-package magit
   :ensure t
   :general
-  (general-nmap "U U" 'magit-status)
-  (general-nmap "U w" 'magit-stage-file)
+  (general-nmap "U U" '(magit-status :which-key "git status"))
+  (general-nmap "U s" '(magit-stage-file :which-key "git stage"))
+  (general-nmap "U d" '(magit-diff-unstaged :which-key "git diff"))
+  (general-nmap "U l" '(magit-log-head :which-key "git diff"))
   :config
   (remove-hook 'magit-status-sections-hook 'magit-insert-stashes) ;; don't show stashes
   (magit-add-section-hook 'magit-status-sections-hook
@@ -305,10 +306,11 @@
 
 (use-package flycheck
   :ensure t
+  :commands flycheck-mode
   :general
   (general-nmap "C-c o f" 'flycheck-mode)
   :config
-  ;; (flycheck-mode t)
+  (setq flycheck-check-syntax-automatically '(mode-enabled save))
   (setq-default flycheck-disabled-checkers '(perl-perlcritic)))
 
 (use-package company
@@ -407,18 +409,10 @@
   :init
   (evil-define-command evgeni-narrow-or-widen (begin end)
     (interactive "<r>")
-    (cond ((region-active-p)
-           (deactivate-mark)
-           (let ((indbuf (clone-indirect-buffer nil nil)))
-             (with-current-buffer indbuf
-               (narrow-to-region begin end))
-             (switch-to-buffer indbuf)))
+    (cond ((region-active-p) (narrow-to-region begin end))
           ((buffer-narrowed-p) (widen))
-          (t (let ((indbuf (clone-indirect-buffer nil nil)))
-               (with-current-buffer indbuf
-                 (narrow-to-defun))
-               (switch-to-buffer indbuf)))))
-  (ex! "na[rrow]" 'evgeni-narrow-or-widen))
+          (t (narrow-to-defun))))
+  (ex! "narrow" 'evgeni-narrow-or-widen))
 
 (use-package wgrep
   :commands wgrep-change-to-wgrep-mode
@@ -485,15 +479,34 @@
           )))
 
 (use-package imenu-anywhere
-  :commands ido-imenu-anywhere
+  :general
+  (general-nmap ", i" 'ido-imenu-anywhere)
+  (general-nmap ", f" 'ido-imenu-anywhere)
   :ensure t)
 
 ;; elisp
+(use-package which-key
+  :ensure t
+  :config
+  (setq which-key-idle-delay 0.4)
+  (which-key-mode))
+
+(use-package counsel
+  :ensure t
+  :general
+  (general-nmap "K" (lambda () (interactive) (counsel-git-grep nil (thing-at-point 'word)) ))
+  (general-nmap ", s" 'swiper)
+  (general-nmap ", /" 'swiper)
+  (general-nmap ", g" 'counsel-git-grep)
+  (general-nmap ", l" 'counsel-git)
+  (general-nmap "g SPC" ' counsel-git))
+
 (use-package elisp-mode
   :config
   (define-key emacs-lisp-mode-map (kbd "C-c C-c") #'eval-defun)
   (add-hook 'emacs-lisp-mode-hook (lambda ()
-                                  (modify-syntax-entry ?- "w")
+                                    (electric-pair-mode)
+                                    (modify-syntax-entry ?- "w")
                                     (modify-syntax-entry ?! "w"))))
 
 (use-package cperl-mode
@@ -503,6 +516,8 @@
          ("\\.pm$"   . cperl-mode)
          ("\\.t$"    . cperl-mode)
          ("\\.html$" . cperl-mode))
+  :init
+  (setq cperl-under-as-char t)
   :config
   (setq cperl-invalid-face nil
         cperl-indent-subs-specially nil
@@ -520,7 +535,6 @@
       (save-excursion (end-of-line)
                       (newline-and-indent)
                       (insert (concat "use Data::Dump qw(pp); warn '" word ": ' . pp($" word ") . \"\\n\";")))))
-  (general-define-key :keymaps 'local :states 'normal "] d" 'evgeni-perl-dump)
 
   (unbind-key "{" cperl-mode-map)
   (unbind-key "[" cperl-mode-map)
@@ -534,20 +548,19 @@
   (unbind-key "\C-j" cperl-mode-map)
   (unbind-key "TAB" cperl-mode-map)
 
-  (add-hook 'cperl-mode-hook (lambda ()
-                               (modify-syntax-entry ?_ "w")
-                             (set-face-background 'cperl-hash-face nil)
-                             (set-face-foreground 'cperl-hash-face nil)
-                             (set-face-background 'cperl-array-face nil)
-                             (set-face-foreground 'cperl-array-face nil)
-                               (electric-pair-mode)))
-
+  (add-hook 'cperl-mode-hook #'(lambda ()
+                                 (general-define-key :keymaps 'local :states 'normal "] d" 'evgeni-perl-dump)
+                                 (set-face-background 'cperl-hash-face nil)
+                                 (set-face-foreground 'cperl-hash-face nil)
+                                 (set-face-background 'cperl-array-face nil)
+                                 (set-face-foreground 'cperl-array-face nil)
+                                 (electric-pair-mode))))
 
 (use-package intero
   :ensure t
   :commands intero-mode)
 
 (use-package whitespace
-  :config
   :commands whitespace-mode
+  :config
   (setq whitespace-style '(face tabs trailing)))
