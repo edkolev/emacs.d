@@ -16,6 +16,10 @@
 (setf initial-scratch-message ""
       initial-major-mode 'emacs-lisp-mode)
 
+(defun display-startup-echo-area-message ()
+  (message ""))
+(setq load-prefer-newer t)
+
 (when (fboundp 'tool-bar-mode) (tool-bar-mode -1))
 (when (fboundp 'menu-bar-mode) (menu-bar-mode -1))
 
@@ -210,6 +214,10 @@
   :commands (ivy-completing-read)
   :ensure t)
 
+(use-package ivy-hydra
+  :ensure t
+  :defer t)
+
 (use-package evil-surround
   :ensure t
   :config (global-evil-surround-mode))
@@ -239,28 +247,12 @@
   :init
   (setq evil-magit-want-horizontal-movement t))
 
-(defun evgeni-filter (condp lst)
-  (delq nil
-        (mapcar (lambda (x) (and (funcall condp x) x)) lst)))
 (use-package recentf
   :init
+  ;; (add-to-list 'recentf-exclude "^/\\(?:ssh\\|su\\|sudo\\)?:")
+  ;; (setq recentf-save-file "recentf-save.el")
   (setq recentf-max-saved-items 50)
-  (recentf-mode)
-
-  (defun evgeni-find-buffer-or-file (file-or-buffer)
-    (let* ((bufnames (mapcar #'buffer-name (buffer-list)))
-           (is-buffer (member file-or-buffer bufnames)))
-      (cond
-       (is-buffer (switch-to-buffer file-or-buffer))
-       (t (find-file file-or-buffer)))))
-
-  :general
-  (general-nmap "SPC" (lambda () (interactive) (evgeni-find-buffer-or-file
-                                                (ivy-completing-read
-                                                 "Find recent file: "
-                                                 (append (evgeni-filter (lambda (bufname) (not (string-prefix-p " " bufname))) (mapcar #'buffer-name (buffer-list))) recentf-list)))))
-
-  )
+  (recentf-mode))
 
 (use-package evil-indent-plus ;; indent object
   :ensure t
@@ -276,6 +268,7 @@
   :general
   (general-nmap "-"   (lambda () (interactive) (dired ".")))
   :config
+  (setq dired-listing-switches "-alh")
   (define-key dired-mode-map (kbd "-") 'dired-up-directory))
 
 (use-package magit
@@ -484,19 +477,40 @@
   (general-nmap ", f" 'ido-imenu-anywhere)
   :ensure t)
 
-;; elisp
 (use-package which-key
   :ensure t
   :config
   (setq which-key-idle-delay 0.4)
   (which-key-mode))
 
+(use-package ivy
+  :ensure t
+  :config
+  (ivy-mode 1)
+  (setq ivy-use-virtual-buffers t)
+  (define-key ivy-minibuffer-map (kbd "C-c C-c") 'ivy-occur)
+  (setq ivy-use-virtual-buffers t)
+  :general
+  (general-nmap "SPC" 'ivy-switch-buffer)
+  :config
+  (define-key ivy-minibuffer-map (kbd "C-w") 'backward-kill-word)
+  ;; TODO not working in terminal
+  (define-key ivy-mode-map [escape] (kbd "C-g"))
+  (define-key ivy-minibuffer-map [escape] (kbd "C-g"))
+
+  ;; (define-key ivy-minibuffer-map (kbd "C-c C-c") 'ivy-restrict-to-matches)
+  )
+
+(use-package swiper
+  :ensure t
+  :general
+  (general-nmap ", s" 'swiper)
+  (general-nmap ", /" 'swiper))
+
 (use-package counsel
   :ensure t
   :general
   (general-nmap "K" (lambda () (interactive) (counsel-git-grep nil (thing-at-point 'word)) ))
-  (general-nmap ", s" 'swiper)
-  (general-nmap ", /" 'swiper)
   (general-nmap ", g" 'counsel-git-grep)
   (general-nmap ", l" 'counsel-git)
   (general-nmap "g SPC" ' counsel-git))
