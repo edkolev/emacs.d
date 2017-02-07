@@ -65,7 +65,6 @@
 (use-package zenburn-theme :ensure t :defer t)
 (use-package eclipse-theme :ensure t :defer t)
 (use-package flatui-theme :ensure t :defer t)
-
 (use-package plan9-theme :ensure t :defer t)
 (use-package twilight-bright-theme :ensure t :defer t)
 (use-package espresso-theme :ensure t :defer t)
@@ -73,29 +72,8 @@
 (use-package flatui-theme :ensure t :defer t)
 (use-package faff-theme :ensure t :defer t)
 
-;; dark variants  Range:   233 (darkest) ~ 239 (lightest) ;; Default: 237
-;; light variants Range:   252 (darkest) ~ 256 (lightest) ;; Default: 253
-;; (setq seoul256-background 253)
 (set-face-bold-p 'bold nil) ;; disable bold
-;; (load-theme 'seoul256 t)
 (load-theme 'leuven)
-
-;; (load-theme 'zenburn t)
-;; (require 'color)
-
-;; (let ((bg (face-attribute 'default :background)))
-;;   (custom-set-faces
-;;    `(company-preview-common ((t (:background ,(color-lighten-name bg 10)))))
-;;    `(company-preview ((t (:background ,(color-lighten-name bg 5)))))))
-
-
-;; (let ((bg (face-attribute 'default :background)))
-;;   (custom-theme-set-faces
-;;    'zenburn
-;;    `(company-preview-common ((t (:background ,(color-lighten-name bg 10)))))
-;;    `(company-preview ((t (:background ,(color-lighten-name bg 5)))))
-;;    `(company-tooltip-selection ((t (:inherit font-lock-function-name-face))))
-;;    `(company-tooltip-common ((t (:inherit font-lock-constant-face))))))
 
 ;; packages
 (use-package general ;; https://gitlab.com/KNX32542/dotfiles/blob/master/emacs/.emacs.d/init.el
@@ -327,15 +305,17 @@
   (global-company-mode t)
   :general
   (general-imap "C-x C-f" 'company-files)
-  (general-imap "C-x C-]" 'company-tags)
+  (general-imap "C-x C-]" 'company-etags)
+  (general-imap "C-]" 'company-etags)
   )
 
 (use-package company-dabbrev
   :after company
   :init
-  (setf company-dabbrev-ignore-case t
-        company-dabbrev-ignore-invisible t
-        company-dabbrev-downcase nil))
+  (setf
+   company-dabbrev-ignore-case nil
+   company-dabbrev-ignore-invisible t
+   company-dabbrev-downcase nil))
 
 (use-package company-dabbrev-code
   :after company
@@ -375,6 +355,8 @@
   (ido-vertical-mode t))
 
 (use-package org
+  ;; https://github.com/gjstein/emacs.d/blob/cb126260d30246dc832d6e456b06676f517b35b0/config/init-31-doc-org.el#L50-L77
+  ;; https://github.com/bbatsov/prelude/blob/e0ca7c700389e70df457177ea75b0936dbe254e0/modules/prelude-evil.el#L130
   :disabled t
   :ensure t)
 
@@ -403,7 +385,7 @@
   (evil-define-command evgeni-narrow-or-widen (begin end)
     (interactive "<r>")
     (cond ((region-active-p) (narrow-to-region begin end))
-          ((buffer-narrowed-p) (widen))
+          ((buffer-narrowed-p) (widen)) ;; buffer-base-buffer
           (t (narrow-to-defun))))
   (ex! "narrow" 'evgeni-narrow-or-widen))
 
@@ -419,6 +401,42 @@
   (general-nmap "C-c o n" 'linum-mode)
   :config
   (setq linum-format "%d "))
+
+(use-package compile
+  :config
+
+  (defun evgeni-project-root ()
+    (if (project-current)
+        (cdr (project-current))
+      default-directory
+      ))
+
+  (defun evgeni-grep-command ()
+    (if (executable-find "ag")
+        "ag --case-sensitive --nogroup"
+      "grep -R -F -e"))
+
+  (defun evgeni-compilation-start-in-project-root (mode command &rest arguments)
+    (let* ((default-directory (evgeni-project-root))
+           (command-with-args (cons command arguments))
+           (full-commad (mapconcat 'identity command-with-args " ")))
+      (compilation-start full-commad mode)))
+
+  (defun evgeni-grep (&rest args)
+    (apply
+     'evgeni-compilation-start-in-project-root
+     'grep-mode
+     (evgeni-grep-command)
+     args))
+
+  (evil-ex-define-cmd "grep" 'evgeni-ex-grep)
+  (evil-define-command evgeni-ex-grep (&rest args)
+    (interactive "<f>")
+    (if args
+        (apply 'evgeni-grep args)
+      (message "What do you want to search for?")))
+
+  (general-nmap "K" (lambda () (interactive) (evgeni-grep (thing-at-point 'word)))))
 
 (use-package smart-compile
   :ensure t
@@ -485,20 +503,15 @@
 
 (use-package ivy
   :ensure t
-  :config
-  (ivy-mode 1)
-  (setq ivy-use-virtual-buffers t)
-  (define-key ivy-minibuffer-map (kbd "C-c C-c") 'ivy-occur)
-  (setq ivy-use-virtual-buffers t)
   :general
   (general-nmap "SPC" 'ivy-switch-buffer)
   :config
+  (ivy-mode 1)
+  (setq ivy-use-virtual-buffers t)
   (define-key ivy-minibuffer-map (kbd "C-w") 'backward-kill-word)
-  ;; TODO not working in terminal
-  (define-key ivy-mode-map [escape] (kbd "C-g"))
-  (define-key ivy-minibuffer-map [escape] (kbd "C-g"))
+  (define-key ivy-minibuffer-map (kbd "C-u") (lambda () (interactive) (kill-region (point) (point-at-bol))))
 
-  ;; (define-key ivy-minibuffer-map (kbd "C-c C-c") 'ivy-restrict-to-matches)
+  (define-key ivy-minibuffer-map (kbd "C-c C-c") 'ivy-restrict-to-matches)
   )
 
 (use-package swiper
@@ -510,7 +523,6 @@
 (use-package counsel
   :ensure t
   :general
-  (general-nmap "K" (lambda () (interactive) (counsel-git-grep nil (thing-at-point 'word)) ))
   (general-nmap ", g" 'counsel-git-grep)
   (general-nmap ", l" 'counsel-git)
   (general-nmap "g SPC" ' counsel-git))
@@ -539,8 +551,6 @@
         cperl-indent-subs-specially nil
         cperl-close-paren-offset -3 ;; can't be set from .dir-locals.el?
         cperl-indent-level 2
-        ;; cperl-continued-statement-offset 4
-        ;; cperl-tab-always-indent t)
         )
 
   (defun evgeni-perl-dump ()
