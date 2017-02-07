@@ -228,7 +228,7 @@
 (use-package recentf
   :init
   ;; (add-to-list 'recentf-exclude "^/\\(?:ssh\\|su\\|sudo\\)?:")
-  ;; (setq recentf-save-file "recentf-save.el")
+  (setq recentf-save-file (expand-file-name "recentf.el" user-emacs-directory))
   (setq recentf-max-saved-items 50)
   (recentf-mode))
 
@@ -240,7 +240,10 @@
   :config (show-paren-mode))
 
 (use-package saveplace
-  :config (save-place-mode))
+  :config
+  (save-place-mode)
+  (setq save-place-file (expand-file-name "saveplace.el" user-emacs-directory))
+  )
 
 (use-package dired
   :general
@@ -286,28 +289,53 @@
 
 (use-package company
   :ensure t
-  :defer 1
-  :init
-  (setf company-idle-delay 0
-        company-minimum-prefix-length 2
-        company-show-numbers t
-        company-selection-wrap-around t
-        company-backends (list #'company-capf
-                               (list #'company-dabbrev-code
-                                     #'company-keywords)
-                               #'company-files
-                               #'company-dabbrev))
-  :config
-  (define-key company-active-map (kbd "C-n") 'company-select-next)
-  (define-key company-active-map (kbd "C-p") 'company-select-previous)
-  (define-key company-active-map (kbd "TAB") 'company-complete-selection)
-  (define-key company-active-map (kbd "RET") nil)
-  (global-company-mode t)
+  :commands company-mode
   :general
   (general-imap "C-x C-f" 'company-files)
   (general-imap "C-x C-]" 'company-etags)
   (general-imap "C-]" 'company-etags)
-  )
+  :init
+  (add-hook 'prog-mode-hook 'company-mode)
+  (setf company-idle-delay 0.3
+
+        company-minimum-prefix-length 2
+        company-show-numbers t
+        company-selection-wrap-around t
+        company-quickhelp-delay nil
+        company-tooltip-limit 10
+        company-tooltip-align-annotations t
+        company-require-match 'never
+
+        company-frontends
+        '(company-pseudo-tooltip-unless-just-one-frontend
+          company-preview-frontend
+          company-echo-metadata-frontend)
+
+        company-backends (list (list #'company-capf
+                                     ;; #'company-dabbrev-code
+                                     #'company-dabbrev
+                                     #'company-keywords)
+                               (list #'company-dabbrev-code
+                                     #'company-keywords)
+                               #'company-files
+                               #'company-dabbrev)
+
+
+        )
+  :config
+
+  (defadvice company-pseudo-tooltip-unless-just-one-frontend
+      (around only-show-tooltip-when-invoked activate)
+    (when (company-explicit-action-p)
+      ad-do-it))
+
+  (define-key company-active-map (kbd "C-n") 'company-select-next)
+  (define-key company-active-map (kbd "C-p") 'company-select-previous)
+  (general-imap "TAB" (lambda () (interactive)
+                        (if (looking-at "\\_>")
+                            (company-complete-common)
+                          (indent-according-to-mode))))
+  (global-company-mode t))
 
 (use-package company-dabbrev
   :after company
@@ -377,6 +405,7 @@
 (use-package abbrev
   :config
   (setq save-abbrevs 'silently)
+  (setq abbrev-file-name (expand-file-name "abbrev.el" user-emacs-directory))
   (setq-default abbrev-mode t))
 
 (use-package narrow
