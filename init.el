@@ -1,6 +1,6 @@
 
 (require 'package)
-(add-to-list 'package-archives '("melpa" . "http://melpa.org/packages/") t)
+(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
 (package-initialize)
 
 (setq gc-cons-threshold (* 10 1024 1024))
@@ -46,6 +46,7 @@
      (evil-ex-define-cmd ,cmd ,func)))
 
 ;; use-package
+(setq use-package-enable-imenu-support t)
 (unless (package-installed-p 'use-package)
   (package-refresh-contents)
   (package-install 'use-package))
@@ -155,14 +156,39 @@
   (general-imap "C-e" 'end-of-line)
   (general-imap "C-a" 'beginning-of-line-text)
   (general-imap "C-u" (lambda () (interactive) (evil-delete (point-at-bol) (point))))
+  (general-imap "C-x s" 'complete-symbol)
+
+  ;; expand lines
+  (defun evgeni-hippie-expand-lines ()
+    (interactive)
+    (let ((hippie-expand-try-functions-list
+           '(try-expand-line try-expand-line-all-buffers)))
+      (end-of-line)
+      (hippie-expand nil)))
+  (general-imap "C-l" 'evgeni-hippie-expand-lines)
+  (general-imap "C-x C-l" 'evgeni-hippie-expand-lines)
+
+  (general-imap "C-k" 'completion-at-point)
+  ;; (global-set-key (kbd "C-l") 'completion-at-point)
 
   ;; function text object
   (evil-define-text-object evgeni-inner-defun (count &optional beg end type)
     (save-excursion
       (mark-defun)
       (evil-range (region-beginning) (region-end) type :expanded t)))
+
   (define-key evil-inner-text-objects-map "m" 'evgeni-inner-defun)
   (define-key evil-outer-text-objects-map "m" 'evgeni-inner-defun)
+
+  ;; 'entire' text object
+  (evil-define-text-object evgeni-entire-text-object (count &optional beg end type)
+    (save-excursion
+      (mark-whole-buffer)
+      (exchange-dot-and-mark)
+      (evil-range (region-beginning) (region-end) type :expanded t)))
+
+  (define-key evil-inner-text-objects-map "e" 'evgeni-entire-text-object)
+  (define-key evil-outer-text-objects-map "e" 'evgeni-entire-text-object)
 
   ;; toggles
   (general-nmap "C-c o c" 'hl-line-mode)
@@ -175,8 +201,7 @@
     (add-hook 'evil-insert-state-exit-hook  (lambda () (send-string-to-terminal "\ePtmux;\e\e]50;CursorShape=0\x7\e\\"))))
    ((not (display-graphic-p))
     (add-hook 'evil-insert-state-entry-hook (lambda () (send-string-to-terminal "\e]50;CursorShape=1\x7")))
-    (add-hook 'evil-insert-state-exit-hook  (lambda () (send-string-to-terminal "\e]50;CursorShape=0\x7")))))
-  )
+    (add-hook 'evil-insert-state-exit-hook  (lambda () (send-string-to-terminal "\e]50;CursorShape=0\x7"))))))
 
 (use-package ace-window
   :ensure t
@@ -187,10 +212,6 @@
   :ensure t
   :general
   (general-nmap "C-c C-g" 'avy-goto-word-or-subword-1))
-
-(use-package ivy
-  :commands (ivy-completing-read)
-  :ensure t)
 
 (use-package ivy-hydra
   :ensure t
@@ -230,6 +251,7 @@
   ;; (add-to-list 'recentf-exclude "^/\\(?:ssh\\|su\\|sudo\\)?:")
   (setq recentf-save-file (expand-file-name "recentf.el" user-emacs-directory))
   (setq recentf-max-saved-items 50)
+  (setq recentf-exclude '("/tmp/" "/ssh:"))
   (recentf-mode))
 
 (use-package evil-indent-plus ;; indent object
@@ -329,6 +351,7 @@
     (when (company-explicit-action-p)
       ad-do-it))
 
+  (unbind-key "C-w" company-active-map)
   (define-key company-active-map (kbd "C-n") 'company-select-next)
   (define-key company-active-map (kbd "C-p") 'company-select-previous)
   (general-imap "TAB" (lambda () (interactive)
@@ -406,7 +429,8 @@
   :config
   (setq save-abbrevs 'silently)
   (setq abbrev-file-name (expand-file-name "abbrev.el" user-emacs-directory))
-  (setq-default abbrev-mode t))
+  (setq-default abbrev-mode t)
+  )
 
 (use-package narrow
   :commands (narrow-to-region narrow-to-defun widen)
@@ -465,6 +489,22 @@
         (apply 'evgeni-grep args)
       (message "What do you want to search for?")))
 
+  (defun evgeni-scroll-grep-win (buffer string)
+    (when (and
+           (eq major-mode 'grep-mode)
+           (buffer-live-p buffer)
+           (string-match "grep" (buffer-name buffer))
+           (string-match "finished" string))
+      (with-selected-window (get-buffer-window buffer)
+        (goto-char (point-min))
+        (scroll-up-line 4)
+
+        (save-excursion
+          (message "*grep* %d matches found" (- (count-lines (point-min) (point-max)) 6))
+          ))))
+
+  (add-hook 'compilation-finish-functions 'evgeni-scroll-grep-win)
+
   (general-nmap "K" (lambda () (interactive) (evgeni-grep (thing-at-point 'word)))))
 
 (use-package smart-compile
@@ -478,20 +518,25 @@
   (setq compilation-ask-about-save nil)
   (setq smart-compile-check-makefile nil)
   (setq smart-compile-alist '((cperl-mode . "perl -w -Mstrict -c %f")
+                              (perl-mode . "perl -w -Mstrict -c %f")
                               (haskell-mode . "stack --silent ghc -- -e :q %f")
                               (emacs-lisp-mode    . (emacs-lisp-byte-compile))
                               ))
 
   (defun evgeni-close-compile-win-if-successful (buffer string)
-    (when (and
-           (buffer-live-p buffer)
-           (string-match "compilation" (buffer-name buffer))
-           (string-match "finished" string)
-           (not
-            (with-current-buffer buffer
-              (goto-char (point-min))
-              (search-forward "warning" nil t))))
-      (delete-windows-on buffer)))
+    (if (and
+         (eq major-mode 'compilation-mode)
+         (buffer-live-p buffer)
+         (string-match "compilation" (buffer-name buffer))
+         (string-match "finished" string)
+         (not
+          (with-current-buffer buffer
+            (goto-char (point-min))
+            (search-forward "warning" nil t))))
+        (delete-windows-on buffer)
+      (with-selected-window (get-buffer-window buffer)
+        (goto-char (point-min))
+        (scroll-up-line 4))))
 
   (add-hook 'compilation-finish-functions 'evgeni-close-compile-win-if-successful)
 
@@ -514,8 +559,8 @@
           ("*Help*"            :align below :size 16  :select t)
           ("*Backtrace*"       :align below :size 25  :noselect t)
           ("*Flycheck error messages*" :align below :size 0.25)
-          ("*compilation*" :align below :size 0.25)
-          ("*grep*" :align below :size 0.25)
+          ("*compilation*" :align below :size 10)
+          ("*grep*" :align below :size 10)
           )))
 
 (use-package imenu-anywhere
@@ -532,6 +577,7 @@
 
 (use-package ivy
   :ensure t
+  :demand
   :general
   (general-nmap "SPC" 'ivy-switch-buffer)
   :config
@@ -540,8 +586,7 @@
   (define-key ivy-minibuffer-map (kbd "C-w") 'backward-kill-word)
   (define-key ivy-minibuffer-map (kbd "C-u") (lambda () (interactive) (kill-region (point) (point-at-bol))))
 
-  (define-key ivy-minibuffer-map (kbd "C-c C-c") 'ivy-restrict-to-matches)
-  )
+  (define-key ivy-minibuffer-map (kbd "C-c C-c") 'ivy-restrict-to-matches))
 
 (use-package swiper
   :ensure t
@@ -554,15 +599,21 @@
   :general
   (general-nmap ", g" 'counsel-git-grep)
   (general-nmap ", l" 'counsel-git)
-  (general-nmap "g SPC" ' counsel-git))
+  (general-nmap "g SPC" ' counsel-git)
+  (general-nmap ", i" 'counsel-imenu)
+  (general-nmap ", f" 'counsel-imenu)
+  )
 
-(use-package elisp-mode
+(use-package elisp-mode ;; emacs-lisp-mode
   :config
   (define-key emacs-lisp-mode-map (kbd "C-c C-c") #'eval-defun)
+
+  (modify-syntax-entry ?- "w" emacs-lisp-mode-syntax-table)
+  (modify-syntax-entry ?. "w" emacs-lisp-mode-syntax-table)
+  (modify-syntax-entry ?! "w" emacs-lisp-mode-syntax-table)
+
   (add-hook 'emacs-lisp-mode-hook (lambda ()
-                                    (electric-pair-mode)
-                                    (modify-syntax-entry ?- "w")
-                                    (modify-syntax-entry ?! "w"))))
+                                    (electric-pair-mode))))
 
 (use-package cperl-mode
   :commands cperl-mode
@@ -617,3 +668,59 @@
   :commands whitespace-mode
   :config
   (setq whitespace-style '(face tabs trailing)))
+
+(use-package winner
+  :config
+  (winner-mode)
+  (general-nmap "z u" 'winner-undo)
+  (general-nmap "z C-r" 'winner-redo)
+  (ex! "winner-undo" 'winner-undo))
+
+(use-package undo-tree
+  :ensure t
+  :config
+  (ex! "undo-tree" 'undo-tree-visualize)
+  (setq undo-tree-history-directory-alist `((".*" . ,temporary-file-directory)))
+  (setq undo-tree-auto-save-history t))
+
+(use-package perl-mode
+  :commands perl-mode
+  :config
+  (setq perl-indent-level 3 ;; 4
+        perl-continued-statement-offset 3 ;; t 4
+        perl-continued-brace-offset -3 ;; -4
+        perl-brace-offset 0
+        perl-brace-imaginary-offset 0
+        perl-label-offset -3 ;; -2
+        perl-indent-continued-arguments nil
+        perl-indent-parens-as-block t ;; nil
+        perl-tab-always-indent tab-always-indent
+        perl-tab-to-comment nil
+        perl-nochange "\f")
+
+
+  (defun evgeni-perl-dump ()
+    (interactive)
+    (let ((word (thing-at-point 'word)))
+      (save-excursion (end-of-line)
+                      (newline-and-indent)
+                      (insert (concat "use Data::Dump qw(pp); warn '" word ": ' . pp($" word ") . \"\\n\";")))))
+
+
+  (add-hook 'perl-mode-hook #'(lambda ()
+                                (general-define-key :keymaps 'local :states 'normal "] d" 'evgeni-perl-dump)
+                                (electric-pair-mode)
+                                (modify-syntax-entry ?_ "w" perl-mode-syntax-table)
+                                (setq defun-prompt-regexp ;; taken from cperl-mode
+                                      "^[ 	]*\\(\\(?:sub\\)\\(\\([ 	\n]\\|#[^\n]*\n\\)+\\(::[a-zA-Z_0-9:']+\\|[a-zA-Z_'][a-zA-Z_0-9:']*\\)\\)\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*\\(([^()]*)\\)\\)?\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*\\(:\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*\\(\\sw\\|_\\)+\\((\\(\\\\.\\|[^\\\\()]\\|([^\\\\()]*)\\)*)\\)?\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*:\\)?\\)+\\)\\)?\\|\\(BEGIN\\|UNITCHECK\\|CHECK\\|INIT\\|END\\|AUTOLOAD\\|DESTROY\\)\\)[ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*")
+                                )
+
+
+            ) 
+  )
+
+(use-package eros
+  :ensure t
+  :general
+  (general-define-key :keymap 'emacs-lisp-mode-map [remap eval-last-sexp] 'eros-eval-last-sexp)
+  (general-define-key :keymap 'emacs-lisp-mode-map [remap eval-defun] 'eros-eval-defun))
