@@ -354,6 +354,7 @@
   (setq-default flycheck-disabled-checkers '(perl-perlcritic)))
 
 (use-package company
+  :disabled t
   :ensure t
   :commands company-mode
   :general
@@ -405,6 +406,7 @@
   (global-company-mode t))
 
 (use-package company-dabbrev
+  :disabled t
   :after company
   :init
   (setf
@@ -413,12 +415,14 @@
    company-dabbrev-downcase nil))
 
 (use-package company-dabbrev-code
+  :disabled t
   :after company
   :config
   (setq company-dabbrev-code-other-buffers t)
   (setq company-dabbrev-code-ignore-case t))
 
 (use-package company-keywords
+  :disabled t
   :after company
   :config
   (add-to-list
@@ -450,10 +454,15 @@
   (ido-vertical-mode t))
 
 (use-package org
-  ;; https://github.com/gjstein/emacs.d/blob/cb126260d30246dc832d6e456b06676f517b35b0/config/init-31-doc-org.el#L50-L77
-  ;; https://github.com/bbatsov/prelude/blob/e0ca7c700389e70df457177ea75b0936dbe254e0/modules/prelude-evil.el#L130
-  :disabled t
+  :mode (("\\.org$"   . org-mode))
+  :defer t
   :ensure t)
+
+(use-package org-bullets
+  :ensure t
+  :after org
+  :config
+  (add-hook 'org-mode-hook (lambda () (org-bullets-mode 1))))
 
 (use-package move-text
   :ensure t
@@ -464,7 +473,7 @@
 (use-package xref
   :general
   (general-nmap "C-]" 'xref-find-definitions)
-  (general-nmap "C-W C-]" 'xref-find-definitions-other-window)
+  (general-nmap "C-w C-]" 'xref-find-definitions-other-window)
   (general-evil-define-key 'normal xref--xref-buffer-mode-map "q" 'delete-window)
   (general-evil-define-key 'normal xref--xref-buffer-mode-map "C-n" 'xref-next-line)
   (general-evil-define-key 'normal xref--xref-buffer-mode-map "C-p" 'xref-prev-line))
@@ -486,10 +495,20 @@
           (t (narrow-to-defun))))
   (ex! "narrow" 'evgeni-narrow-or-widen))
 
+(use-package grep
+  :commands grep-mode
+  :config
+  (unbind-key "h" grep-mode-map)
+  (unbind-key "n" grep-mode-map)
+  ;; TODO these aren't working
+  ;; (define-key grep-mode-map "C-p" 'previous-error-no-select)
+  ;; (define-key grep-mode-map "C-n" 'next-error-no-select)
+  )
+
 (use-package wgrep
   :commands wgrep-change-to-wgrep-mode
-  :ensure t
   :init
+  (setq wgrep-auto-save-buffer t)
   (ex! "wgrep" 'wgrep-change-to-wgrep-mode)
   (ex! "wgrep-finish" 'wgrep-finish-edit))
 
@@ -607,12 +626,6 @@
           ("*grep*" :align below :size 10)
           )))
 
-(use-package imenu-anywhere
-  :general
-  (general-nmap ", i" 'ido-imenu-anywhere)
-  (general-nmap ", f" 'ido-imenu-anywhere)
-  :ensure t)
-
 (use-package which-key
   :ensure t
   :config
@@ -660,6 +673,7 @@
                                     (electric-pair-mode))))
 
 (use-package cperl-mode
+  :disabled t
   :commands cperl-mode
   :load-path "extra-packages"
   :mode (("\\.pl$"   . cperl-mode)
@@ -676,13 +690,6 @@
         cperl-close-paren-offset -3 ;; can't be set from .dir-locals.el?
         cperl-indent-level 2
         )
-
-  (defun evgeni-perl-dump ()
-    (interactive)
-    (let ((word (thing-at-point 'word)))
-      (save-excursion (end-of-line)
-                      (newline-and-indent)
-                      (insert (concat "use Data::Dump qw(pp); warn '" word ": ' . pp($" word ") . \"\\n\";")))))
 
   (unbind-key "{" cperl-mode-map)
   (unbind-key "[" cperl-mode-map)
@@ -716,8 +723,8 @@
 (use-package winner
   :config
   (winner-mode)
-  (general-nmap "z u" 'winner-undo)
-  (general-nmap "z C-r" 'winner-redo)
+  (general-mmap "z u" 'winner-undo)
+  (general-mmap "z C-r" 'winner-redo)
   (ex! "winner-undo" 'winner-undo))
 
 (use-package undo-tree
@@ -768,3 +775,17 @@
   :general
   (general-define-key :keymap 'emacs-lisp-mode-map [remap eval-last-sexp] 'eros-eval-last-sexp)
   (general-define-key :keymap 'emacs-lisp-mode-map [remap eval-defun] 'eros-eval-defun))
+
+(use-package markdown-mode
+  :ensure t
+  :commands (markdown-mode gfm-mode)
+  :mode (("README\\.md\\'" . gfm-mode)
+         ("\\.md\\'" . markdown-mode)
+         ("\\.markdown\\'" . markdown-mode)))
+
+(use-package undo-tree
+  :ensure t
+  :diminish undo-tree-mode
+  :config
+  (global-undo-tree-mode))
+
