@@ -85,12 +85,26 @@
 (use-package evil
   :ensure t
   :init
-  (setq evil-search-module 'isearch)
+  (setq evil-search-module 'evil-search)
   (setq evil-ex-complete-emacs-commands nil)
   (setq evil-vsplit-window-right t)
   (setq evil-split-window-below t)
   :config
   (evil-mode)
+
+  ;; auto-clear highlight
+  (defun evgeni-nohighlight-hook (&rest _)
+    (remove-hook 'pre-command-hook 'evgeni-nohighlight-hook 'local)
+    (evil-ex-nohighlight))
+  (defun evgeni-add-nohighlight-hook (&rest _)
+    (add-hook 'pre-command-hook 'evgeni-nohighlight-hook nil 'local))
+  (dolist (f '(evil-ex-search-backward
+               evil-ex-search-forward
+               evil-ex-search-next
+               evil-ex-search-previous
+               evil-ex-search-word-backward
+               evil-ex-search-word-forward))
+    (advice-add f :after #'evgeni-add-nohighlight-hook))
 
   (general-nmap "RET" 'save-buffer)
   (general-nmap "[ Q" 'first-error)
@@ -147,10 +161,10 @@
     (condition-case nil
         (funcall emacs-cmd)
       (error (if (getenv "TMUX") (shell-command-to-string tmux-cmd)))))
-  (general-nmap "C-h" (lambda! (evgeni-window-navigate 'windmove-left "tmux select-pane -L")))
-  (general-nmap "C-j" (lambda! (evgeni-window-navigate 'windmove-down "tmux select-pane -D")))
-  (general-nmap "C-k" (lambda! (evgeni-window-navigate 'windmove-up "tmux select-pane -U")))
-  (general-nmap "C-l" (lambda! (evgeni-window-navigate 'windmove-right "tmux select-pane -R")))
+  (general-mmap "C-h" (lambda! (evgeni-window-navigate 'windmove-left "tmux select-pane -L")))
+  (general-mmap "C-j" (lambda! (evgeni-window-navigate 'windmove-down "tmux select-pane -D")))
+  (general-mmap "C-k" (lambda! (evgeni-window-navigate 'windmove-up "tmux select-pane -U")))
+  (general-mmap "C-l" (lambda! (evgeni-window-navigate 'windmove-right "tmux select-pane -R")))
 
   ;; insert state
   (general-imap "C-e" 'end-of-line)
@@ -159,17 +173,28 @@
   (general-imap "C-x s" 'complete-symbol)
 
   ;; expand lines
-  (defun evgeni-hippie-expand-lines ()
-    (interactive)
-    (let ((hippie-expand-try-functions-list
-           '(try-expand-line try-expand-line-all-buffers)))
-      (end-of-line)
-      (hippie-expand nil)))
-  (general-imap "C-l" 'evgeni-hippie-expand-lines)
-  (general-imap "C-x C-l" 'evgeni-hippie-expand-lines)
+  (general-imap "C-l" 'evil-complete-next-line)
+  (general-imap "C-x C-l" 'evil-complete-next-line)
 
+  ;; completion
+  (general-imap "TAB" 'hippie-expand)
+  (general-imap "<backtab>" 'completion-at-point)
+  (general-imap "C-x C-x" 'completion-at-poin)
   (general-imap "C-k" 'completion-at-point)
-  ;; (global-set-key (kbd "C-l") 'completion-at-point)
+  (general-imap "C-x C-]" 'complete-tag)
+  (general-imap "C-]" 'complete-tag)
+
+  ;; complete file paths
+  (general-imap "C-x C-f" (lambda () (interactive)
+                            (let ((hippie-expand-try-functions-list '(try-complete-file-name try-complete-file-name-partially)))
+                              (hippie-expand nil))
+                            ))
+
+  ;; C-d to either shift line or delete char
+  (general-imap "C-d" (lambda () (interactive)
+                        (if (eq (point) (point-at-eol))
+                            (evil-shift-right-line 1)
+                          (delete-char 1))))
 
   ;; function text object
   (evil-define-text-object evgeni-inner-defun (count &optional beg end type)
@@ -278,9 +303,10 @@
   :ensure t
   :general
   (general-nmap "U U" '(magit-status :which-key "git status"))
-  (general-nmap "U s" '(magit-stage-file :which-key "git stage"))
+  (general-nmap "U w" '(magit-stage-file :which-key "git stage file"))
   (general-nmap "U d" '(magit-diff-unstaged :which-key "git diff"))
   (general-nmap "U l" '(magit-log-head :which-key "git diff"))
+  (general-nmap "U r" '(magit-file-checkout :which-key "git checkout file"))
   :config
   (remove-hook 'magit-status-sections-hook 'magit-insert-stashes) ;; don't show stashes
   (magit-add-section-hook 'magit-status-sections-hook
@@ -297,8 +323,26 @@
              vdiff-buffers
              vdiff-buffers3
              vdiff-magit-dwim
-             vdiff-magit-popup))
+             vdiff-magit-popup)
+  :config
+  (define-key vdiff-mode-map (kbd "] c") 'vdiff-next-hunk)
+  (define-key vdiff-mode-map (kbd "[ c") 'vdiff-previous-hunk)
+  (define-key vdiff-mode-map (kbd "zc") 'vdiff-close-fold)
+  (define-key vdiff-mode-map (kbd "zM") 'vdiff-close-all-folds)
+  (define-key vdiff-mode-map (kbd "zo") 'vdiff-open-fold)
+  (define-key vdiff-mode-map (kbd "zR") 'vdiff-open-all-folds)
+  (define-key vdiff-mode-map (kbd "C-c o SPC") 'vdiff-toggle-whitespace)
 
+  (define-key vdiff-mode-map (kbd "do") 'vdiff-receive-changes)
+  (define-key vdiff-mode-map (kbd "dp") 'vdiff-send-changes)
+  (define-key vdiff-mode-map (kbd "C-c r") 'vdiff-receive-changes)
+  (define-key vdiff-mode-map (kbd "C-c s") 'vdiff-send-changes)
+  (evil-define-key 'normal vdiff-mode-map "d o" 'vdiff-receive-changes)
+  (evil-define-key 'normal vdiff-mode-map "d p" 'vdiff-send-changes)
+
+
+  (define-key vdiff-mode-map (kbd "q" ) 'vdiff-quit)
+  (evil-define-key 'normal vdiff-mode-map "q" 'vdiff-quit))
 
 (use-package flycheck
   :ensure t
