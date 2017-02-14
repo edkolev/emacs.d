@@ -11,6 +11,7 @@
 (setq backup-inhibited t)
 (setq auto-save-default nil)
 (setq custom-safe-themes t)
+(setq suggest-key-bindings nil)
 (setq-default truncate-lines t)
 (fset 'yes-or-no-p 'y-or-n-p)
 (setf initial-scratch-message ""
@@ -26,6 +27,7 @@
 (global-set-key "\C-ch" help-map)
 
 (setq hippie-expand-try-functions-list '(try-expand-dabbrev
+                                         try-expand-all-abbrevs
                                          try-expand-dabbrev-all-buffers
                                          try-expand-dabbrev-from-kill
                                          try-complete-file-name-partially
@@ -193,7 +195,7 @@
   ;; C-d to either shift line or delete char
   (general-imap "C-d" (lambda () (interactive)
                         (if (eq (point) (point-at-eol))
-                            (evil-shift-right-line 1)
+                            (evil-shift-left-line 1)
                           (delete-char 1))))
 
   ;; function text object
@@ -314,7 +316,8 @@
 
   (define-key magit-mode-map "e" 'vdiff-magit-dwim)
   (define-key magit-mode-map "E" 'vdiff-magit-popup)
-  )
+  (general-evil-define-key 'normal magit-mode-map "C-n" 'magit-section-forward)
+  (general-evil-define-key 'normal magit-mode-map "C-p" 'magit-section-backward))
 
 (use-package vdiff
   :ensure t
@@ -435,14 +438,6 @@
      "type" "undefined" "unsafe" "where"
      )))
 
-(use-package flx-ido
-  :config
-  (ido-mode 1)
-  (ido-everywhere 1)
-  (flx-ido-mode 1)
-  (setq ido-enable-flex-matching t)
-  (setq ido-use-faces nil))
-
 (use-package idomenu
   :ensure t
   :commands (idomenu))
@@ -479,10 +474,11 @@
   (general-evil-define-key 'normal xref--xref-buffer-mode-map "C-p" 'xref-prev-line))
 
 (use-package abbrev
+  :diminish 'abbrev-mode
   :config
-  (setq save-abbrevs 'silently)
   (setq abbrev-file-name (expand-file-name "abbrev.el" user-emacs-directory))
   (setq-default abbrev-mode t)
+  (add-hook 'evil-insert-state-exit-hook 'expand-abbrev)
   )
 
 (use-package narrow
@@ -634,6 +630,7 @@
 
 (use-package ivy
   :ensure t
+  :diminish 'ivy-mode
   :demand
   :general
   (general-nmap "SPC" 'ivy-switch-buffer)
@@ -788,4 +785,9 @@
   :diminish undo-tree-mode
   :config
   (global-undo-tree-mode))
+(use-package haskell-mode
+  :commands haskell-mode
+  :config
+  (define-abbrev-table 'haskell-mode-abbrev-table
+    '(("undef" "undefined"))))
 
