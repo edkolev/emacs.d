@@ -6,6 +6,8 @@
 (setq gc-cons-threshold (* 10 1024 1024))
 
 ;; settings
+(when (display-graphic-p)
+  (set-default-font "Source Code Pro 13"))
 (setq custom-file (expand-file-name "custom-file.el" user-emacs-directory))
 (setq inhibit-startup-screen t)
 (setq backup-inhibited t)
@@ -35,6 +37,8 @@
 
 (setq-default indent-tabs-mode nil)
 (setq-default tab-width 8)
+
+(modify-syntax-entry ?_ "w" (standard-syntax-table))
 
 (defvar default-tags-table-function '(lambda () (expand-file-name ".git/etags" "/usr/local/")))
 
@@ -125,6 +129,9 @@
   (general-nmap "[ m" 'beginning-of-defun)
   (general-nmap "] m" 'end-of-defun)
   (general-nmap "0" 'evil-first-non-blank)
+
+  ;; alias :On with :on
+  (evil-ex-define-cmd "On" "on")
 
   ;; :source
   (evil-ex-define-cmd "so[urce]" 'evgeni-source)
@@ -221,6 +228,12 @@
   (general-nmap "C-c o c" 'hl-line-mode)
   (general-nmap "C-c o w" 'toggle-truncate-lines)
 
+  ;; clean whitespace on lines with nothing but whitespace
+  (add-hook 'evil-insert-state-exit-hook 'evgeni-clean-whitespace-line)
+  (defun evgeni-clean-whitespace-line ()
+    (when (string-match "^\s+$" (thing-at-point 'line))
+      (delete-region (line-beginning-position) (line-end-position))))
+
   ;; cursor in terminal
   (cond
    ((getenv "TMUX")
@@ -299,6 +312,7 @@
   (general-nmap "-"   (lambda () (interactive) (dired ".")))
   :config
   (setq dired-listing-switches "-alh")
+  (add-hook 'dired-mode-hook 'dired-hide-details-mode)
   (define-key dired-mode-map (kbd "-") 'dired-up-directory))
 
 (use-package magit
@@ -316,6 +330,10 @@
 
   (define-key magit-mode-map "e" 'vdiff-magit-dwim)
   (define-key magit-mode-map "E" 'vdiff-magit-popup)
+  (unbind-key "C-h" magit-mode-map)
+  (unbind-key "C-j" magit-mode-map)
+  (unbind-key "C-k" magit-mode-map)
+  (unbind-key "C-l" magit-mode-map)
   (general-evil-define-key 'normal magit-mode-map "C-n" 'magit-section-forward)
   (general-evil-define-key 'normal magit-mode-map "C-p" 'magit-section-backward))
 
@@ -327,6 +345,8 @@
              vdiff-buffers3
              vdiff-magit-dwim
              vdiff-magit-popup)
+  :general
+  (general-nmap "U D" '(vdiff-magit-popup :which-key "vdiff popup"))
   :config
   (define-key vdiff-mode-map (kbd "] c") 'vdiff-next-hunk)
   (define-key vdiff-mode-map (kbd "[ c") 'vdiff-previous-hunk)
@@ -605,8 +625,16 @@
 (use-package aggressive-indent
   :ensure t
   :commands aggressive-indent-mode
-  :init
-  (add-hook 'emacs-lisp-mode-hook 'aggressive-indent-mode))
+  :config
+  (add-hook 'emacs-lisp-mode-hook 'aggressive-indent-mode)
+  (add-hook 'perl-mode-hook 'aggressive-indent-mode)
+
+  (add-to-list
+   'aggressive-indent-dont-indent-if
+   '(and (derived-mode-p 'perl-mode)
+         (null (string-match "\\([;{}]\\|\\b\\(if\\|for\\|while\\)\\b\\)"
+                             (thing-at-point 'line)))))
+  )
 
 (use-package shackle
   :ensure t
@@ -625,7 +653,7 @@
 (use-package which-key
   :ensure t
   :config
-  (setq which-key-idle-delay 0.4)
+  (setq which-key-idle-delay 1.5)
   (which-key-mode))
 
 (use-package ivy
@@ -637,6 +665,7 @@
   :config
   (ivy-mode 1)
   (setq ivy-use-virtual-buffers t)
+  (setq ivy-virtual-abbreviate 'full)
   (define-key ivy-minibuffer-map (kbd "C-w") 'backward-kill-word)
   (define-key ivy-minibuffer-map (kbd "C-u") (lambda () (interactive) (kill-region (point) (point-at-bol))))
 
@@ -726,7 +755,11 @@
 
 (use-package undo-tree
   :ensure t
+  :diminish undo-tree-mode
   :config
+  (global-undo-tree-mode)
+    (setq undo-tree-visualizer-timestamps t)
+    (setq undo-tree-visualizer-diff t)
   (ex! "undo-tree" 'undo-tree-visualize)
   (setq undo-tree-history-directory-alist `((".*" . ,temporary-file-directory)))
   (setq undo-tree-auto-save-history t))
@@ -740,7 +773,7 @@
         perl-brace-offset 0
         perl-brace-imaginary-offset 0
         perl-label-offset -3 ;; -2
-        perl-indent-continued-arguments nil
+        perl-indent-continued-arguments 0 ;; nil
         perl-indent-parens-as-block t ;; nil
         perl-tab-always-indent tab-always-indent
         perl-tab-to-comment nil
@@ -780,14 +813,20 @@
          ("\\.md\\'" . markdown-mode)
          ("\\.markdown\\'" . markdown-mode)))
 
-(use-package undo-tree
+(use-package origami
   :ensure t
-  :diminish undo-tree-mode
-  :config
-  (global-undo-tree-mode))
+  :commands origami-mode)
+
 (use-package haskell-mode
   :commands haskell-mode
   :config
   (define-abbrev-table 'haskell-mode-abbrev-table
     '(("undef" "undefined"))))
+
+(use-package loccur
+  :ensure t
+  :commands (loccur-current loccur)
+  :init
+  (general-nmap ", *" 'loccur-current)
+  (evil-ex-define-cmd "loccur" 'loccur))
 
