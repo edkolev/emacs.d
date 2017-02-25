@@ -80,7 +80,13 @@
 (use-package faff-theme :ensure t :defer t)
 
 (set-face-bold-p 'bold nil) ;; disable bold
-(load-theme 'leuven)
+
+(load-theme 'spacemacs-light)
+(custom-theme-set-faces
+ 'spacemacs-light
+ '(lazy-highlight ((t (:background "#d7dfff"))))
+ '(sp-show-pair-match-face ((t (:background "#d7dfff"))))
+ )
 
 ;; packages
 (use-package general ;; https://gitlab.com/KNX32542/dotfiles/blob/master/emacs/.emacs.d/init.el
@@ -297,9 +303,6 @@
 (use-package evil-indent-plus ;; indent object
   :ensure t
   :config (evil-indent-plus-default-bindings))
-
-(use-package paren
-  :config (show-paren-mode))
 
 (use-package saveplace
   :config
@@ -625,10 +628,9 @@
 (use-package aggressive-indent
   :ensure t
   :commands aggressive-indent-mode
-  :config
+  :init
   (add-hook 'emacs-lisp-mode-hook 'aggressive-indent-mode)
-  (add-hook 'perl-mode-hook 'aggressive-indent-mode)
-
+  :config
   (add-to-list
    'aggressive-indent-dont-indent-if
    '(and (derived-mode-p 'perl-mode)
@@ -674,6 +676,7 @@
 (use-package swiper
   :ensure t
   :general
+  (general-nmap "g /" 'swiper)
   (general-nmap ", s" 'swiper)
   (general-nmap ", /" 'swiper))
 
@@ -693,10 +696,7 @@
 
   (modify-syntax-entry ?- "w" emacs-lisp-mode-syntax-table)
   (modify-syntax-entry ?. "w" emacs-lisp-mode-syntax-table)
-  (modify-syntax-entry ?! "w" emacs-lisp-mode-syntax-table)
-
-  (add-hook 'emacs-lisp-mode-hook (lambda ()
-                                    (electric-pair-mode))))
+  (modify-syntax-entry ?! "w" emacs-lisp-mode-syntax-table))
 
 (use-package cperl-mode
   :disabled t
@@ -734,17 +734,20 @@
                                  (set-face-background 'cperl-hash-face nil)
                                  (set-face-foreground 'cperl-hash-face nil)
                                  (set-face-background 'cperl-array-face nil)
-                                 (set-face-foreground 'cperl-array-face nil)
-                                 (electric-pair-mode))))
+                                 (set-face-foreground 'cperl-array-face nil))))
 
 (use-package intero
   :ensure t
   :commands intero-mode)
 
 (use-package whitespace
-  :commands whitespace-mode
   :config
-  (setq whitespace-style '(face tabs trailing)))
+  (setq whitespace-style '(face tabs trailing))
+  (defun evgeni-show-trailing-whitespace () (setq show-trailing-whitespace t))
+  (add-hook 'prog-mode-hook 'evgeni-show-trailing-whitespace)
+  (set-face-attribute 'trailing-whitespace nil
+                      :background
+                      (face-attribute 'font-lock-comment-face :foreground)))
 
 (use-package winner
   :config
@@ -758,11 +761,12 @@
   :diminish undo-tree-mode
   :config
   (global-undo-tree-mode)
-    (setq undo-tree-visualizer-timestamps t)
-    (setq undo-tree-visualizer-diff t)
+  (setq undo-tree-visualizer-timestamps t)
+  (setq undo-tree-visualizer-diff t)
   (ex! "undo-tree" 'undo-tree-visualize)
   (setq undo-tree-history-directory-alist `((".*" . ,temporary-file-directory)))
-  (setq undo-tree-auto-save-history t))
+  ;; (setq undo-tree-auto-save-history t)
+  )
 
 (use-package perl-mode
   :commands perl-mode
@@ -779,6 +783,7 @@
         perl-tab-to-comment nil
         perl-nochange "\f")
 
+  (set-face-underline 'font-lock-variable-name-face nil)
 
   (defun evgeni-perl-dump ()
     (interactive)
@@ -790,7 +795,6 @@
 
   (add-hook 'perl-mode-hook #'(lambda ()
                                 (general-define-key :keymaps 'local :states 'normal "] d" 'evgeni-perl-dump)
-                                (electric-pair-mode)
                                 (modify-syntax-entry ?_ "w" perl-mode-syntax-table)
                                 (setq defun-prompt-regexp ;; taken from cperl-mode
                                       "^[ 	]*\\(\\(?:sub\\)\\(\\([ 	\n]\\|#[^\n]*\n\\)+\\(::[a-zA-Z_0-9:']+\\|[a-zA-Z_'][a-zA-Z_0-9:']*\\)\\)\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*\\(([^()]*)\\)\\)?\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*\\(:\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*\\(\\sw\\|_\\)+\\((\\(\\\\.\\|[^\\\\()]\\|([^\\\\()]*)\\)*)\\)?\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*:\\)?\\)+\\)\\)?\\|\\(BEGIN\\|UNITCHECK\\|CHECK\\|INIT\\|END\\|AUTOLOAD\\|DESTROY\\)\\)[ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*")
@@ -822,6 +826,26 @@
   :config
   (define-abbrev-table 'haskell-mode-abbrev-table
     '(("undef" "undefined"))))
+
+(use-package smartparens
+  :ensure t
+  :config
+
+  (setq sp-highlight-pair-overlay nil)
+  (setq sp-highlight-wrap-overlay nil)
+  (setq sp-highlight-wrap-tag-overlay nil)
+
+  (require 'smartparens-config)
+  (show-smartparens-global-mode)
+  (add-hook 'perl-mode-hook #'smartparens-mode)
+  (add-hook 'emacs-lisp-mode-hook #'smartparens-mode)
+
+  (sp-pair "{" nil :post-handlers '(("||\n[i]" "RET")))
+  (sp-pair "[" nil :post-handlers '(("||\n[i]" "RET")))
+
+  (general-define-key :keymap 'emacs-lisp-mode-map "C-c <" 'sp-forward-slurp-sexp)
+
+  )
 
 (use-package loccur
   :ensure t
