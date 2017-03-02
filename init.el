@@ -1,3 +1,12 @@
+(defconst emacs-start-time (current-time))
+
+(add-hook 'after-init-hook
+          `(lambda ()
+             (let ((elapsed (float-time (time-subtract (current-time)
+                                                       emacs-start-time))))
+               (message "Loading %s...done (%.3fs) [after-init]"
+                        ,load-file-name elapsed)))
+          t)
 
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
@@ -19,6 +28,11 @@
 (setf initial-scratch-message ""
       initial-major-mode 'emacs-lisp-mode)
 
+;; scrol
+(setq scroll-step 1)
+(setq scroll-conservatively 10000)
+(setq auto-window-vscroll nil)
+
 (defun display-startup-echo-area-message ()
   (message ""))
 (setq load-prefer-newer t)
@@ -27,13 +41,6 @@
 (when (fboundp 'menu-bar-mode) (menu-bar-mode -1))
 
 (global-set-key "\C-ch" help-map)
-
-(setq hippie-expand-try-functions-list '(try-expand-dabbrev
-                                         try-expand-all-abbrevs
-                                         try-expand-dabbrev-all-buffers
-                                         try-expand-dabbrev-from-kill
-                                         try-complete-file-name-partially
-                                         try-complete-file-name))
 
 (setq-default indent-tabs-mode nil)
 (setq-default tab-width 8)
@@ -59,6 +66,17 @@
 (eval-when-compile
   (require 'use-package))
 (setq use-package-verbose t)
+
+;; upgrade installed packages
+(defun evgeni-upgrade-packages ()
+  (interactive)
+  (save-window-excursion
+    (package-list-packages t)
+    (package-menu-mark-upgrades)
+    (condition-case nil
+        (package-menu-execute t)
+      (error
+       (package-menu-execute)))))
 
 ;; theme packages
 (use-package spacemacs-theme :ensure t :defer t)
@@ -94,6 +112,49 @@
   :config
   (general-evil-setup))
 
+(use-package hippie-exp
+  :init
+  (defun my-yas-hippie-try-expand (first-time)
+    (if (not first-time)
+        (let ((yas-fallback-behavior 'return-nil))
+          (yas-expand))
+      (undo 1)
+      nil))
+
+  (defun try-expand-tag (old)
+    (when tags-table-list
+      (unless old
+        (he-init-string (he-tag-beg) (point))
+        (setq he-expand-list
+              (sort (all-completions he-search-string 'tags-complete-tag)
+                    'string-lessp)))
+      (while (and he-expand-list
+                  (he-string-member (car he-expand-list) he-tried-table))
+        (setq he-expand-list (cdr he-expand-list)))
+      (if (null he-expand-list)
+          (progn
+            (when old (he-reset-string))
+            ())
+        (he-substitute-string (car he-expand-list))
+        (setq he-expand-list (cdr he-expand-list))
+        t)))
+
+  (defun evgeni-hippie-expand-yasnippet ()
+    (interactive)
+    (let ((hippie-expand-try-functions-list '(my-yas-hippie-try-expand)))
+      (hippie-expand nil)))
+  (general-imap "C-x C-y" 'evgeni-hippie-expand-yasnippet)
+  (general-imap "C-x TAB" 'evgeni-hippie-expand-yasnippet)
+
+  (setq hippie-expand-try-functions-list '(try-expand-dabbrev
+                                           try-expand-all-abbrevs
+                                           try-expand-dabbrev-all-buffers
+                                           try-expand-dabbrev-from-kill
+                                           try-expand-tag
+                                           ;; my-yas-hippie-try-expand
+                                           )
+        ))
+
 (use-package evil
   :ensure t
   :init
@@ -101,6 +162,9 @@
   (setq evil-ex-complete-emacs-commands nil)
   (setq evil-vsplit-window-right t)
   (setq evil-split-window-below t)
+  (setq evil-shift-round nil)
+  (setq evil-want-C-u-scroll t)
+  (setq evil-maybe-remove-spaces t) ;; clean whitespace on lines with nothing but whitespace
   :config
   (evil-mode)
 
@@ -122,7 +186,6 @@
   (general-nmap "[ Q" 'first-error)
   (general-nmap "] q" 'next-error)
   (general-nmap "[ q" 'previous-error)
-  (general-nmap "C-u" 'evil-scroll-up)
   (general-nmap ", w" 'evil-window-vsplit)
 
   (general-nmap "C-c C-b" 'ido-switch-buffer)
@@ -342,33 +405,34 @@
 
 (use-package vdiff
   :ensure t
-  :commands (vdiff-files
-             vdiff-files3
-             vdiff-buffers
-             vdiff-buffers3
-             vdiff-magit-dwim
-             vdiff-magit-popup)
   :general
   (general-nmap "U D" '(vdiff-magit-popup :which-key "vdiff popup"))
   :config
-  (define-key vdiff-mode-map (kbd "] c") 'vdiff-next-hunk)
-  (define-key vdiff-mode-map (kbd "[ c") 'vdiff-previous-hunk)
-  (define-key vdiff-mode-map (kbd "zc") 'vdiff-close-fold)
-  (define-key vdiff-mode-map (kbd "zM") 'vdiff-close-all-folds)
-  (define-key vdiff-mode-map (kbd "zo") 'vdiff-open-fold)
-  (define-key vdiff-mode-map (kbd "zR") 'vdiff-open-all-folds)
-  (define-key vdiff-mode-map (kbd "C-c o SPC") 'vdiff-toggle-whitespace)
+  (evil-define-minor-mode-key 'normal 'vdiff-mode-map (kbd "] c") 'vdiff-next-hunk)
+  (evil-define-minor-mode-key 'normal 'vdiff-mode-map (kbd "[ c") 'vdiff-previous-hunk)
+  (evil-define-minor-mode-key 'normal 'vdiff-mode-map (kbd "z c") 'vdiff-close-fold)
+  (evil-define-minor-mode-key 'normal 'vdiff-mode-map (kbd "z M") 'vdiff-close-all-folds)
+  (evil-define-minor-mode-key 'normal 'vdiff-mode-map (kbd "z o") 'vdiff-open-fold)
+  (evil-define-minor-mode-key 'normal 'vdiff-mode-map (kbd "z R") 'vdiff-open-all-folds)
+  (evil-define-minor-mode-key 'normal 'vdiff-mode-map (kbd "C-c o SPC") 'vdiff-toggle-whitespace)
+  (evil-define-minor-mode-key 'normal 'vdiff-mode-map (kbd "q") 'vdiff-quit)
+  ;; "dp"/"do" to send/receive changes
+  (define-key evil-operator-state-map "o" 'evgeni-diff-obtain)
+  (define-key evil-operator-state-map "p" 'evgeni-diff-put)
 
-  (define-key vdiff-mode-map (kbd "do") 'vdiff-receive-changes)
-  (define-key vdiff-mode-map (kbd "dp") 'vdiff-send-changes)
-  (define-key vdiff-mode-map (kbd "C-c r") 'vdiff-receive-changes)
-  (define-key vdiff-mode-map (kbd "C-c s") 'vdiff-send-changes)
-  (evil-define-key 'normal vdiff-mode-map "d o" 'vdiff-receive-changes)
-  (evil-define-key 'normal vdiff-mode-map "d p" 'vdiff-send-changes)
+  (defun evgeni-diff-obtain ()
+    (interactive)
+    (when (and (eq evil-this-operator 'evil-delete)
+               (memq 'vdiff-mode minor-mode-list))
+      (setq evil-inhibit-operator t)
+      (call-interactively 'vdiff-receive-changes)))
 
-
-  (define-key vdiff-mode-map (kbd "q" ) 'vdiff-quit)
-  (evil-define-key 'normal vdiff-mode-map "q" 'vdiff-quit))
+  (defun evgeni-diff-put ()
+    (interactive)
+    (when (and (eq evil-this-operator 'evil-delete)
+               (memq 'vdiff-mode minor-mode-list))
+      (setq evil-inhibit-operator t)
+      (call-interactively 'vdiff-send-changes))))
 
 (use-package flycheck
   :ensure t
@@ -611,10 +675,7 @@
          (buffer-live-p buffer)
          (string-match "compilation" (buffer-name buffer))
          (string-match "finished" string)
-         (not
-          (with-current-buffer buffer
-            (goto-char (point-min))
-            (search-forward "warning" nil t))))
+         (= 8 (line-number-at-pos (point-max)))) ;; check lines are exactly 8
         (delete-windows-on buffer)
       (with-selected-window (get-buffer-window buffer)
         (goto-char (point-min))
@@ -671,6 +732,10 @@
   (define-key ivy-minibuffer-map (kbd "C-w") 'backward-kill-word)
   (define-key ivy-minibuffer-map (kbd "C-u") (lambda () (interactive) (kill-region (point) (point-at-bol))))
 
+  ;; C-r C-w to read word at point
+  (unbind-key "C-r" ivy-minibuffer-map)
+  (define-key ivy-minibuffer-map (kbd "C-r C-w") 'ivy-next-history-element)
+
   (define-key ivy-minibuffer-map (kbd "C-c C-c") 'ivy-restrict-to-matches))
 
 (use-package swiper
@@ -686,9 +751,13 @@
   (general-nmap ", g" 'counsel-git-grep)
   (general-nmap ", l" 'counsel-git)
   (general-nmap "g SPC" ' counsel-git)
-  (general-nmap ", i" 'counsel-imenu)
+  (general-nmap ", SPC" ' counsel-git)
   (general-nmap ", f" 'counsel-imenu)
-  )
+
+  :config
+  (use-package imenu
+    :config
+    (advice-add 'imenu :after 'recenter)))
 
 (use-package elisp-mode ;; emacs-lisp-mode
   :config
@@ -792,16 +861,23 @@
                       (newline-and-indent)
                       (insert (concat "use Data::Dump qw(pp); warn '" word ": ' . pp($" word ") . \"\\n\";")))))
 
+  (defun evgeni-define-perl-function ()
+    (interactive)
+    (let ((function-name-at-point (thing-at-point 'word)))
+      (end-of-defun)
+      (insert "\nsub " function-name-at-point " {\n}\n")
+      (evil-previous-line)
+      (evil-open-above 1)))
+
+  (general-evil-define-key 'normal 'perl-mode-map "C-c f" 'evgeni-define-perl-function)
+  (general-evil-define-key 'normal 'perl-mode-map "] d" 'evgeni-perl-dump)
+
+  (modify-syntax-entry ?_ "w" perl-mode-syntax-table)
 
   (add-hook 'perl-mode-hook #'(lambda ()
-                                (general-define-key :keymaps 'local :states 'normal "] d" 'evgeni-perl-dump)
-                                (modify-syntax-entry ?_ "w" perl-mode-syntax-table)
                                 (setq defun-prompt-regexp ;; taken from cperl-mode
                                       "^[ 	]*\\(\\(?:sub\\)\\(\\([ 	\n]\\|#[^\n]*\n\\)+\\(::[a-zA-Z_0-9:']+\\|[a-zA-Z_'][a-zA-Z_0-9:']*\\)\\)\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*\\(([^()]*)\\)\\)?\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*\\(:\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*\\(\\sw\\|_\\)+\\((\\(\\\\.\\|[^\\\\()]\\|([^\\\\()]*)\\)*)\\)?\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*:\\)?\\)+\\)\\)?\\|\\(BEGIN\\|UNITCHECK\\|CHECK\\|INIT\\|END\\|AUTOLOAD\\|DESTROY\\)\\)[ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*")
-                                )
-
-
-            ) 
+                                ))
   )
 
 (use-package eros
