@@ -310,7 +310,18 @@
     (add-hook 'evil-insert-state-exit-hook  (lambda () (send-string-to-terminal "\ePtmux;\e\e]50;CursorShape=0\x7\e\\"))))
    ((not (display-graphic-p))
     (add-hook 'evil-insert-state-entry-hook (lambda () (send-string-to-terminal "\e]50;CursorShape=1\x7")))
-    (add-hook 'evil-insert-state-exit-hook  (lambda () (send-string-to-terminal "\e]50;CursorShape=0\x7"))))))
+    (add-hook 'evil-insert-state-exit-hook  (lambda () (send-string-to-terminal "\e]50;CursorShape=0\x7")))))
+
+  ;; <escape> should quit
+  (define-key minibuffer-local-map (kbd "<escape>") 'keyboard-escape-quit)
+  (define-key minibuffer-local-ns-map (kbd "<escape>") 'keyboard-escape-quit)
+  (define-key minibuffer-local-completion-map (kbd "<escape>") 'keyboard-escape-quit)
+  (define-key minibuffer-local-must-match-map (kbd "<escape>") 'keyboard-escape-quit)
+  (define-key minibuffer-local-isearch-map (kbd "<escape>") 'keyboard-escape-quit)
+
+  (define-key evil-ex-completion-map "\C-a" 'move-beginning-of-line)
+  (define-key evil-ex-completion-map "\C-b" 'backward-char)
+  )
 
 (use-package ace-window
   :ensure t
@@ -928,5 +939,8 @@
   :commands (loccur-current loccur)
   :init
   (general-nmap ", *" 'loccur-current)
-  (evil-ex-define-cmd "loccur" 'loccur))
+  (evil-ex-define-cmd "loccur" 'loccur)
+  (evil-define-minor-mode-key 'normal 'loccur-mode (kbd "q") 'loccur)
+  (evil-define-minor-mode-key 'normal 'loccur-mode (kbd "<escape>") 'loccur)
+  )
 
