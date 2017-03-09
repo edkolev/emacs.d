@@ -179,7 +179,8 @@
                evil-ex-search-next
                evil-ex-search-previous
                evil-ex-search-word-backward
-               evil-ex-search-word-forward))
+               evil-ex-search-word-forward
+               swiper))
     (advice-add f :after #'evgeni-add-nohighlight-hook))
 
   (general-nmap "RET" 'save-buffer)
@@ -246,9 +247,20 @@
 
   ;; insert state
   (general-imap "C-e" 'end-of-line)
-  (general-imap "C-a" 'beginning-of-line-text)
   (general-imap "C-u" (lambda () (interactive) (evil-delete (point-at-bol) (point))))
   (general-imap "C-x s" 'complete-symbol)
+  (general-imap "C-a" 'evgeni-beginning-of-line)
+  (general-imap "RET" 'newline-and-indent)
+
+  (defun evgeni-beginning-of-line ()
+    (interactive)
+    (let ((orig-point (point))
+          ;; TODO maybe indent-according-to-mode when is-whitespace-only-line
+          ;; (is-whitespace-only-line (string-match "^\s+$" (thing-at-point 'line)))
+          )
+      (back-to-indentation)
+      (when (= orig-point (point))
+        (move-beginning-of-line 1))))
 
   ;; expand lines
   (general-imap "C-l" 'evil-complete-next-line)
@@ -319,9 +331,17 @@
   (define-key minibuffer-local-must-match-map (kbd "<escape>") 'keyboard-escape-quit)
   (define-key minibuffer-local-isearch-map (kbd "<escape>") 'keyboard-escape-quit)
 
+  (defun evgeni-prev-or-move-end-of-line ()
+    (interactive)
+    (when (not (thing-at-point 'line t))
+      (call-interactively 'previous-complete-history-element))
+    (call-interactively 'move-end-of-line))
+
+  ;; tweak search and ex maps
+  (define-key evil-ex-search-keymap "\C-e" 'evgeni-prev-or-move-end-of-line)
+  (define-key evil-ex-completion-map "\C-e" 'evgeni-prev-or-move-end-of-line)
   (define-key evil-ex-completion-map "\C-a" 'move-beginning-of-line)
-  (define-key evil-ex-completion-map "\C-b" 'backward-char)
-  )
+  (define-key evil-ex-completion-map "\C-b" 'backward-char))
 
 (use-package ace-window
   :ensure t
@@ -401,6 +421,8 @@
   (general-nmap "U l" '(magit-log-head :which-key "git diff"))
   (general-nmap "U r" '(magit-file-checkout :which-key "git checkout file"))
   :config
+  (setq magit-display-buffer-function 'magit-display-buffer-fullframe-status-v1)
+
   (remove-hook 'magit-status-sections-hook 'magit-insert-stashes) ;; don't show stashes
   (magit-add-section-hook 'magit-status-sections-hook
                           'magit-insert-untracked-files 'magit-insert-staged-changes 1) ;; lower untracked
@@ -676,7 +698,7 @@
   (setq smart-compile-check-makefile nil)
   (setq smart-compile-alist '((cperl-mode . "perl -w -Mstrict -c %f")
                               (perl-mode . "perl -w -Mstrict -c %f")
-                              (haskell-mode . "stack --silent ghc -- -e :q %f")
+                              (haskell-mode . "stack --silent ghc -- -Wall -e :q %f")
                               (emacs-lisp-mode    . (emacs-lisp-byte-compile))
                               ))
 
@@ -942,5 +964,28 @@
   (evil-ex-define-cmd "loccur" 'loccur)
   (evil-define-minor-mode-key 'normal 'loccur-mode (kbd "q") 'loccur)
   (evil-define-minor-mode-key 'normal 'loccur-mode (kbd "<escape>") 'loccur)
+
+(use-package evil-iedit-state
+  :ensure t
+  ;; :commands evil-iedit-state/iedit-mode
+  :general
+  (general-nvmap ", m" 'evil-iedit-state/iedit-mode)
+  :config
+  (define-key evil-iedit-state-map (kbd "TAB") 'iedit-toggle-selection)
+  (define-key evil-iedit-state-map (kbd "C-c f") 'iedit-restrict-function)
+  (unbind-key "TAB" iedit-mode-keymap)
+  ;; (define-key evil-iedit-state-map (kbd "TAB") 'iedit-restrict-region)
+  ;; (define-key evil-iedit-state-map (kbd "TAB") 'iedit-restrict-current-line)
+  )
+
+(use-package beacon
+  :ensure t
+  :config
+  ;; (setq beacon-color "#d7dfff")
+  (setq beacon-color (face-background 'region))
+  ;; (setq beacon-blink-when-window-scrolls t)
+  ;; (setq beacon-blink-when-point-moves-horizontally 10)
+  ;; (setq beacon-color 0.9)
+  (beacon-mode))
   )
 
