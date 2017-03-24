@@ -24,14 +24,12 @@
 (setq custom-safe-themes t)
 (setq suggest-key-bindings nil)
 (setq-default truncate-lines t)
+(setq blink-cursor-mode nil)
 (fset 'yes-or-no-p 'y-or-n-p)
 (setf initial-scratch-message ""
       initial-major-mode 'emacs-lisp-mode)
-
-;; scrol
-(setq scroll-step 1)
-(setq scroll-conservatively 10000)
-(setq auto-window-vscroll nil)
+(setq echo-keystrokes 0.02)
+(setq scroll-step 2)
 
 (defun display-startup-echo-area-message ()
   (message ""))
@@ -239,7 +237,9 @@
   (defun evgeni-window-navigate (emacs-cmd tmux-cmd)
     (condition-case nil
         (funcall emacs-cmd)
-      (error (if (getenv "TMUX") (shell-command-to-string tmux-cmd)))))
+      (error (if (getenv "TMUX") (let ((default-directory "~"))
+                                   (shell-command-to-string tmux-cmd))))))
+
   (general-mmap "C-h" (lambda! (evgeni-window-navigate 'windmove-left "tmux select-pane -L")))
   (general-mmap "C-j" (lambda! (evgeni-window-navigate 'windmove-down "tmux select-pane -D")))
   (general-mmap "C-k" (lambda! (evgeni-window-navigate 'windmove-up "tmux select-pane -U")))
@@ -250,14 +250,12 @@
   (general-imap "C-u" (lambda () (interactive) (evil-delete (point-at-bol) (point))))
   (general-imap "C-x s" 'complete-symbol)
   (general-imap "C-a" 'evgeni-beginning-of-line)
-  (general-imap "RET" 'newline-and-indent)
+  ;; auto-indent on RET
+  (define-key global-map (kbd "RET") 'newline-and-indent)
 
   (defun evgeni-beginning-of-line ()
     (interactive)
-    (let ((orig-point (point))
-          ;; TODO maybe indent-according-to-mode when is-whitespace-only-line
-          ;; (is-whitespace-only-line (string-match "^\s+$" (thing-at-point 'line)))
-          )
+    (let ((orig-point (point)))
       (back-to-indentation)
       (when (= orig-point (point))
         (move-beginning-of-line 1))))
@@ -307,7 +305,7 @@
 
   ;; toggles
   (general-nmap "C-c o c" 'hl-line-mode)
-  (general-nmap "C-c o w" 'toggle-truncate-lines)
+  (general-nmap "C-c o w" 'visual-line-mode)
 
   ;; clean whitespace on lines with nothing but whitespace
   (add-hook 'evil-insert-state-exit-hook 'evgeni-clean-whitespace-line)
@@ -330,6 +328,16 @@
   (define-key minibuffer-local-completion-map (kbd "<escape>") 'keyboard-escape-quit)
   (define-key minibuffer-local-must-match-map (kbd "<escape>") 'keyboard-escape-quit)
   (define-key minibuffer-local-isearch-map (kbd "<escape>") 'keyboard-escape-quit)
+
+  ;; move by visual lines with j/k
+  (define-key evil-normal-state-map "j"  'evil-next-visual-line)
+  (define-key evil-normal-state-map "k"  'evil-previous-visual-line)
+  (define-key evil-normal-state-map "gj" 'evil-next-line)
+  (define-key evil-normal-state-map "gk" 'evil-previous-line)
+  (define-key evil-visual-state-map "j"  'evil-next-visual-line)
+  (define-key evil-visual-state-map "k"  'evil-previous-visual-line)
+  (define-key evil-visual-state-map "gj" 'evil-next-line)
+  (define-key evil-visual-state-map "gk" 'evil-previous-line)
 
   (defun evgeni-prev-or-move-end-of-line ()
     (interactive)
@@ -363,6 +371,7 @@
 
 (use-package evil-commentary
   :ensure t
+  :diminish 'evil-commentary-mode
   :config (evil-commentary-mode))
 
 (use-package evil-exchange
@@ -401,27 +410,43 @@
 (use-package saveplace
   :config
   (save-place-mode)
-  (setq save-place-file (expand-file-name "saveplace.el" user-emacs-directory))
-  )
+  (setq save-place-file (expand-file-name "saveplace.el" user-emacs-directory)))
 
+(use-package savehist
+  :init
+  (setq ;; savehist-file (concat spacemacs-cache-directory "savehist")
+   enable-recursive-minibuffers t ; Allow commands in minibuffers
+   history-length 1000
+   savehist-additional-variables '(mark-ring
+                                   global-mark-ring
+                                   search-ring
+                                   regexp-search-ring
+                                   extended-command-history)
+   savehist-autosave-interval 60)
+  (savehist-mode t))
 (use-package dired
   :general
   (general-nmap "-"   (lambda () (interactive) (dired ".")))
   :config
   (setq dired-listing-switches "-alh")
+  (setq dired-auto-revert-buffer t)
   (add-hook 'dired-mode-hook 'dired-hide-details-mode)
   (define-key dired-mode-map (kbd "-") 'dired-up-directory))
 
 (use-package magit
   :ensure t
   :general
-  (general-nmap "U U" '(magit-status :which-key "git status"))
-  (general-nmap "U w" '(magit-stage-file :which-key "git stage file"))
-  (general-nmap "U d" '(magit-diff-unstaged :which-key "git diff"))
-  (general-nmap "U l" '(magit-log-head :which-key "git diff"))
-  (general-nmap "U r" '(magit-file-checkout :which-key "git checkout file"))
+  (general-nmap "U U" '(magit-status))
+  (general-nmap "U w" '(magit-stage-file))
+  (general-nmap "U d" '(magit-diff-unstaged))
+  (general-nmap "U l" '(magit-log-head))
+  (general-nmap "U r" '(magit-file-checkout))
+  (general-nmap "U c" '(magit-commit))
+  (general-nmap "U b" '(magit-blame))
+  (general-nmap "U z" '(magit-stash-popup))
   :config
   (setq magit-display-buffer-function 'magit-display-buffer-fullframe-status-v1)
+  (setq magit-diff-refine-hunk 't)
 
   (remove-hook 'magit-status-sections-hook 'magit-insert-stashes) ;; don't show stashes
   (magit-add-section-hook 'magit-status-sections-hook
@@ -434,7 +459,9 @@
   (unbind-key "C-k" magit-mode-map)
   (unbind-key "C-l" magit-mode-map)
   (general-evil-define-key 'normal magit-mode-map "C-n" 'magit-section-forward)
-  (general-evil-define-key 'normal magit-mode-map "C-p" 'magit-section-backward))
+  (general-evil-define-key 'normal magit-mode-map "C-p" 'magit-section-backward)
+
+  (add-hook 'git-commit-mode-hook 'flyspell-mode))
 
 (use-package vdiff
   :ensure t
