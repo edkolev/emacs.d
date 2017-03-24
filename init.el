@@ -369,6 +369,11 @@
   :ensure t
   :config (global-evil-surround-mode))
 
+(use-package evil-lion
+  :load-path "src/evil-lion"
+  :config
+  (evil-lion-mode))
+
 (use-package evil-commentary
   :ensure t
   :diminish 'evil-commentary-mode
@@ -585,20 +590,31 @@
      "type" "undefined" "unsafe" "where"
      )))
 
-(use-package idomenu
-  :ensure t
-  :commands (idomenu))
-
-(use-package ido-vertical-mode
-  :ensure t
-  :config
-  (setq ido-vertical-define-keys 'C-n-and-C-p-only)
-  (ido-vertical-mode t))
-
 (use-package org
   :mode (("\\.org$"   . org-mode))
   :defer t
-  :ensure t)
+  :ensure t
+  :config
+
+  ;; https://github.com/edwtjo/evil-org-mode/blob/master/evil-org.el
+  (dolist (state '(normal insert))
+    (evil-define-key state org-mode-map
+      (kbd "M-l") 'org-metaright
+      (kbd "M-h") 'org-metaleft
+      (kbd "M-k") 'org-metaup
+      (kbd "M-j") 'org-metadown
+      (kbd "M-L") 'org-shiftmetaright
+      (kbd "M-H") 'org-shiftmetaleft
+      (kbd "M-K") 'org-shiftmetaup
+      (kbd "M-J") 'org-shiftmetadown
+      (kbd "M-o") 'org-insert-heading
+      (kbd "M-t") 'org-insert-todo-heading))
+
+  (evil-define-key 'normal org-mode-map
+    "H" 'org-shiftleft
+    "J" 'org-shiftdown
+    "K" 'org-shiftup
+    "L" 'org-shiftright))
 
 (use-package org-bullets
   :ensure t
@@ -663,6 +679,9 @@
 
 (use-package compile
   :config
+  (setq compilation-scroll-output 'next-error)
+  (setq compilation-read-command nil)
+  (setq compilation-ask-about-save nil)
 
   (defun evgeni-project-root ()
     (if (project-current)
@@ -775,6 +794,7 @@
 
 (use-package which-key
   :ensure t
+  :diminish 'which-key-mode
   :config
   (setq which-key-idle-delay 1.5)
   (which-key-mode))
@@ -800,28 +820,56 @@
 
 (use-package swiper
   :ensure t
-  :general
-  (general-nmap "g /" 'swiper)
-  (general-nmap ", s" 'swiper)
-  (general-nmap ", /" 'swiper))
+  :bind (:map evil-normal-state-map
+              ("g /" . evil-search-forward)
+              ("/" . swiper)))
 
 (use-package counsel
   :ensure t
   :general
   (general-nmap ", g" 'counsel-git-grep)
-  (general-nmap ", l" 'counsel-git)
-  (general-nmap "g SPC" ' counsel-git)
-  (general-nmap ", SPC" ' counsel-git)
-  (general-nmap ", f" 'counsel-imenu)
+  :init
+
+  (general-nmap ", f" 'evgeni-counsel-imenu)
+  (defun evgeni-counsel-imenu ()
+    (interactive)
+    (let ((orig-point (point)))
+      (call-interactively 'counsel-imenu)
+      (unless (= orig-point (point))
+        (evil-set-jump orig-point))))
+
+  (define-key global-map [remap describe-function] 'counsel-describe-function)
+  (define-key global-map [remap describe-variable] 'counsel-describe-variable)
+  (define-key global-map [remap execute-extended-command] 'counsel-M-x)
+  :config
+  ;; use C-] to go to definition
+  (define-key counsel-describe-map (kbd "C-]") 'counsel-find-symbol)
 
   :config
-  (use-package imenu
-    :config
-    (advice-add 'imenu :after 'recenter)))
+  (use-package smex))
 
-(use-package elisp-mode ;; emacs-lisp-mode
+(use-package find-file-in-project
+  :ensure
+  :demand ;; load it now so it can define its safe-local-variables
+  :bind (:map evil-normal-state-map
+              ("g SPC" . find-file-in-project)))
+
+(use-package imenu-anywhere
+  :ensure t
+  :general
+  (general-nmap ", F" 'imenu-anywhere))
+
+(use-package elisp-mode
   :config
   (define-key emacs-lisp-mode-map (kbd "C-c C-c") #'eval-defun)
+
+  (defun evgeni-elisp-eval ()
+    (interactive)
+    (if (region-active-p)
+        (call-interactively 'eval-region)
+      (call-interactively 'eval-buffer)))
+
+  (evil-ex-define-cmd "eval" 'evgeni-elisp-eval)
 
   (modify-syntax-entry ?- "w" emacs-lisp-mode-syntax-table)
   (modify-syntax-entry ?. "w" emacs-lisp-mode-syntax-table)
@@ -876,7 +924,7 @@
   (add-hook 'prog-mode-hook 'evgeni-show-trailing-whitespace)
   (set-face-attribute 'trailing-whitespace nil
                       :background
-                      (face-attribute 'font-lock-comment-face :foreground)))
+                      (face-attribute 'mode-line :background)))
 
 (use-package winner
   :config
@@ -991,6 +1039,13 @@
   (evil-ex-define-cmd "loccur" 'loccur)
   (evil-define-minor-mode-key 'normal 'loccur-mode (kbd "q") 'loccur)
   (evil-define-minor-mode-key 'normal 'loccur-mode (kbd "<escape>") 'loccur)
+;; meaningful names for buffers with the same name
+(use-package uniquify
+  :config
+  (setq uniquify-buffer-name-style 'forward)
+  (setq uniquify-separator "/")
+  (setq uniquify-after-kill-buffer-p t)     ; rename after killing uniquified
+  (setq uniquify-ignore-buffers-re "^\\*")) ; don't muck with special buffers
 
 (use-package evil-iedit-state
   :ensure t
@@ -1000,6 +1055,7 @@
   :config
   (define-key evil-iedit-state-map (kbd "TAB") 'iedit-toggle-selection)
   (define-key evil-iedit-state-map (kbd "C-c f") 'iedit-restrict-function)
+  (define-key evil-iedit-state-map (kbd "C-c C-f") 'iedit-restrict-function)
   (unbind-key "TAB" iedit-mode-keymap)
   ;; (define-key evil-iedit-state-map (kbd "TAB") 'iedit-restrict-region)
   ;; (define-key evil-iedit-state-map (kbd "TAB") 'iedit-restrict-current-line)
@@ -1010,9 +1066,20 @@
   :config
   ;; (setq beacon-color "#d7dfff")
   (setq beacon-color (face-background 'region))
+  (setq beacon-overlay-priority 1)
   ;; (setq beacon-blink-when-window-scrolls t)
   ;; (setq beacon-blink-when-point-moves-horizontally 10)
   ;; (setq beacon-color 0.9)
   (beacon-mode))
+
+(use-package regex-tool
+  :ensure t
+  :commands regex-tool)
+
+(use-package macrostep
+  :ensure t
+  :bind (:map emacs-lisp-mode-map
+              ("C-c e" . macrostep-expand)))
+
   )
 
