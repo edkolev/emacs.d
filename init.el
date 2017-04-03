@@ -30,6 +30,8 @@
       initial-major-mode 'emacs-lisp-mode)
 (setq echo-keystrokes 0.02)
 (setq scroll-step 2)
+(setq default-major-mode 'text-mode)
+(setq enable-local-variables :safe)
 
 (defun display-startup-echo-area-message ()
   (message ""))
@@ -69,6 +71,7 @@
 (defun evgeni-upgrade-packages ()
   (interactive)
   (save-window-excursion
+    (package-refresh-contents)
     (package-list-packages t)
     (package-menu-mark-upgrades)
     (condition-case nil
@@ -112,12 +115,29 @@
 
 (use-package hippie-exp
   :init
+  (general-imap "TAB" 'evgeni-tab)
+  (defun evgeni-tab ()
+    (interactive)
+    (if (looking-at "\\_>") (hippie-expand nil) (indent-for-tab-command)))
+
   (defun my-yas-hippie-try-expand (first-time)
     (if (not first-time)
         (let ((yas-fallback-behavior 'return-nil))
           (yas-expand))
       (undo 1)
       nil))
+
+  (defun he-tag-beg ()
+    (save-excursion
+      (backward-word 1)
+      (point)))
+
+  (defun tags-complete-tag (string predicate what)
+    (save-excursion
+      ;; If we need to ask for the tag table, allow that.
+      (if (eq what t)
+          (all-completions string (tags-completion-table) predicate)
+        (try-completion string (tags-completion-table) predicate))))
 
   (defun try-expand-tag (old)
     (when tags-table-list
@@ -181,7 +201,7 @@
                swiper))
     (advice-add f :after #'evgeni-add-nohighlight-hook))
 
-  (general-nmap "RET" 'save-buffer)
+  (general-nmap "RET" (lambda () (interactive) (if buffer-file-name (call-interactively 'save-buffer) (message "No file"))))
   (general-nmap "[ Q" 'first-error)
   (general-nmap "] q" 'next-error)
   (general-nmap "[ q" 'previous-error)
@@ -196,7 +216,20 @@
   (general-nmap "C-n" 'end-of-defun)
   (general-nmap "[ m" 'beginning-of-defun)
   (general-nmap "] m" 'end-of-defun)
-  (general-nmap "0" 'evil-first-non-blank)
+  (general-nvmap "0" 'evil-first-non-blank)
+  (general-omap "0" 'evil-first-non-blank)
+
+  (defvar evgeni-conflict-marker-regex "^[<=>|]\\{7\\}")
+  (defun evgeni-next-conflict ()
+    (interactive)
+    (re-search-forward evgeni-conflict-marker-regex))
+
+  (defun evgeni-prev-conflict ()
+    (interactive)
+    (re-search-backward evgeni-conflict-marker-regex))
+
+  (general-nmap "] n" 'evgeni-next-conflict)
+  (general-nmap "[ n" 'evgeni-prev-conflict)
 
   ;; alias :On with :on
   (evil-ex-define-cmd "On" "on")
@@ -265,7 +298,7 @@
   (general-imap "C-x C-l" 'evil-complete-next-line)
 
   ;; completion
-  (general-imap "TAB" 'hippie-expand)
+
   (general-imap "<backtab>" 'completion-at-point)
   (general-imap "C-x C-x" 'completion-at-poin)
   (general-imap "C-k" 'completion-at-point)
@@ -345,11 +378,29 @@
       (call-interactively 'previous-complete-history-element))
     (call-interactively 'move-end-of-line))
 
+  (defun evgeni-ex-delete-or-complete ()
+    (interactive)
+    (if (eq (point) (point-at-eol))
+        (evil-ex-completion)
+      (delete-char 1)))
+
   ;; tweak search and ex maps
-  (define-key evil-ex-search-keymap "\C-e" 'evgeni-prev-or-move-end-of-line)
+  (define-key evil-ex-search-keymap "\C-e"  'evgeni-prev-or-move-end-of-line)
+  (define-key evil-ex-search-keymap "\C-e"  'evgeni-prev-or-move-end-of-line)
   (define-key evil-ex-completion-map "\C-e" 'evgeni-prev-or-move-end-of-line)
   (define-key evil-ex-completion-map "\C-a" 'move-beginning-of-line)
-  (define-key evil-ex-completion-map "\C-b" 'backward-char))
+  (define-key evil-ex-completion-map "\C-b" 'backward-char)
+  (define-key evil-ex-completion-map "\C-d" 'evgeni-ex-delete-or-complete)
+
+  (define-key evil-normal-state-map "zz" 'recenter-top-bottom)
+
+  ;; overwrite the "o" code
+  (defun evil-open-below (count)
+    "..."
+    (interactive "p")
+    (evil-insert-state 1)
+    (evil-move-end-of-line)
+    (call-interactively (key-binding (kbd "RET")))))
 
 (use-package ace-window
   :ensure t
@@ -381,7 +432,7 @@
 
 (use-package evil-exchange
   :ensure t
-  :config (evil-exchange-cx-install))
+  :config (evil-exchange-install))
 
 (use-package evil-replace-with-register
   :ensure t
@@ -394,6 +445,9 @@
   :config
   (global-evil-visualstar-mode))
 
+(use-package evil-goggles
+  :load-path "src/evil-goggles")
+
 (use-package evil-magit
   :ensure t
   :after magit
@@ -402,10 +456,10 @@
 
 (use-package recentf
   :init
-  ;; (add-to-list 'recentf-exclude "^/\\(?:ssh\\|su\\|sudo\\)?:")
   (setq recentf-save-file (expand-file-name "recentf.el" user-emacs-directory))
-  (setq recentf-max-saved-items 50)
+  (setq recentf-max-saved-items 500)
   (setq recentf-exclude '("/tmp/" "/ssh:"))
+  (setq recentf-auto-cleanup 'never)
   (recentf-mode))
 
 (use-package evil-indent-plus ;; indent object
@@ -438,6 +492,12 @@
   (add-hook 'dired-mode-hook 'dired-hide-details-mode)
   (define-key dired-mode-map (kbd "-") 'dired-up-directory))
 
+(use-package wdired
+  :commands wdired-change-to-wdired-mode
+  :init
+  (ex! "wdired" 'wdired-change-to-wdired-mode)
+  (ex! "wdired-finish" 'wdired-finish-edit))
+
 (use-package magit
   :ensure t
   :general
@@ -446,9 +506,10 @@
   (general-nmap "U d" '(magit-diff-unstaged))
   (general-nmap "U l" '(magit-log-head))
   (general-nmap "U r" '(magit-file-checkout))
-  (general-nmap "U c" '(magit-commit))
+  (general-nmap "U c" '(magit-commit-popup))
   (general-nmap "U b" '(magit-blame))
   (general-nmap "U z" '(magit-stash-popup))
+  (general-nmap "U p" '(magit-push-popup))
   :config
   (setq magit-display-buffer-function 'magit-display-buffer-fullframe-status-v1)
   (setq magit-diff-refine-hunk 't)
@@ -463,6 +524,7 @@
   (unbind-key "C-j" magit-mode-map)
   (unbind-key "C-k" magit-mode-map)
   (unbind-key "C-l" magit-mode-map)
+  (unbind-key "SPC" magit-status-mode-map)
   (general-evil-define-key 'normal magit-mode-map "C-n" 'magit-section-forward)
   (general-evil-define-key 'normal magit-mode-map "C-p" 'magit-section-backward)
 
@@ -728,8 +790,14 @@
           (message "*grep* %d matches found" (- (count-lines (point-min) (point-max)) 6))
           ))))
 
+  (evil-define-motion evgeni-grep-visual (beg end)
+    (interactive "<r>")
+    (evil-exit-visual-state)
+    (evgeni-grep (buffer-substring-no-properties beg end)))
+
   (add-hook 'compilation-finish-functions 'evgeni-scroll-grep-win)
 
+  (general-vmap "K" 'evgeni-grep-visual)
   (general-nmap "K" (lambda () (interactive) (evgeni-grep (thing-at-point 'word)))))
 
 (use-package smart-compile
@@ -784,12 +852,12 @@
   (shackle-mode 1)
   (setq shackle-rules
         '(
-          ("*xref*"            :align below :size 0.4 :noselect t)
-          ("*Help*"            :align below :size 16  :select t)
-          ("*Backtrace*"       :align below :size 25  :noselect t)
+          ("*xref*"                    :align below :size 10  :noselect t)
+          ("*Help*"                    :align below :size 16  :select t)
+          ("*Backtrace*"               :align below :size 25  :noselect t)
           ("*Flycheck error messages*" :align below :size 0.25)
-          ("*compilation*" :align below :size 10)
-          ("*grep*" :align below :size 10)
+          ("*compilation*"             :align below :size 10)
+          ("*grep*"                    :align below :size 10)
           )))
 
 (use-package which-key
@@ -828,15 +896,19 @@
   :ensure t
   :general
   (general-nmap ", g" 'counsel-git-grep)
+  (general-nmap "g SPC" 'counsel-git)
   :init
+  (when (executable-find "ag")
+    (setq counsel-git-cmd "ag -l"))
 
-  (general-nmap ", f" 'evgeni-counsel-imenu)
-  (defun evgeni-counsel-imenu ()
-    (interactive)
-    (let ((orig-point (point)))
-      (call-interactively 'counsel-imenu)
-      (unless (= orig-point (point))
-        (evil-set-jump orig-point))))
+  (general-nmap ", f" (lambda ()
+                        (interactive)
+                        (let ((imenu-default-goto-function 'evgeni-imenu-goto))
+                          (call-interactively 'counsel-imenu))))
+
+  (defun evgeni-imenu-goto (&rest args)
+    (evil-set-jump)
+    (apply 'imenu-default-goto-function args))
 
   (define-key global-map [remap describe-function] 'counsel-describe-function)
   (define-key global-map [remap describe-variable] 'counsel-describe-variable)
@@ -847,12 +919,6 @@
 
   :config
   (use-package smex))
-
-(use-package find-file-in-project
-  :ensure
-  :demand ;; load it now so it can define its safe-local-variables
-  :bind (:map evil-normal-state-map
-              ("g SPC" . find-file-in-project)))
 
 (use-package imenu-anywhere
   :ensure t
@@ -983,7 +1049,8 @@
   (modify-syntax-entry ?_ "w" perl-mode-syntax-table)
 
   (add-hook 'perl-mode-hook #'(lambda ()
-                                (setq defun-prompt-regexp ;; taken from cperl-mode
+                                ;; taken from cperl-mode, used for beginning-of-defun / end-of-defun
+                                (setq defun-prompt-regexp
                                       "^[ 	]*\\(\\(?:sub\\)\\(\\([ 	\n]\\|#[^\n]*\n\\)+\\(::[a-zA-Z_0-9:']+\\|[a-zA-Z_'][a-zA-Z_0-9:']*\\)\\)\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*\\(([^()]*)\\)\\)?\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*\\(:\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*\\(\\sw\\|_\\)+\\((\\(\\\\.\\|[^\\\\()]\\|([^\\\\()]*)\\)*)\\)?\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*:\\)?\\)+\\)\\)?\\|\\(BEGIN\\|UNITCHECK\\|CHECK\\|INIT\\|END\\|AUTOLOAD\\|DESTROY\\)\\)[ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*")
                                 ))
   )
@@ -1063,6 +1130,7 @@
 
 (use-package beacon
   :ensure t
+  :diminish beacon-mode
   :config
   ;; (setq beacon-color "#d7dfff")
   (setq beacon-color (face-background 'region))
@@ -1076,6 +1144,21 @@
   :ensure t
   :commands regex-tool)
 
+(use-package quickrun
+  :ensure t
+  :disable t
+  :commands (quickrun
+             quickrun-region
+             quickrun-with-arg
+             quickrun-shell
+             quickrun-compile-only
+             quickrun-replace-region)
+  :init
+  (setq quickrun-focus-p nil)
+  (ex! "quickrun" 'quickrun)
+  (ex! "quickrun-region" 'quickrun-region)
+  (ex! "quickrun-replace-region" 'quickrun-replace-region))
+
 (use-package macrostep
   :ensure t
   :bind (:map emacs-lisp-mode-map
@@ -1083,3 +1166,7 @@
 
   )
 
+(use-package js
+  :defer t
+  :config
+  (modify-syntax-entry ?_ "w" js-mode-syntax-table))
