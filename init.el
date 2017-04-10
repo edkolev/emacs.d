@@ -343,7 +343,7 @@
   ;; clean whitespace on lines with nothing but whitespace
   (add-hook 'evil-insert-state-exit-hook 'evgeni-clean-whitespace-line)
   (defun evgeni-clean-whitespace-line ()
-    (when (string-match "^\s+$" (thing-at-point 'line))
+    (when (string-match "^\s+$" (or (thing-at-point 'line) ""))
       (delete-region (line-beginning-position) (line-end-position))))
 
   ;; cursor in terminal
@@ -446,7 +446,9 @@
   (global-evil-visualstar-mode))
 
 (use-package evil-goggles
-  :load-path "src/evil-goggles")
+  :load-path "src/evil-goggles"
+  :config
+  (evil-goggles-mode))
 
 (use-package evil-magit
   :ensure t
@@ -510,6 +512,8 @@
   (general-nmap "U b" '(magit-blame))
   (general-nmap "U z" '(magit-stash-popup))
   (general-nmap "U p" '(magit-push-popup))
+  (general-nmap "U f" '(magit-fetch-popup))
+  (general-nmap "U F" '(magit-pull-popup))
   :config
   (setq magit-display-buffer-function 'magit-display-buffer-fullframe-status-v1)
   (setq magit-diff-refine-hunk 't)
@@ -518,8 +522,6 @@
   (magit-add-section-hook 'magit-status-sections-hook
                           'magit-insert-untracked-files 'magit-insert-staged-changes 1) ;; lower untracked
 
-  (define-key magit-mode-map "e" 'vdiff-magit-dwim)
-  (define-key magit-mode-map "E" 'vdiff-magit-popup)
   (unbind-key "C-h" magit-mode-map)
   (unbind-key "C-j" magit-mode-map)
   (unbind-key "C-k" magit-mode-map)
@@ -531,10 +533,11 @@
   (add-hook 'git-commit-mode-hook 'flyspell-mode))
 
 (use-package vdiff
+  :disabled t
   :ensure t
-  :general
-  (general-nmap "U D" '(vdiff-magit-popup :which-key "vdiff popup"))
   :config
+  (setq vdiff-magit-stage-is-2way t)
+
   (evil-define-minor-mode-key 'normal 'vdiff-mode-map (kbd "] c") 'vdiff-next-hunk)
   (evil-define-minor-mode-key 'normal 'vdiff-mode-map (kbd "[ c") 'vdiff-previous-hunk)
   (evil-define-minor-mode-key 'normal 'vdiff-mode-map (kbd "z c") 'vdiff-close-fold)
@@ -542,24 +545,9 @@
   (evil-define-minor-mode-key 'normal 'vdiff-mode-map (kbd "z o") 'vdiff-open-fold)
   (evil-define-minor-mode-key 'normal 'vdiff-mode-map (kbd "z R") 'vdiff-open-all-folds)
   (evil-define-minor-mode-key 'normal 'vdiff-mode-map (kbd "C-c o SPC") 'vdiff-toggle-whitespace)
-  (evil-define-minor-mode-key 'normal 'vdiff-mode-map (kbd "q") 'vdiff-quit)
-  ;; "dp"/"do" to send/receive changes
-  (define-key evil-operator-state-map "o" 'evgeni-diff-obtain)
-  (define-key evil-operator-state-map "p" 'evgeni-diff-put)
 
-  (defun evgeni-diff-obtain ()
-    (interactive)
-    (when (and (eq evil-this-operator 'evil-delete)
-               (memq 'vdiff-mode minor-mode-list))
-      (setq evil-inhibit-operator t)
-      (call-interactively 'vdiff-receive-changes)))
-
-  (defun evgeni-diff-put ()
-    (interactive)
-    (when (and (eq evil-this-operator 'evil-delete)
-               (memq 'vdiff-mode minor-mode-list))
-      (setq evil-inhibit-operator t)
-      (call-interactively 'vdiff-send-changes))))
+  (evil-define-minor-mode-key 'motion 'vdiff-mode "go" 'vdiff-receive-changes)
+  (evil-define-minor-mode-key 'motion 'vdiff-mode "gp" 'vdiff-send-changes))
 
 (use-package flycheck
   :ensure t
@@ -888,9 +876,11 @@
 
 (use-package swiper
   :ensure t
-  :bind (:map evil-normal-state-map
+  :bind (:map evil-motion-state-map
               ("g /" . evil-search-forward)
-              ("/" . swiper)))
+              ("/" . swiper))
+  :config
+  (setq swiper-goto-start-of-match t))
 
 (use-package counsel
   :ensure t
@@ -1080,6 +1070,7 @@
 
 (use-package smartparens
   :ensure t
+  :diminish smartparens-mode
   :config
 
   (setq sp-highlight-pair-overlay nil)
@@ -1102,11 +1093,43 @@
   :ensure t
   :commands (loccur-current loccur)
   :init
+  (setq loccur-highlight-matching-regexp nil)
+  (setq loccur-jump-beginning-of-line t)
   (general-nmap ", *" 'loccur-current)
+  (general-vmap ", *" 'loccur)
   (evil-ex-define-cmd "loccur" 'loccur)
   (evil-define-minor-mode-key 'normal 'loccur-mode (kbd "q") 'loccur)
-  (evil-define-minor-mode-key 'normal 'loccur-mode (kbd "<escape>") 'loccur)
-;; meaningful names for buffers with the same name
+  (evil-define-minor-mode-key 'normal 'loccur-mode (kbd "RET") 'loccur)
+  (evil-define-minor-mode-key 'normal 'loccur-mode (kbd "<escape>") 'loccur))
+
+(use-package ledger-mode
+  :ensure t
+  :commands ledger-mode)
+
+(use-package yasnippet
+  :disabled t
+  :ensure t
+  :demand t
+  ;; :diminish yas-minor-mode
+  :commands (yas-expand yas-minor-mode)
+  :mode ("/\\.emacs\\.d/snippets/" . snippet-mode)
+  :bind (("C-c y TAB" . yas-expand)
+         ("C-c y s"   . yas-insert-snippet)
+         ("C-c y v"   . yas-visit-snippet-file))
+  :config
+  (evil-ex-define-cmd "new-snippet" 'yas-new-snippet)
+  ;; from https://github.com/haskell/haskell-snippets
+  ;; (setq-default yas-prompt-functions '(yas-ido-prompt yas-dropdown-prompt))
+
+  ;; (yas-load-directory "~/.emacs.d/snippets/")
+  (yas-global-mode 1)
+
+  (bind-key "C-i" #'yas-next-field-or-maybe-expand yas-keymap))
+
+(use-package haskell-snippets
+  :disabled t
+  :ensure t)
+
 (use-package uniquify
   :config
   (setq uniquify-buffer-name-style 'forward)
@@ -1146,7 +1169,7 @@
 
 (use-package quickrun
   :ensure t
-  :disable t
+  :disabled t
   :commands (quickrun
              quickrun-region
              quickrun-with-arg
@@ -1164,7 +1187,42 @@
   :bind (:map emacs-lisp-mode-map
               ("C-c e" . macrostep-expand)))
 
+(use-package yaml-mode
+  :ensure t
+  :commands yaml-mode)
+
+(use-package package-lint
+  :ensure t)
+
+(use-package multiple-cursors
+  :load-path "src/multiple-cursors.el"
+  :commands mc/edit-lines
+  :config
+  (evil-ex-define-cmd "mc[cursors]" 'mc/edit-lines)
+
+  ;; (global-set-key (kbd "C->") 'mc/mark-next-like-this)
+  ;; (global-set-key (kbd "C-<") 'mc/mark-previous-like-this)
+  ;; (global-set-key (kbd "C-c C-<") 'mc/mark-all-like-this)
+  ;; mc/mark-next-like-this-word
+
   )
+
+(use-package idle-highlight-mode
+  :commands idle-highlight-mode
+  :ensure t
+  :bind (:map evil-normal-state-map
+              ("C-c o h" . idle-highlight-mode)))
+
+(use-package repl-toggle
+  :disabled t
+  :ensure t
+  :general
+  (general-imap "C-c C-z" 'rtog/toggle-repl)
+  (general-nmap "C-c C-z" 'rtog/toggle-repl)
+  :config
+  (setq rtog/fullscreen t)
+  :init
+  (setq rtog/mode-repl-alist '((emacs-lisp-mode . ielm))))
 
 (use-package js
   :defer t
