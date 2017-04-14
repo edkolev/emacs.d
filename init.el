@@ -409,8 +409,10 @@
 
 (use-package avy
   :ensure t
-  :general
-  (general-nmap "C-c C-g" 'avy-goto-word-or-subword-1))
+  :bind (:map evil-motion-state-map
+              ("C-c C-g" . avy-goto-word-or-subword-1)
+              ("gY" . avy-copy-region)
+              ("gyy" . avy-copy-line)))
 
 (use-package ivy-hydra
   :ensure t
@@ -428,7 +430,8 @@
 (use-package evil-commentary
   :ensure t
   :diminish 'evil-commentary-mode
-  :config (evil-commentary-mode))
+  :bind (:map evil-normal-state-map
+              ("gc" . evil-commentary)))
 
 (use-package evil-exchange
   :ensure t
@@ -436,9 +439,8 @@
 
 (use-package evil-replace-with-register
   :ensure t
-  :config
-  (setq evil-replace-with-register-key (kbd "gr"))
-  (evil-replace-with-register-install))
+  :bind (:map evil-normal-state-map
+              ("gr" . evil-replace-with-register)))
 
 (use-package evil-visualstar
   :ensure t
@@ -448,7 +450,16 @@
 (use-package evil-goggles
   :load-path "src/evil-goggles"
   :config
-  (evil-goggles-mode))
+  (evil-goggles-mode)
+
+  (require 'diff-mode) ;; load diff-* faces
+  (setq evil-goggles-faces-alist `(
+                                   ( evil-delete . diff-removed ) ;; isearch-fail
+                                   ( evil-yank . highlight )
+                                   ( evil-paste-after . diff-added )
+                                   ( evil-paste-before . diff-added )
+                                   ))
+  )
 
 (use-package evil-magit
   :ensure t
@@ -558,6 +569,7 @@
   (setq flycheck-check-syntax-automatically '(mode-enabled save))
   (setq-default flycheck-disabled-checkers '(perl-perlcritic)))
 
+;; TODO - company through hippie exp only https://github.com/jwiegley/dot-emacs/blob/master/init.el#L1355
 (use-package company
   :disabled t
   :ensure t
@@ -675,8 +687,16 @@
 (use-package move-text
   :ensure t
   :general
-  (general-nmap "] e" (lambda (arg) (interactive "*p") (move-text-down arg)))
-  (general-nmap "[ e" (lambda (arg) (interactive "*p") (move-text-up arg))))
+  (general-nmap "] e" (lambda (count)
+                        (interactive "p")
+                        (let ((count (or count 1)))
+                          (dotimes (i count)
+                            (move-text-line-down)))))
+  (general-nmap "[ e" (lambda (count)
+                        (interactive "p")
+                        (let ((count (or count 1)))
+                          (dotimes (i count)
+                            (move-text-line-up))))))
 
 (use-package xref
   :general
@@ -859,8 +879,8 @@
   :ensure t
   :diminish 'ivy-mode
   :demand
-  :general
-  (general-nmap "SPC" 'ivy-switch-buffer)
+  :bind (:map evil-normal-state-map
+              ("SPC" . ivy-switch-buffer))
   :config
   (ivy-mode 1)
   (setq ivy-use-virtual-buffers t)
@@ -888,8 +908,7 @@
   (general-nmap ", g" 'counsel-git-grep)
   (general-nmap "g SPC" 'counsel-git)
   :init
-  (when (executable-find "ag")
-    (setq counsel-git-cmd "ag -l"))
+  (setq counsel-git-cmd "git ls-files --cached --others --exclude-standard")
 
   (general-nmap ", f" (lambda ()
                         (interactive)
@@ -1076,6 +1095,7 @@
   (setq sp-highlight-pair-overlay nil)
   (setq sp-highlight-wrap-overlay nil)
   (setq sp-highlight-wrap-tag-overlay nil)
+  (setq sp-show-pair-delay 0) ;; TODO not working in insert mode?
 
   (require 'smartparens-config)
   (show-smartparens-global-mode)
