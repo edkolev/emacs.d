@@ -39,6 +39,7 @@
 
 (when (fboundp 'tool-bar-mode) (tool-bar-mode -1))
 (when (fboundp 'menu-bar-mode) (menu-bar-mode -1))
+(when (fboundp 'toggle-scroll-bar) (toggle-scroll-bar -1))
 
 (global-set-key "\C-ch" help-map)
 
@@ -80,7 +81,7 @@
       (error
        (package-menu-execute)))))
 
-;; theme packages
+;; themes
 (use-package spacemacs-theme :ensure t :defer t)
 (use-package molokai-theme :ensure t :defer t)
 (use-package color-theme-sanityinc-tomorrow :ensure t :defer t)
@@ -100,6 +101,7 @@
 (use-package faff-theme :ensure t :defer t)
 (use-package apropospriate-theme :ensure t :defer t)
 (use-package spacegray-theme :ensure t :defer t)
+(use-package minimal-theme :ensure t :defer t)
 
 ;; (set-face-bold-p 'bold nil) ;; disable bold
 (load-theme (if (display-graphic-p)
@@ -432,7 +434,7 @@
 (use-package avy
   :ensure t
   :bind (:map evil-motion-state-map
-              ("C-c C-g" . avy-goto-word-or-subword-1)
+              ("C-c C-g" . avy-goto-char-timer)
               ("gY" . avy-copy-region)
               ("gyy" . avy-copy-line)))
 
@@ -467,6 +469,7 @@
   (global-evil-visualstar-mode))
 
 (use-package evil-goggles
+  :ensure t
   :load-path "src/evil-goggles"
   :config
   (evil-goggles-mode)
@@ -568,19 +571,17 @@
 
 (use-package vdiff
   :ensure t
-  ;; :bind (:map vdiff-mode-map
-  ;;             ("C-c C-k" . vdiff-quit))
+  :defer t
   :config
   (define-key vdiff-mode-map (kbd "C-c") vdiff-mode-prefix-map)
-  (setq vdiff-magit-stage-is-2way t)
-  ;; (define-key vdiff-mode-map (kbd "C-c") 'vdiff-mode-prefix-map)
-  ;; (define-key vdiff-mode-prefix-map (kbd "C-k") 'vdiff-quit)
-  )
+  (setq vdiff-magit-stage-is-2way t))
 
 (use-package vdiff-magit
   :ensure t
-  :init
-  (general-nmap "U D" '(vdiff-magit-popup)))
+  :bind (:map evil-normal-state-map
+              ("U D" . vdiff-magit-popup))
+  :config
+  (use-package vdiff))
 
 (use-package flycheck
   :ensure t
@@ -773,6 +774,7 @@
   )
 
 (use-package wgrep
+  :ensure t
   :commands wgrep-change-to-wgrep-mode
   :init
   (setq wgrep-auto-save-buffer t)
@@ -933,6 +935,7 @@
 
 (use-package counsel
   :ensure t
+  :load-path "~/dev/swiper"
   :general
   (general-nmap ", g" 'counsel-git-grep)
   (general-nmap "g SPC" 'counsel-git)
@@ -953,6 +956,7 @@
   (define-key global-map [remap describe-variable] 'counsel-describe-variable)
   (define-key global-map [remap execute-extended-command] 'counsel-M-x)
   :config
+  (setq counsel-git-grep-skip-counting-lines t)
   (use-package smex)
   ;; use C-] to go to definition
   (define-key counsel-describe-map (kbd "C-]") 'counsel-find-symbol)
@@ -1080,7 +1084,8 @@
     (interactive)
     (let ((word (thing-at-point 'word)))
       (save-excursion (end-of-line)
-                      (newline-and-indent)
+                      (newline)
+                      (indent-according-to-mode)
                       (insert (concat "use Data::Dump qw(pp); warn '" word ": ' . pp($" word ") . \"\\n\";")))))
 
   (defun evgeni-define-perl-function ()
@@ -1373,7 +1378,8 @@
   :commands yaml-mode)
 
 (use-package package-lint
-  :ensure t)
+  :ensure t
+  :commands package-lint-current-buffer)
 
 (use-package multiple-cursors
   :load-path "src/multiple-cursors.el"
