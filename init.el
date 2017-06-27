@@ -51,6 +51,9 @@
 
 (defvar default-tags-table-function '(lambda () (expand-file-name ".git/etags" "/usr/local/")))
 
+(when (display-graphic-p)
+  (desktop-save-mode t))
+
 (defmacro lambda! (&rest body)
   "Shortcut for interactive lambdas"
   `(lambda () (interactive) ,@body))
@@ -102,6 +105,7 @@
 (use-package apropospriate-theme :ensure t :defer t)
 (use-package spacegray-theme :ensure t :defer t)
 (use-package minimal-theme :ensure t :defer t)
+(use-package gotham-theme :ensure t :defer t)
 
 ;; (set-face-bold-p 'bold nil) ;; disable bold
 (load-theme (if (display-graphic-p)
@@ -416,20 +420,27 @@
 
   (define-key evil-list-view-mode-map (kbd "q") #'kill-buffer-and-window)
 
+  (defun evgeni-ex-reverse ()
+    (interactive)
+    (if (region-active-p)
+        (call-interactively 'reverse-region)
+      (message "No range")))
+  (ex! "rev[erse]" 'evgeni-ex-reverse)
+
   ;; :remove to delete file and buffer
-  (defun evgeni-remove ()
+  (defun evgeni-ex-remove ()
     (interactive)
     (let ((filename (buffer-file-name)))
       (when filename
         (delete-file filename)
         (kill-buffer)
         (message "Removed %s and its buffer" filename))))
-  (ex! "remove" 'evgeni-remove))
+  (ex! "remove" 'evgeni-ex-remove))
 
 (use-package ace-window
   :ensure t
-  :general
-  (general-nmap "C-w C-w" 'ace-window))
+  :bind (:map evil-normal-state-map
+              ("C-w C-w" . ace-window)))
 
 (use-package avy
   :ensure t
@@ -469,23 +480,12 @@
   (global-evil-visualstar-mode))
 
 (use-package evil-goggles
+  :defer 3
   :ensure t
   :load-path "src/evil-goggles"
   :config
   (evil-goggles-mode)
-  (evil-goggles-use-diff-faces)
-
-  ;; (require 'diff-mode) ;; load diff-* faces
-
-  ;; (setq evil-goggles-default-face 'diff-changed)
-
-  ;; (setq evil-goggles-faces-alist `(( evil-delete . diff-removed ) ;; isearch-fail
-  ;;                                  ( evil-yank . diff-changed )
-  ;;                                  ( evil-paste-after . diff-added )
-  ;;                                  ( evil-paste-before . diff-added )
-  ;;                                  ( undo-redo-add . diff-added )
-  ;;                                  ( undo-redo-remove . diff-removed )))
-  )
+  (evil-goggles-use-diff-faces))
 
 (use-package evil-magit
   :ensure t
@@ -494,6 +494,7 @@
   (setq evil-magit-want-horizontal-movement t))
 
 (use-package recentf
+  :defer 10
   :init
   (setq recentf-save-file (expand-file-name "recentf.el" user-emacs-directory))
   (setq recentf-max-saved-items 500)
@@ -522,6 +523,7 @@
                                    extended-command-history)
    savehist-autosave-interval 60)
   (savehist-mode t))
+
 (use-package dired
   :general
   (general-nmap "-"   (lambda () (interactive) (dired ".")))
@@ -539,19 +541,24 @@
 
 (use-package magit
   :ensure t
-  :general
-  (general-nmap "U U" '(magit-status))
-  (general-nmap "U w" '(magit-stage-file))
-  (general-nmap "U d" '(magit-diff-unstaged))
-  (general-nmap "U l" '(magit-log-head))
-  (general-nmap "U r" '(magit-file-checkout))
-  (general-nmap "U c" '(magit-commit-popup))
-  (general-nmap "U b" '(magit-blame))
-  (general-nmap "U z" '(magit-stash-popup))
-  (general-nmap "U p" '(magit-push-popup))
-  (general-nmap "U f" '(magit-fetch-popup))
-  (general-nmap "U F" '(magit-pull-popup))
+  :bind (:map evil-normal-state-map
+              ("U U" . magit-status)
+              ("U w" . magit-stage-file)
+              ("U d" . evgeni-magit-diff-unstaged-buffer-file)
+              ("U l" . magit-log-head)
+              ("U r" . magit-file-checkout)
+              ("U c" . magit-commit-popup)
+              ("U b" . magit-blame)
+              ("U z" . magit-stash-popup)
+              ("U p" . magit-push-popup)
+              ("U f" . magit-fetch-popup)
+              ("U F" . magit-pull-popup)
+              ("U B" . magit-checkout))
   :config
+  (defun evgeni-magit-diff-unstaged-buffer-file ()
+    (interactive)
+    (magit-diff-unstaged nil (list (magit-file-relative-name))))
+
   (setq magit-display-buffer-function 'magit-display-buffer-fullframe-status-v1)
   (setq magit-diff-refine-hunk 't)
 
@@ -582,6 +589,20 @@
               ("U D" . vdiff-magit-popup))
   :config
   (use-package vdiff))
+
+(use-package git-gutter
+  :ensure t
+  ;; :commands git-gutter-mode
+  ;; :init
+  ;; (add-hook 'prog-mode-hook 'git-gutter-mode)
+  :config
+  (global-git-gutter-mode)
+  (evil-define-key 'normal prog-mode-map
+    "]c" 'git-gutter:next-hunk
+    "[c" 'git-gutter:previous-hunk
+    "Uus" 'git-gutter:stage-hunk
+    "Uux" 'git-gutter:revert-hunk)
+  )
 
 (use-package flycheck
   :ensure t
@@ -897,11 +918,12 @@
           ("*Flycheck error messages*" :align below :size 0.25)
           ("*compilation*"             :align below :size 10)
           ("*grep*"                    :align below :size 10)
-          )))
+          (ivy-occur-grep-mode         :align below :size 10))))
 
 (use-package which-key
   :ensure t
   :diminish 'which-key-mode
+  :defer 10
   :config
   (setq which-key-idle-delay 1.5)
   (which-key-mode))
@@ -918,6 +940,7 @@
   (setq ivy-virtual-abbreviate 'full)
   (define-key ivy-minibuffer-map (kbd "C-w") 'backward-kill-word)
   (define-key ivy-minibuffer-map (kbd "C-u") (lambda () (interactive) (kill-region (point) (point-at-bol))))
+  (define-key ivy-minibuffer-map [escape] 'minibuffer-keyboard-quit)
 
   ;; C-r C-w to read word at point
   (unbind-key "C-r" ivy-minibuffer-map)
@@ -940,6 +963,7 @@
   (general-nmap ", g" 'counsel-git-grep)
   (general-nmap "g SPC" 'counsel-git)
   (general-nmap "g /" 'counsel-git-grep)
+  (general-nmap "K" (lambda () (interactive) (counsel-git-grep nil (thing-at-point 'word))))
   :init
   (setq counsel-git-cmd "git ls-files --cached --others --exclude-standard")
 
@@ -971,10 +995,15 @@
 
   (general-vmap "K" 'evgeni-counsel-git-grep-visual))
 
+(use-package imenu
+  :defer t
+  :config
+  (setq imenu-auto-rescan-maxout 600000))
+
 (use-package imenu-anywhere
   :ensure t
-  :general
-  (general-nmap ", F" 'imenu-anywhere))
+  :bind (:map evil-normal-state-map
+              (", F"  . imenu-anywhere)))
 
 (use-package elisp-mode
   :config
@@ -1044,6 +1073,7 @@
                       (face-attribute 'mode-line :background)))
 
 (use-package winner
+  :defer 10
   :config
   (winner-mode)
   (general-mmap "z u" 'winner-undo)
@@ -1064,6 +1094,11 @@
 
 (use-package perl-mode
   :commands perl-mode
+  :mode (("\\.pl$"   . perl-mode)
+         ("\\.pm$"   . perl-mode)
+         ("\\.psgi$" . perl-mode)
+         ("\\.t$"    . perl-mode)
+         ("\\.html$" . perl-mode))
   :load-path "extra-packages"
   :config
   (setq perl-indent-level 3 ;; 4
@@ -1110,9 +1145,10 @@
 
 (use-package eros
   :ensure t
-  :general
-  (general-define-key :keymap 'emacs-lisp-mode-map [remap eval-last-sexp] 'eros-eval-last-sexp)
-  (general-define-key :keymap 'emacs-lisp-mode-map [remap eval-defun] 'eros-eval-defun))
+  :commands (eros-eval-last-sexp eros-eval-defun)
+  :init
+  (define-key global-map [remap eval-last-sexp] 'eros-eval-last-sexp)
+  (define-key global-map [remap eval-defun] 'eros-eval-defun))
 
 (use-package markdown-mode
   :ensure t
@@ -1331,11 +1367,9 @@
   :config
   (define-key evil-iedit-state-map (kbd "TAB") 'iedit-toggle-selection)
   (define-key evil-iedit-state-map (kbd "C-c f") 'iedit-restrict-function)
-  (define-key evil-iedit-state-map (kbd "C-c C-f") 'iedit-restrict-function)
-  (unbind-key "TAB" iedit-mode-keymap)
-  ;; (define-key evil-iedit-state-map (kbd "TAB") 'iedit-restrict-region)
-  ;; (define-key evil-iedit-state-map (kbd "TAB") 'iedit-restrict-current-line)
-  )
+  (define-key evil-iedit-state-map (kbd "C-c C-l") 'iedit-restrict-current-line)
+  (define-key evil-iedit-state-map (kbd "C-c l") 'iedit-restrict-current-line)
+  (unbind-key "TAB" iedit-mode-keymap))
 
 (use-package beacon
   :ensure t
@@ -1412,12 +1446,49 @@
   (setq rtog/mode-repl-alist '((emacs-lisp-mode . ielm))))
 
 (use-package js
-  :mode "\\.js\\'"
+  :ensure t
+  :mode ("\\.js\\'" . js-mode)
   :config
   (modify-syntax-entry ?_ "w" js-mode-syntax-table))
 
 (use-package css-mode
   :ensure t
-  :mode "\\.css\\'"
+  :mode ("\\.css\\'" . css-mode)
   :config
   (modify-syntax-entry ?- "w" css-mode-syntax-table))
+
+(use-package tramp-sh
+  :defer t
+  :config
+  ;; (setq tramp-default-method "ssh")
+
+  ;; Open files in Docker containers like so: /docker:drunk_bardeen:/etc/passwd
+  ;; from https://github.com/jwiegley/dot-emacs/blob/master/init.el
+  (push
+   (cons
+    "docker"
+    '((tramp-login-program "docker")
+      (tramp-login-args (("exec" "-it") ("%h") ("/bin/bash")))
+      (tramp-remote-shell "/bin/sh")
+      (tramp-remote-shell-args ("-i") ("-c"))))
+   tramp-methods)
+
+  (defadvice tramp-completion-handle-file-name-all-completions
+      (around dotemacs-completion-docker activate)
+    "(tramp-completion-handle-file-name-all-completions \"\" \"/docker:\" returns
+    a list of active Docker container names, followed by colons."
+    (if (equal (ad-get-arg 1) "/docker:")
+        (let* ((dockernames-raw (shell-command-to-string "docker ps | perl -we 'use strict; $_ = <>; m/^(.*)NAMES/ or die; my $offset = length($1); while(<>) {substr($_, 0, $offset, q()); chomp; for(split m/\\W+/) {print qq($_:\n)} }'"))
+               (dockernames (cl-remove-if-not
+                             #'(lambda (dockerline) (string-match ":$" dockerline))
+                             (split-string dockernames-raw "\n"))))
+          (setq ad-return-value dockernames))
+      ad-do-it)))
+
+(use-package restclient
+  :ensure t
+  :mode ("\\.restclient\\'" . restclient-mode))
+
+(use-package dockerfile-mode
+  :defer t
+  :ensure t)
