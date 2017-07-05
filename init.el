@@ -70,7 +70,7 @@
   (package-install 'use-package))
 (eval-when-compile
   (require 'use-package))
-(setq use-package-verbose t)
+(setq use-package-verbose nil)
 
 ;; upgrade installed packages
 (defun evgeni-upgrade-packages ()
@@ -104,13 +104,20 @@
 (use-package faff-theme :ensure t :defer t)
 (use-package apropospriate-theme :ensure t :defer t)
 (use-package spacegray-theme :ensure t :defer t)
-(use-package minimal-theme :ensure t :defer t)
 (use-package gotham-theme :ensure t :defer t)
+
+;; minimal themes
+(use-package minimal-theme :ensure t :defer t)
+(use-package paper-theme :ensure t :defer t)
+(use-package white-theme :ensure t :defer t)
+(use-package tao-theme :ensure t :defer t)
+(use-package basic-theme :ensure t :defer t)
 
 ;; (set-face-bold-p 'bold nil) ;; disable bold
 (load-theme (if (display-graphic-p)
-                'spacemacs-light ;; emacs desktop app
-              'leuven) ;; in terminal
+                'spacemacs-light
+              'leuven
+              )
             t)
 
 ;; packages
@@ -353,6 +360,7 @@
   ;; toggles
   (general-nmap "C-c o c" 'hl-line-mode)
   (general-nmap "C-c o w" 'visual-line-mode)
+  (general-nmap "C-c o k" 'toggle-input-method)
 
   ;; clean whitespace on lines with nothing but whitespace
   (add-hook 'evil-insert-state-exit-hook 'evgeni-clean-whitespace-line)
@@ -445,9 +453,32 @@
 (use-package avy
   :ensure t
   :bind (:map evil-motion-state-map
-              ("C-c C-g" . avy-goto-char-timer)
+              ("gh" . avy-goto-char-timer)
               ("gY" . avy-copy-region)
-              ("gyy" . avy-copy-line)))
+              ("gyy" . avy-copy-line))
+  :defer 3
+  :config
+
+  ;; TODO
+  (evil-define-text-object evgeni--avy-line (count &optional beg end type)
+    (save-excursion
+      (let* ((avy-all-windows nil)
+             (beg (avy--line))
+             (end (save-excursion
+                    (goto-char beg)
+                    (move-end-of-line count)
+                    (point))))
+        (evil-range beg end 'line :expanded t))))
+
+  (evil-define-text-object evgeni--avy-region (count &optional beg end type)
+    (save-excursion
+      (let* ((beg (save-selected-window
+                    (avy--line count)))
+             (end (avy--line count)))
+        (evil-range beg end 'line :expanded t))))
+
+  (define-key evil-inner-text-objects-map "l" 'evgeni--avy-line)
+  (define-key evil-outer-text-objects-map "l" 'evgeni--avy-region))
 
 (use-package evil-surround
   :ensure t
@@ -545,8 +576,10 @@
               ("U U" . magit-status)
               ("U w" . magit-stage-file)
               ("U d" . evgeni-magit-diff-unstaged-buffer-file)
-              ("U l" . magit-log-head)
+              ("U L" . magit-log-head)
+              ("U l" . magit-log-buffer-file)
               ("U r" . magit-file-checkout)
+              ("U r" . evgeni-magit-file-checkout)
               ("U c" . magit-commit-popup)
               ("U b" . magit-blame)
               ("U z" . magit-stash-popup)
@@ -555,9 +588,14 @@
               ("U F" . magit-pull-popup)
               ("U B" . magit-checkout))
   :config
+
   (defun evgeni-magit-diff-unstaged-buffer-file ()
     (interactive)
     (magit-diff-unstaged nil (list (magit-file-relative-name))))
+
+  (defun evgeni-magit-file-checkout ()
+    (interactive)
+    (magit-file-checkout "HEAD" (magit-file-relative-name)))
 
   (setq magit-display-buffer-function 'magit-display-buffer-fullframe-status-v1)
   (setq magit-diff-refine-hunk 't)
@@ -595,13 +633,42 @@
   ;; :commands git-gutter-mode
   ;; :init
   ;; (add-hook 'prog-mode-hook 'git-gutter-mode)
+  :diminish 'git-gutter-mode
   :config
   (global-git-gutter-mode)
   (evil-define-key 'normal prog-mode-map
     "]c" 'git-gutter:next-hunk
     "[c" 'git-gutter:previous-hunk
-    "Uus" 'git-gutter:stage-hunk
-    "Uux" 'git-gutter:revert-hunk)
+    "Us" 'git-gutter:stage-hunk
+    "Ux" 'git-gutter:revert-hunk)
+
+  ;; temp fix for next hunk when the buffer is narrowed
+  (defun git-gutter:next-hunk (arg)
+    "Move to next diff hunk"
+    (interactive "p")
+    (if (not git-gutter:diffinfos)
+        (when (> git-gutter:verbosity 3)
+          (message "There are no changes!!"))
+      (save-restriction
+        (widen)
+        (let* ((is-reverse (< arg 0))
+               (diffinfos git-gutter:diffinfos)
+               (len (length diffinfos))
+               (index (git-gutter:search-near-diff-index diffinfos is-reverse))
+               (real-index (if index
+                               (let ((next (if is-reverse (1+ index) (1- index))))
+                                 (mod (+ arg next) len))
+                             (if is-reverse (1- len) 0)))
+               (diffinfo (nth real-index diffinfos)))
+          (goto-char (point-min))
+          (forward-line (1- (git-gutter-hunk-start-line diffinfo)))
+          (when (> git-gutter:verbosity 0)
+            (message "Move to %d/%d hunk" (1+ real-index) len))
+          (when (buffer-live-p (get-buffer git-gutter:popup-buffer))
+            (git-gutter:update-popuped-buffer diffinfo))))))
+
+
+
   )
 
 (use-package flycheck
@@ -1365,8 +1432,12 @@
   :general
   (general-nvmap ", m" 'evil-iedit-state/iedit-mode)
   :config
+
+  (setq iedit-use-symbol-boundaries nil)
+
   (define-key evil-iedit-state-map (kbd "TAB") 'iedit-toggle-selection)
   (define-key evil-iedit-state-map (kbd "C-c f") 'iedit-restrict-function)
+  (define-key evil-iedit-state-map (kbd "C-c C-f") 'iedit-restrict-function)
   (define-key evil-iedit-state-map (kbd "C-c C-l") 'iedit-restrict-current-line)
   (define-key evil-iedit-state-map (kbd "C-c l") 'iedit-restrict-current-line)
   (unbind-key "TAB" iedit-mode-keymap))
@@ -1490,5 +1561,9 @@
   :mode ("\\.restclient\\'" . restclient-mode))
 
 (use-package dockerfile-mode
-  :defer t
+  :mode (".*Dockerfile.*" . dockerfile-mode)
   :ensure t)
+
+(use-package suggest
+  :ensure t
+  :commands suggest)
