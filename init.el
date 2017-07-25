@@ -16,7 +16,12 @@
 
 ;; settings
 (when (display-graphic-p)
-  (set-default-font "Source Code Pro 13"))
+  (set-default-font "Source Code Pro 13")
+  ;; smooth scroll
+  (setq mouse-wheel-scroll-amount '(1 ((shift) . 1)))
+  (setq mouse-wheel-progressive-speed nil)
+  (setq mouse-wheel-follow-mouse 't)
+  (setq scroll-step 1))
 (setq custom-file (expand-file-name "custom-file.el" user-emacs-directory))
 (setq inhibit-startup-screen t)
 (setq backup-inhibited t)
@@ -49,7 +54,19 @@
 (modify-syntax-entry ?_ "w" (standard-syntax-table))
 (add-hook 'prog-mode-hook (lambda () (modify-syntax-entry ?_ "w")))
 
-(defvar default-tags-table-function '(lambda () (expand-file-name ".git/etags" "/usr/local/")))
+;; project root
+(defun evgeni-project-root ()
+  (if (project-current)
+      (cdr (project-current))
+    default-directory))
+
+;; etags
+(defun evgeni-find-etags-file ()
+  (let ((etags-file (expand-file-name ".git/etags" (evgeni-project-root))))
+    (when (file-exists-p etags-file)
+      etags-file)))
+(setq default-tags-table-function 'evgeni-find-etags-file)
+(setq tags-revert-without-query t)
 
 (when (display-graphic-p)
   (desktop-save-mode t))
@@ -320,7 +337,6 @@
 
   ;; completion
 
-  (general-imap "<backtab>" 'completion-at-point)
   (general-imap "C-x C-x" 'completion-at-poin)
   (general-imap "C-k" 'completion-at-point)
   (general-imap "C-x C-]" 'complete-tag)
@@ -361,6 +377,7 @@
   (general-nmap "C-c o c" 'hl-line-mode)
   (general-nmap "C-c o w" 'visual-line-mode)
   (general-nmap "C-c o k" 'toggle-input-method)
+  (general-nmap "C-c o h" 'auto-fill-mode)
 
   ;; clean whitespace on lines with nothing but whitespace
   (add-hook 'evil-insert-state-exit-hook 'evgeni-clean-whitespace-line)
@@ -443,7 +460,12 @@
         (delete-file filename)
         (kill-buffer)
         (message "Removed %s and its buffer" filename))))
-  (ex! "remove" 'evgeni-ex-remove))
+  (ex! "remove" 'evgeni-ex-remove)
+
+  (evil-define-text-object evil-pasted (count &rest args)
+    (list (save-excursion (evil-goto-mark ?\[) (point))
+          (save-excursion (evil-goto-mark ?\]) (point))))
+  (define-key evil-inner-text-objects-map "P" 'evil-pasted))
 
 (use-package ace-window
   :ensure t
@@ -452,12 +474,15 @@
 
 (use-package avy
   :ensure t
+  :defer 3
   :bind (:map evil-motion-state-map
               ("gh" . avy-goto-char-timer)
               ("gY" . avy-copy-region)
               ("gyy" . avy-copy-line))
-  :defer 3
   :config
+  (custom-set-faces
+   '(avy-lead-face-0 ((t (:inherit 'highlight))))
+   '(avy-lead-face ((t (:inherit 'highlight)))))
 
   ;; TODO
   (evil-define-text-object evgeni--avy-line (count &optional beg end type)
@@ -503,7 +528,9 @@
 (use-package evil-replace-with-register
   :ensure t
   :bind (:map evil-normal-state-map
-              ("gr" . evil-replace-with-register)))
+              ("gr" . evil-replace-with-register))
+  :config
+  (setq evil-replace-with-register-indent t))
 
 (use-package evil-visualstar
   :ensure t
@@ -511,7 +538,7 @@
   (global-evil-visualstar-mode))
 
 (use-package evil-goggles
-  :defer 3
+  :defer 1
   :ensure t
   :load-path "src/evil-goggles"
   :config
@@ -535,7 +562,12 @@
 
 (use-package evil-indent-plus ;; indent object
   :ensure t
-  :config (evil-indent-plus-default-bindings))
+  :config (evil-indent-plus-default-bindings)
+  ;; temprorary fix until this is addressed https://github.com/TheBB/evil-indent-plus/pull/4
+  (defun evil-indent-plus--linify (range)
+    (let ((nbeg (save-excursion (goto-char (cl-first range)) (point-at-bol)))
+          (nend (save-excursion (goto-char (cl-second range)) (+ (point-at-eol) (if (evil-visual-state-p) 0 1)))))
+      (evil-range nbeg nend 'line))))
 
 (use-package saveplace
   :config
@@ -556,13 +588,17 @@
   (savehist-mode t))
 
 (use-package dired
-  :general
-  (general-nmap "-"   (lambda () (interactive) (dired ".")))
+  :bind (:map evil-normal-state-map
+              ("-" . evgeni-dired-current-dir))
   :config
   (setq dired-listing-switches "-alh")
   (setq dired-auto-revert-buffer t)
   (add-hook 'dired-mode-hook 'dired-hide-details-mode)
-  (define-key dired-mode-map (kbd "-") 'dired-up-directory))
+  (define-key dired-mode-map (kbd "-") 'dired-up-directory)
+
+  (defun evgeni-dired-current-dir ()
+    (interactive)
+    (dired ".")))
 
 (use-package wdired
   :commands wdired-change-to-wdired-mode
@@ -630,17 +666,15 @@
 
 (use-package git-gutter
   :ensure t
-  ;; :commands git-gutter-mode
-  ;; :init
-  ;; (add-hook 'prog-mode-hook 'git-gutter-mode)
+  :defer 1
   :diminish 'git-gutter-mode
   :config
   (global-git-gutter-mode)
-  (evil-define-key 'normal prog-mode-map
-    "]c" 'git-gutter:next-hunk
-    "[c" 'git-gutter:previous-hunk
-    "Us" 'git-gutter:stage-hunk
-    "Ux" 'git-gutter:revert-hunk)
+  (bind-keys :map evil-normal-state-map
+             ("]c" . git-gutter:next-hunk)
+             ("[c" . git-gutter:previous-hunk)
+             ("Us" . git-gutter:stage-hunk)
+             ("Ux" . git-gutter:revert-hunk))
 
   ;; temp fix for next hunk when the buffer is narrowed
   (defun git-gutter:next-hunk (arg)
@@ -665,11 +699,7 @@
           (when (> git-gutter:verbosity 0)
             (message "Move to %d/%d hunk" (1+ real-index) len))
           (when (buffer-live-p (get-buffer git-gutter:popup-buffer))
-            (git-gutter:update-popuped-buffer diffinfo))))))
-
-
-
-  )
+            (git-gutter:update-popuped-buffer diffinfo)))))))
 
 (use-package flycheck
   :ensure t
@@ -768,38 +798,26 @@
   :defer t
   :ensure t
   :config
+  (org-babel-do-load-languages
+   'org-babel-load-languages '((shell . t)))
 
-  ;; https://github.com/edwtjo/evil-org-mode/blob/master/evil-org.el
-  (dolist (state '(normal insert))
-    (evil-define-key state org-mode-map
-      (kbd "M-l") 'org-metaright
-      (kbd "M-h") 'org-metaleft
-      (kbd "M-k") 'org-metaup
-      (kbd "M-j") 'org-metadown
-      (kbd "M-L") 'org-shiftmetaright
-      (kbd "M-H") 'org-shiftmetaleft
-      (kbd "M-K") 'org-shiftmetaup
-      (kbd "M-J") 'org-shiftmetadown
-      (kbd "M-o") 'org-insert-heading
-      (kbd "M-t") 'org-insert-todo-heading))
+  (setq org-confirm-babel-evaluate nil)
 
-  (evil-define-key 'normal org-mode-map
-    "H" 'org-shiftleft
-    "J" 'org-shiftdown
-    "K" 'org-shiftup
-    "L" 'org-shiftright))
+  (evil-define-key '(normal insert) org-mode-map
+    (kbd "TAB") 'org-cycle)
+
+  (font-lock-add-keywords 'org-mode
+                          '(("^ +\\([-*]\\) "
+                             (0 (prog1 () (compose-region (match-beginning 1) (match-end 1) "•")))))))
 
 (use-package evil-org
   :ensure t
   :after org
   :config
-
   (add-hook 'org-mode-hook 'evil-org-mode)
-
   (add-hook 'org-mode-hook (lambda ()
                              (evil-org-mode)
                              (evil-org-set-key-theme '(operators)))))
-
 (use-package org-bullets
   :ensure t
   :after org
@@ -808,17 +826,21 @@
 
 (use-package move-text
   :ensure t
-  :general
-  (general-nmap "] e" (lambda (count)
-                        (interactive "p")
-                        (let ((count (or count 1)))
-                          (dotimes (i count)
-                            (move-text-line-down)))))
-  (general-nmap "[ e" (lambda (count)
-                        (interactive "p")
-                        (let ((count (or count 1)))
-                          (dotimes (i count)
-                            (move-text-line-up))))))
+  :bind (:map evil-normal-state-map
+              ("] e" . evgeni-move-text-line-up )
+              ("[ e" . evgeni-move-text-line-down ))
+  :config
+  (defun evgeni-move-text-line-up (count)
+    (interactive "p")
+    (let ((count (or count 1)))
+      (dotimes (i count)
+        (move-text-line-down))))
+
+  (defun evgeni-move-text-line-down (count)
+    (interactive "p")
+    (let ((count (or count 1)))
+      (dotimes (i count)
+        (move-text-line-up)))))
 
 (use-package xref
   :general
@@ -867,7 +889,12 @@
   :init
   (setq wgrep-auto-save-buffer t)
   (ex! "wgrep" 'wgrep-change-to-wgrep-mode)
-  (ex! "wgrep-finish" 'wgrep-finish-edit))
+  (ex! "wgrep-finish" 'wgrep-finish-edit)
+  :config
+  (custom-set-faces
+   '(wgrep-face ((t (:inherit 'underline)))) ;; *Face used for the changed text in the grep buffer.
+   '(wgrep-file-face ((t (:inherit 'underline)))) ;; *Face used for the changed text in the file buffer.
+   '(wgrep-delete-face ((t (:inherit 'isearch-fail)))))) ;; *Face used for the deleted whole line in the grep buffer.
 
 (use-package linum
   :general
@@ -880,12 +907,6 @@
   (setq compilation-scroll-output 'next-error)
   (setq compilation-read-command nil)
   (setq compilation-ask-about-save nil)
-
-  (defun evgeni-project-root ()
-    (if (project-current)
-        (cdr (project-current))
-      default-directory
-      ))
 
   (defun evgeni-grep-command ()
     (if (executable-find "ag")
@@ -1011,9 +1032,7 @@
 
   ;; C-r C-w to read word at point
   (unbind-key "C-r" ivy-minibuffer-map)
-  (define-key ivy-minibuffer-map (kbd "C-r C-w") 'ivy-next-history-element)
-
-  (define-key ivy-minibuffer-map (kbd "C-c C-c") 'ivy-restrict-to-matches))
+  (define-key ivy-minibuffer-map (kbd "C-r C-w") 'ivy-next-history-element))
 
 (use-package swiper
   :ensure t
@@ -1026,10 +1045,12 @@
 (use-package counsel
   :ensure t
   :load-path "~/dev/swiper"
+  :bind (:map evil-normal-state-map
+              ("g /" . counsel-git-grep)
+              ("g SPC" . counsel-git)
+              )
+
   :general
-  (general-nmap ", g" 'counsel-git-grep)
-  (general-nmap "g SPC" 'counsel-git)
-  (general-nmap "g /" 'counsel-git-grep)
   (general-nmap "K" (lambda () (interactive) (counsel-git-grep nil (thing-at-point 'word))))
   :init
   (setq counsel-git-cmd "git ls-files --cached --others --exclude-standard")
@@ -1234,7 +1255,7 @@
   :functions s-trim)
 
 (use-package haskell-mode
-  :commands haskell-mode
+  :mode (("\\.hs$"   . haskell-mode))
   :config
   (setq haskell-indent-spaces 4)
   ;; (defun evgeni-haskell-evil-auto-indent () (setq evil-auto-indent nil))
@@ -1429,12 +1450,13 @@
 (use-package evil-iedit-state
   :ensure t
   ;; :commands evil-iedit-state/iedit-mode
-  :general
-  (general-nvmap ", m" 'evil-iedit-state/iedit-mode)
-  :config
-
+  :bind (:map evil-normal-state-map
+              (", m" . evil-iedit-state/iedit-mode)
+              :map evil-visual-state-map
+              (", m" . evil-iedit-state/iedit-mode))
+  :init
   (setq iedit-use-symbol-boundaries nil)
-
+  :config
   (define-key evil-iedit-state-map (kbd "TAB") 'iedit-toggle-selection)
   (define-key evil-iedit-state-map (kbd "C-c f") 'iedit-restrict-function)
   (define-key evil-iedit-state-map (kbd "C-c C-f") 'iedit-restrict-function)
@@ -1508,9 +1530,8 @@
 (use-package repl-toggle
   :disabled t
   :ensure t
-  :general
-  (general-imap "C-c C-z" 'rtog/toggle-repl)
-  (general-nmap "C-c C-z" 'rtog/toggle-repl)
+  :bind (:map evil-normal-state-map
+              ("C-c C-z" . rtog/toggle-repl))
   :config
   (setq rtog/fullscreen t)
   :init
@@ -1556,6 +1577,10 @@
           (setq ad-return-value dockernames))
       ad-do-it)))
 
+(use-package docker-tramp
+  :ensure t
+  :after tramp)
+
 (use-package restclient
   :ensure t
   :mode ("\\.restclient\\'" . restclient-mode))
@@ -1567,3 +1592,19 @@
 (use-package suggest
   :ensure t
   :commands suggest)
+
+(use-package conf-mode
+  :defer t
+  :config
+  (modify-syntax-entry ?_ "w" conf-mode-syntax-table))
+
+(use-package nginx-mode
+  :ensure t
+  :mode ("nginx.*\\.conf\\'" . nginx-mode)
+  :config
+  (setq nginx-indent-level 3))
+
+(use-package edebug
+  :defer t
+  :config
+  (add-hook 'edebug-mode-hook 'evil-normalize-keymaps))
