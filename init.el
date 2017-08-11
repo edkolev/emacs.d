@@ -10,9 +10,13 @@
 
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+(add-to-list 'package-directory-list (expand-file-name "~/.emacs.d/src"))
 (package-initialize)
 
-(setq gc-cons-threshold (* 10 1024 1024))
+(setq gc-cons-threshold 64000000)
+(add-hook 'after-init-hook #'(lambda ()
+                               ;; restore after startup
+                               (setq gc-cons-threshold 800000)))
 
 ;; settings
 (when (display-graphic-p)
@@ -194,14 +198,13 @@
   (general-imap "C-x C-y" 'evgeni-hippie-expand-yasnippet)
   (general-imap "C-x TAB" 'evgeni-hippie-expand-yasnippet)
 
-  (setq hippie-expand-try-functions-list '(try-expand-dabbrev
-                                           try-expand-all-abbrevs
+  (setq hippie-expand-try-functions-list '(try-expand-dabbrev-visible
+                                           try-expand-dabbrev
                                            try-expand-dabbrev-all-buffers
                                            try-expand-dabbrev-from-kill
                                            try-expand-tag
                                            ;; my-yas-hippie-try-expand
-                                           )
-        ))
+                                           )))
 
 (use-package evil
   :load-path "~/dev/evil"
@@ -249,8 +252,6 @@
   (general-nmap "] SPC" (lambda (count) (interactive "p") (dotimes (_ count) (save-excursion (evil-insert-newline-below)))))
   (general-nmap "[ SPC" (lambda (count) (interactive "p") (dotimes (_ count) (save-excursion (evil-insert-newline-above)))))
 
-  (general-nmap "C-p" 'beginning-of-defun)
-  (general-nmap "C-n" 'end-of-defun)
   (general-nmap "[ m" 'beginning-of-defun)
   (general-nmap "] m" 'end-of-defun)
   (general-nmap "] M" 'end-of-defun)
@@ -510,7 +511,6 @@
   :config (global-evil-surround-mode))
 
 (use-package evil-lion
-  :load-path "src/evil-lion"
   :ensure t
   :config
   (evil-lion-mode))
@@ -540,8 +540,11 @@
 (use-package evil-goggles
   :defer 1
   :ensure t
-  :load-path "src/evil-goggles"
   :config
+
+  ;; enable experimental undo/redo
+  (setq evil-goggles-enable-undo t
+        evil-goggles-enable-redo t)
   (evil-goggles-mode)
   (evil-goggles-use-diff-faces))
 
@@ -647,6 +650,18 @@
   (unbind-key "SPC" magit-status-mode-map)
   (general-evil-define-key 'normal magit-mode-map "C-n" 'magit-section-forward)
   (general-evil-define-key 'normal magit-mode-map "C-p" 'magit-section-backward)
+
+  (evil-define-key 'insert git-commit-mode-map
+    (kbd "C-x C-x") 'evgeni-insert-number-from-git-branch)
+
+  (defun evgeni-insert-number-from-git-branch ()
+    (interactive)
+    (let ((number-from-branch
+           (let ((str (shell-command-to-string "git rev-parse --abbrev-ref HEAD")))
+             (when (string-match "\\([0-9]+\\)" str)
+               (match-string-no-properties 0 str)))))
+      (when number-from-branch
+        (insert number-from-branch))))
 
   (add-hook 'git-commit-mode-hook 'flyspell-mode))
 
@@ -1032,7 +1047,13 @@
 
   ;; C-r C-w to read word at point
   (unbind-key "C-r" ivy-minibuffer-map)
-  (define-key ivy-minibuffer-map (kbd "C-r C-w") 'ivy-next-history-element))
+  (define-key ivy-minibuffer-map (kbd "C-r C-w") 'ivy-next-history-element)
+
+  ;; use different colors in ivy-switch-buffer
+  (setq ivy-switch-buffer-faces-alist
+        '((emacs-lisp-mode . swiper-match-face-1)
+          (dired-mode . ivy-subdir)
+          (org-mode . org-level-4))))
 
 (use-package swiper
   :ensure t
@@ -1040,7 +1061,41 @@
               ("C-c C-r" . ivy-resume)
               ("/" . swiper))
   :config
-  (setq swiper-goto-start-of-match t))
+  (setq swiper-goto-start-of-match t)
+
+  (defun evgeni-swiper-to-evil-iedit ()
+    (interactive)
+    (unless (require 'evil-iedit-state nil t)
+      (error "evil-iedit-state isn't installed"))
+    (unless (window-minibuffer-p)
+      (error "Call me only from `swiper'"))
+    (let ((cands (nreverse ivy--old-cands)))
+      (unless (string= ivy-text "")
+        (ivy-exit-with-action
+         (lambda (_)
+           ;; (message "ivy-text: %s" ivy-text)
+           (message "ivy regex: %s" (ivy--regex ivy-text))
+
+           (setq mark-active nil)
+           (run-hooks 'deactivate-mark-hook)
+           (when iedit-mode
+             (iedit-cleanup))
+           (let* ((regexp (ivy--regex ivy-text))
+                  (iedit-case-sensitive (not (and ivy-case-fold-search
+                                                  (string= regexp (downcase regexp))))))
+             (iedit-start regexp (point-min) (point-max))
+             (cond ((not iedit-occurrences-overlays)
+                    (message "No matches found for %s" regexp)
+                    (iedit-done))
+                   ((not (iedit-same-length))
+                    (message "Matches are not the same length.")
+                    (iedit-done))
+                   (t
+                    (evil-iedit-state)))))))))
+
+  (define-key swiper-map (kbd "C-c C-c") 'evgeni-swiper-to-evil-iedit)
+  (define-key swiper-map (kbd "C-c C-d") 'evgeni-swiper-delete-matching-lines)
+  (define-key swiper-map (kbd "C-c C-y") 'evgeni-swiper-copy-line))
 
 (use-package counsel
   :ensure t
