@@ -41,6 +41,7 @@
 (setq scroll-step 2)
 (setq default-major-mode 'text-mode)
 (setq enable-local-variables :all)
+(setq require-final-newline t)
 
 (defun display-startup-echo-area-message ()
   (message ""))
@@ -73,9 +74,6 @@
 (setq default-tags-table-function 'evgeni-find-etags-file)
 (setq tags-revert-without-query t)
 
-(when (display-graphic-p)
-  (desktop-save-mode t))
-
 (defmacro ex! (cmd func)
   "Shortcut for defining ex commands"
   `(with-eval-after-load 'evil
@@ -94,13 +92,10 @@
 (defun evgeni-upgrade-packages ()
   (interactive)
   (save-window-excursion
-    (package-refresh-contents)
-    (package-list-packages t)
+    (package-list-packages)
     (package-menu-mark-upgrades)
-    (condition-case nil
-        (package-menu-execute t)
-      (error
-       (package-menu-execute)))))
+    (package-menu-execute 'no-query)))
+(ex! "upgrade-packages" 'evgeni-upgrade-packages)
 
 ;; themes
 (use-package spacemacs-theme :ensure t :defer t)
@@ -137,6 +132,28 @@
               'leuven
               )
             t)
+
+(use-package no-littering
+  :ensure t
+  :demand t
+  :config
+  (require 'recentf)
+  (add-to-list 'recentf-exclude no-littering-var-directory)
+  (add-to-list 'recentf-exclude no-littering-etc-directory))
+
+(use-package desktop
+  :if (display-graphic-p)
+  :config
+  (add-to-list 'frameset-filter-alist '(background-color . :never))
+  (add-to-list 'frameset-filter-alist '(foreground-color . :never))
+  (add-to-list 'frameset-filter-alist '(font . :never))
+  (add-to-list 'frameset-filter-alist '(cursor-color . :never))
+  (setq desktop-globals-to-save '()
+        desktop-locals-to-save '()
+        desktop-files-not-to-save ".*"
+        desktop-buffers-not-to-save ".*"
+        desktop-save t)
+  (desktop-save-mode))
 
 (use-package evil
   :load-path "~/dev/evil"
@@ -188,12 +205,15 @@
   (define-key evil-normal-state-map (kbd "] m")'end-of-defun)
   (define-key evil-normal-state-map (kbd "] M")'end-of-defun)
   (define-key evil-motion-state-map (kbd "0") 'evil-first-non-blank)
+  (define-key evil-normal-state-map (kbd "g n") (lambda () (interactive) (evil-ex "%normal ")))
+  (define-key evil-visual-state-map (kbd "g n") (lambda () (interactive) (evil-ex "normal ")))
 
   ;; '*' should not move point
   (define-key evil-motion-state-map "*" (lambda ()
                                           (interactive)
                                           (save-excursion
                                             (evil-ex-search-word-forward))))
+
   (define-key evil-motion-state-map "g*" (lambda ()
                                            (interactive)
                                            (save-excursion
@@ -230,18 +250,6 @@
     (if theme
         (load-theme (intern theme) t)
       (call-interactively 'load-theme)))
-
-  ;; :tyank & :tput
-  (when (getenv "TMUX")
-    (evil-define-command evgeni-tyank (begin end _type)
-      (interactive "<R>")
-      (shell-command (concat "tmux set-buffer " (shell-quote-argument (buffer-substring begin end)))))
-    (evil-ex-define-cmd "tput" (lambda () (interactive)
-                                 (save-excursion
-                                   (end-of-line)
-                                   (newline)
-                                   (insert (shell-command-to-string "tmux show-buffer")))))
-    (evil-ex-define-cmd "tyank" 'evgeni-tyank))
 
   (define-key evil-normal-state-map "Y" (lambda () (interactive) (evil-yank (point) (point-at-eol))))
 
@@ -367,7 +375,6 @@
 
   ;; tweak search and ex maps
   (define-key evil-ex-search-keymap "\C-e"  'evgeni-prev-or-move-end-of-line)
-  (define-key evil-ex-search-keymap "\C-e"  'evgeni-prev-or-move-end-of-line)
   (define-key evil-ex-completion-map "\C-e" 'evgeni-prev-or-move-end-of-line)
   (define-key evil-ex-completion-map "\C-a" 'move-beginning-of-line)
   (define-key evil-ex-completion-map "\C-b" 'backward-char)
@@ -386,23 +393,6 @@
   (define-key evil-normal-state-map "g\C-g" 'evgeni-word-count)
 
   (define-key evil-list-view-mode-map (kbd "q") #'kill-buffer-and-window)
-
-  (defun evgeni-ex-reverse ()
-    (interactive)
-    (if (region-active-p)
-        (call-interactively 'reverse-region)
-      (message "No range")))
-  (ex! "rev[erse]" 'evgeni-ex-reverse)
-
-  ;; :remove to delete file and buffer
-  (defun evgeni-ex-remove ()
-    (interactive)
-    (let ((filename (buffer-file-name)))
-      (when filename
-        (delete-file filename)
-        (kill-buffer)
-        (message "Removed %s and its buffer" filename))))
-  (ex! "remove" 'evgeni-ex-remove)
 
   (evil-define-text-object evil-pasted (count &rest args)
     (list (save-excursion (evil-goto-mark ?\[) (point))
@@ -508,13 +498,29 @@
   (define-key evil-outer-text-objects-map "l" 'evgeni--avy-region))
 
 (use-package evil-surround
-  :ensure t
-  :config (global-evil-surround-mode))
+  :commands
+  (evil-surround-edit
+   evil-Surround-edit
+   evil-surround-region
+   evil-Surround-region)
+  :init
+  (evil-define-key 'operator global-map "s" 'evil-surround-edit)
+  (evil-define-key 'operator global-map "S" 'evil-Surround-edit)
+  (evil-define-key 'visual global-map "S" 'evil-surround-region)
+  (evil-define-key 'visual global-map "gS" 'evil-Surround-region))
 
 (use-package evil-lion
   :ensure t
-  :config
-  (evil-lion-mode))
+  :bind (:map evil-normal-state-map
+              ("g l " . evil-lion-left)
+              ("g L " . evil-lion-right)
+              :map evil-visual-state-map
+              ("g l " . evil-lion-left)
+              ("g L " . evil-lion-right)))
+
+(use-package evil-expat
+  :load-path "src/evil-expat"
+  :defer 1)
 
 (use-package evil-commentary
   :ensure t
@@ -559,9 +565,8 @@
   (setq evil-magit-want-horizontal-movement t))
 
 (use-package recentf
-  :defer 10
+  :defer 1
   :init
-  (setq recentf-save-file (expand-file-name "recentf.el" user-emacs-directory))
   (setq recentf-max-saved-items 500)
   (setq recentf-exclude '("/tmp/" "/ssh:"))
   (setq recentf-auto-cleanup 'never)
@@ -569,6 +574,7 @@
 
 (use-package evil-indent-plus ;; indent object
   :ensure t
+  :defer 4
   :config (evil-indent-plus-default-bindings)
   ;; temprorary fix until this is addressed https://github.com/TheBB/evil-indent-plus/pull/4
   (defun evil-indent-plus--linify (range)
@@ -578,8 +584,7 @@
 
 (use-package saveplace
   :config
-  (save-place-mode)
-  (setq save-place-file (expand-file-name "saveplace.el" user-emacs-directory)))
+  (save-place-mode))
 
 (use-package savehist
   :init
@@ -601,7 +606,10 @@
   (setq dired-listing-switches "-alh")
   (setq dired-auto-revert-buffer t)
   (add-hook 'dired-mode-hook 'dired-hide-details-mode)
-  ;; (define-key dired-mode-map (kbd "-") 'dired-up-directory)
+  (evil-define-key 'normal dired-mode-map
+    "n" (lookup-key evil-motion-state-map "n")
+    "g" (lookup-key evil-motion-state-map "g")
+    "gr" 'revert-buffer)
 
   (defun evgeni-dired-current-dir ()
     (interactive)
@@ -619,8 +627,7 @@
 (use-package wdired
   :commands wdired-change-to-wdired-mode
   :init
-  (ex! "wdired" 'wdired-change-to-wdired-mode)
-  (ex! "wdired-finish" 'wdired-finish-edit))
+  (ex! "wdired" 'wdired-change-to-wdired-mode))
 
 (use-package magit
   :ensure t
@@ -633,7 +640,7 @@
               ("U r" . magit-file-checkout)
               ("U r" . evgeni-magit-file-checkout)
               ("U c" . magit-commit-popup)
-              ("U b" . magit-blame)
+              ("U b" . magit-branch-popup)
               ("U z" . magit-stash-popup)
               ("U p" . magit-push-popup)
               ("U f" . magit-fetch-popup)
