@@ -637,7 +637,6 @@
               ("U d" . evgeni-magit-diff-unstaged-buffer-file)
               ("U L" . magit-log-head)
               ("U l" . magit-log-buffer-file)
-              ("U r" . magit-file-checkout)
               ("U r" . evgeni-magit-file-checkout)
               ("U c" . magit-commit-popup)
               ("U b" . magit-branch-popup)
@@ -648,7 +647,7 @@
               ("U B" . magit-checkout))
   :commands (magit-find-file)
   :init
-  (ex! "gread" 'magit-find-file)
+  (ex! "gedit" 'magit-find-file)
   :config
 
   (defun evgeni-magit-diff-unstaged-buffer-file ()
@@ -691,8 +690,24 @@
   :ensure t
   :defer t
   :config
+  (setq vdiff-auto-refine t)
   (define-key vdiff-mode-map (kbd "C-c") vdiff-mode-prefix-map)
-  (setq vdiff-magit-stage-is-2way t))
+
+  (evil-define-minor-mode-key 'normal 'vdiff-mode "]c" 'vdiff-next-hunk)
+  (evil-define-minor-mode-key 'normal 'vdiff-mode "[c" 'vdiff-previous-hunk)
+  (evil-define-minor-mode-key 'normal 'vdiff-mode "zc" 'vdiff-close-fold)
+  (evil-define-minor-mode-key 'normal 'vdiff-mode "zM" 'vdiff-close-all-folds)
+  (evil-define-minor-mode-key 'normal 'vdiff-mode "zo" 'vdiff-open-fold)
+  (evil-define-minor-mode-key 'normal 'vdiff-mode "zR" 'vdiff-open-all-folds)
+  (evil-define-minor-mode-key 'motion 'vdiff-mode "go" 'vdiff-receive-changes)
+  (evil-define-minor-mode-key 'motion 'vdiff-mode "gp" 'vdiff-send-changes)
+  (evil-define-minor-mode-key 'normal 'vdiff-mode "q" 'evgeni-vdiff-close-if-readonly)
+
+  (defun evgeni-vdiff-close-if-readonly ()
+    (interactive)
+    (if buffer-read-only
+        (vdiff-quit)
+      (call-interactively 'evil-record-macro))))
 
 (use-package vdiff-magit
   :ensure t
@@ -701,48 +716,60 @@
   :config
   (use-package vdiff))
 
-(use-package git-gutter
-  :ensure t
-  :defer 1
-  :diminish 'git-gutter-mode
-  :config
-  (global-git-gutter-mode)
-  (bind-keys :map evil-normal-state-map
-             ("]c" . git-gutter:next-hunk)
-             ("[c" . git-gutter:previous-hunk)
-             ("Us" . git-gutter:stage-hunk)
-             ("Ux" . git-gutter:revert-hunk))
+  )
 
-  ;; temp fix for next hunk when the buffer is narrowed
-  (defun git-gutter:next-hunk (arg)
-    "Move to next diff hunk"
-    (interactive "p")
-    (if (not git-gutter:diffinfos)
-        (when (> git-gutter:verbosity 3)
-          (message "There are no changes!!"))
-      (save-restriction
-        (widen)
-        (let* ((is-reverse (< arg 0))
-               (diffinfos git-gutter:diffinfos)
-               (len (length diffinfos))
-               (index (git-gutter:search-near-diff-index diffinfos is-reverse))
-               (real-index (if index
-                               (let ((next (if is-reverse (1+ index) (1- index))))
-                                 (mod (+ arg next) len))
-                             (if is-reverse (1- len) 0)))
-               (diffinfo (nth real-index diffinfos)))
-          (goto-char (point-min))
-          (forward-line (1- (git-gutter-hunk-start-line diffinfo)))
-          (when (> git-gutter:verbosity 0)
-            (message "Move to %d/%d hunk" (1+ real-index) len))
-          (when (buffer-live-p (get-buffer git-gutter:popup-buffer))
-            (git-gutter:update-popuped-buffer diffinfo)))))))
+(use-package git-gutter+
+  :ensure t
+  :commands git-gutter+-mode
+  :init
+  (add-hook 'prog-mode-hook 'git-gutter+-mode)
+  (add-hook 'text-mode-hook 'git-gutter+-mode)
+  (add-hook 'conf-mode-hook 'git-gutter+-mode)
+  :config
+  (evil-define-minor-mode-key 'normal 'git-gutter+-mode
+    "]c" 'git-gutter+-next-hunk
+    "[c" 'git-gutter+-previous-hunk
+    "Us" 'evgeni-stage-hunk
+    ;; "Ux" 'git-gutter+-revert-hunks
+    "Ux" 'evgeni-revert-hunk
+    "U?" 'git-gutter+-show-hunk-inline-at-point)
+  (evil-define-minor-mode-key 'visual 'git-gutter+-mode
+    "Us" 'git-gutter+-stage-hunks)
+
+  (defun evgeni-stage-hunk ()
+    (interactive)
+    (-when-let (diffinfo (git-gutter+-diffinfo-at-point))
+      (let ((diff (with-temp-buffer
+                    (insert (plist-get diffinfo :content) "\n")
+                    (diff-mode)
+                    ;; Force-fontify the invisible temp buffer
+                    (font-lock-default-function 'diff-mode)
+                    (font-lock-default-fontify-buffer)
+                    (buffer-string))))
+        (momentary-string-display diff (point-at-bol) nil "Stage hunk?")
+
+        (when (eq (read-char) ?y)
+          (git-gutter+-stage-hunks)))))
+
+  (defun evgeni-revert-hunk ()
+    (interactive)
+    (-when-let (diffinfo (git-gutter+-diffinfo-at-point))
+      (let ((diff (with-temp-buffer
+                    (insert (plist-get diffinfo :content) "\n")
+                    (diff-mode)
+                    ;; Force-fontify the invisible temp buffer
+                    (font-lock-default-function 'diff-mode)
+                    (font-lock-default-fontify-buffer)
+                    (buffer-string))))
+        (momentary-string-display diff (point-at-bol) nil "Revert hunk?")
+
+        (when (eq (read-char) ?y)
+          (git-gutter+-do-revert-hunk diffinfo))))))
 
 (use-package flycheck
   :ensure t
-  :commands flycheck-mode
-  :general
-  (general-nmap "C-c o f" 'flycheck-mode)
+  :bind (:map evil-normal-state-map
+              ( "C-c o f" . flycheck-mode))
   :config
   (setq flycheck-check-syntax-automatically '(mode-enabled save))
   (setq-default flycheck-disabled-checkers '(perl-perlcritic)))
@@ -827,8 +854,7 @@
      "deriving" "do" "else" "error" "export" "family" "foreign" "hiding"
      "if" "import" "in" "infix" "infixl" "infixr" "instance" "let"
      "module" "newtype" "of" "qualified" "safe" "stdcall" "then" "trace"
-     "type" "undefined" "unsafe" "where"
-     )))
+     "type" "undefined" "unsafe" "where")))
 
 (use-package org
   :mode (("\\.org$"   . org-mode))
@@ -837,6 +863,8 @@
   :config
   (org-babel-do-load-languages
    'org-babel-load-languages '((shell . t)))
+
+  (evil-ex-define-cmd "cap[ture]" 'org-capture)
 
   (setq org-confirm-babel-evaluate nil)
 
@@ -884,14 +912,13 @@
               ("C-]" . xref-find-definitions)
               ("C-w C-]" . xref-find-definitions-other-window))
   :config
-  (define-key xref--xref-buffer-mode-map "q" 'delete-window)
-  (define-key xref--xref-buffer-mode-map "C-n" 'xref-next-line)
-  (define-key xref--xref-buffer-mode-map "C-p" 'xref-prev-line))
+  (evil-define-key 'normal xref--xref-buffer-mode-map "q" 'delete-window
+    "C-n" 'xref-next-line
+    "C-p" 'xref-prev-line))
 
 (use-package abbrev
   :diminish 'abbrev-mode
   :config
-  (setq abbrev-file-name (expand-file-name "abbrev.el" user-emacs-directory))
   (setq-default abbrev-mode t)
   (add-hook 'evil-insert-state-exit-hook 'expand-abbrev)
   )
@@ -935,56 +962,17 @@
    '(wgrep-delete-face ((t (:inherit 'isearch-fail)))))) ;; *Face used for the deleted whole line in the grep buffer.
 
 (use-package linum
-  :general
-  (general-nmap "C-c o n" 'linum-mode)
+  :bind (:map evil-normal-state-map
+              ( "C-c o n" . linum-mode))
   :config
   (setq linum-format "%d "))
 
 (use-package compile
+  :defer 3
   :config
   (setq compilation-scroll-output 'next-error)
   (setq compilation-read-command nil)
-  (setq compilation-ask-about-save nil)
-
-  (defun evgeni-grep-command ()
-    (if (executable-find "ag")
-        "ag --case-sensitive --nogroup"
-      "grep -R -F -e"))
-
-  (defun evgeni-compilation-start-in-project-root (mode command &rest arguments)
-    (let* ((default-directory (evgeni-project-root))
-           (command-with-args (cons command arguments))
-           (full-commad (mapconcat 'identity command-with-args " ")))
-      (compilation-start full-commad mode)))
-
-  (defun evgeni-grep (&rest args)
-    (apply
-     'evgeni-compilation-start-in-project-root
-     'grep-mode
-     (evgeni-grep-command)
-     args))
-
-  (evil-ex-define-cmd "grep" 'evgeni-ex-grep)
-  (evil-define-command evgeni-ex-grep (&rest args)
-    (interactive "<f>")
-    (if args
-        (apply 'evgeni-grep args)
-      (message "What do you want to search for?")))
-
-  (defun evgeni-scroll-grep-win (buffer string)
-    (when (and
-           (eq major-mode 'grep-mode)
-           (buffer-live-p buffer)
-           (string-match "grep" (buffer-name buffer))
-           (string-match "finished" string))
-      (with-selected-window (get-buffer-window buffer)
-        (goto-char (point-min))
-        (scroll-up-line 4)
-
-        (save-excursion
-          (message "*grep* %d matches found" (- (count-lines (point-min) (point-max)) 6))))))
-
-  (add-hook 'compilation-finish-functions 'evgeni-scroll-grep-win))
+  (setq compilation-ask-about-save nil))
 
 (use-package smart-compile
   :ensure t
@@ -999,8 +987,8 @@
   (setq smart-compile-alist '((cperl-mode . "perl -w -Mstrict -c %f")
                               (perl-mode . "perl -w -Mstrict -c %f")
                               (haskell-mode . "stack --silent ghc -- -Wall -e :q %f")
-                              (emacs-lisp-mode    . (emacs-lisp-byte-compile))
-                              ))
+                              ("docker-compose*\\.yml$" . "docker-compose -f %f config -q")
+                              (emacs-lisp-mode    . (emacs-lisp-byte-compile))))
 
   (defun evgeni-close-compile-win-if-successful (buffer string)
     (if (and
@@ -1059,8 +1047,9 @@
 (use-package ivy
   :ensure t
   :diminish 'ivy-mode
-  :demand
+  :defer 4
   :bind (:map evil-normal-state-map
+              ("")
               ("SPC" . ivy-switch-buffer))
   :config
   (ivy-mode 1)
@@ -1098,9 +1087,6 @@
       (unless (string= ivy-text "")
         (ivy-exit-with-action
          (lambda (_)
-           ;; (message "ivy-text: %s" ivy-text)
-           (message "ivy regex: %s" (ivy--regex ivy-text))
-
            (setq mark-active nil)
            (run-hooks 'deactivate-mark-hook)
            (when iedit-mode
@@ -1124,35 +1110,42 @@
         (user-error "Should only be called in the minibuffer through `swiper-map'")
       (lexical-let ((enable-recursive-minibuffers t)
                     (regex (ivy--regex ivy-text)))
-        (swiper--cleanup)
-        (ivy-exit-with-action
-         (lambda (_)
-           (with-ivy-window
-             (evil-ex (format "g/%s/norm " regex))))))))
+                   (swiper--cleanup)
+                   (ivy-exit-with-action
+                    (lambda (_)
+                      (with-ivy-window
+                        (evil-ex (format "g/%s/norm " regex))))))))
 
   (define-key swiper-map (kbd "C-c C-c") 'evgeni-swiper-to-evil-iedit)
   (define-key swiper-map (kbd "C-c C-e") 'evgeni-swiper-to-global-normal-command))
 
 (use-package counsel
   :ensure t
-  :bind (:map evil-normal-state-map
-              ("g /"   . counsel-git-grep)
-              ("g SPC" . counsel-git)
-              (", f"   . evgeni-counsel-imenu)
-              ("K"     . evgeni-counsel-git-grep)
-              :map evil-visual-state-map
-              ("K"     . evgeni-counsel-git-grep))
-
+  :bind (([remap find-file] . counsel-find-file)
+         ([remap describe-function] . counsel-describe-function)
+         ([remap describe-variable] . counsel-describe-variable)
+         ([remap execute-extended-command] . counsel-M-x)
+         :map evil-normal-state-map
+         ("g /"   . counsel-git-grep)
+         (", f"   . evgeni-counsel-imenu)
+         ("K"     . evgeni-counsel-git-grep)
+         :map evil-visual-state-map
+         ("K"     . evgeni-counsel-git-grep))
   :config
   (setq counsel-git-cmd "git ls-files --cached --others --exclude-standard")
+  (setq counsel-git-grep-cmd-default "git --no-pager grep --full-name -n --no-color --untracked -i -e \"%s\"")
   (setq counsel-git-grep-skip-counting-lines t)
 
-  ;; use C-] to go to definition
   (define-key counsel-describe-map (kbd "C-]") 'counsel-find-symbol)
+  (define-key counsel-git-grep-map (kbd "C-c C-c") 'ivy-occur)
+  (define-key ivy-occur-grep-mode-map (kbd "C-c C-c") 'wgrep-change-to-wgrep-mode)
 
   (defun evgeni-counsel-git-grep ()
     (interactive)
-    (counsel-git-grep nil (substring-no-properties (thing-at-point 'word))))
+    (counsel-git-grep nil (substring-no-properties
+                           (if (region-active-p)
+                               (buffer-substring (region-beginning) (region-end))
+                             (thing-at-point 'word)))))
   (defun evgeni-counsel-imenu ()
     (interactive)
     (let ((imenu-default-goto-function 'evgeni-imenu-goto))
@@ -1161,18 +1154,6 @@
     (evil-set-jump)
     (apply 'imenu-default-goto-function args))
 
-  :init
-  (evil-define-motion evgeni-counsel-git-grep (&optional beg end)
-    (interactive "<r>")
-    (if (not (evil-visual-state-p))
-        (counsel-git-grep nil (thing-at-point 'word)))
-    (evil-exit-visual-state)
-    (counsel-git-grep nil (buffer-substring-no-properties beg end)))
-
-  (define-key global-map [remap describe-function] 'counsel-describe-function)
-  (define-key global-map [remap describe-variable] 'counsel-describe-variable)
-  (define-key global-map [remap execute-extended-command] 'counsel-M-x)
-  :config
   ;; (defun counsel-git-hunks ()
   ;;   "Find file in the current Git repository."
   ;;   (interactive)
@@ -1292,11 +1273,11 @@
                       (face-attribute 'mode-line :background)))
 
 (use-package winner
-  :defer 10
+  :defer 5
   :config
   (winner-mode)
-  (evil-define-minor-mode-key 'normal 'winner (kbd "z u") 'winner-undo)
-  (evil-define-minor-mode-key 'normal 'winner (kbd "z C-r") 'winner-redo))
+  (evil-define-minor-mode-key 'normal 'winner-mode (kbd "z u") 'winner-undo)
+  (evil-define-minor-mode-key 'normal 'winner-mode (kbd "z C-r") 'winner-redo))
 
 (use-package undo-tree
   :ensure t
@@ -1385,7 +1366,7 @@
   :functions s-trim)
 
 (use-package haskell-mode
-  :mode (("\\.hs$"   . haskell-mode))
+  :mode "\\.hs\\'"
   :config
   (setq haskell-indent-spaces 2)
 
@@ -1417,7 +1398,7 @@
     (when (and (< 1 (line-number-at-pos))
                (save-excursion
                  (forward-line -1)
-                 (string= "" (s-trim (buffer-substring (line-beginning-position) (line-end-position))))))
+                 (string= "" (string-trim-left (string-trim-right (buffer-substring (line-beginning-position) (line-end-position)))))))
       (delete-region (line-beginning-position) (point))))
 
   (advice-add 'haskell-indentation-newline-and-indent
@@ -1484,6 +1465,7 @@
 (use-package smartparens
   :ensure t
   :diminish smartparens-mode
+  :after prog-mode
   :config
 
   (setq sp-highlight-pair-overlay nil)
@@ -1499,8 +1481,8 @@
   (sp-pair "{" nil :post-handlers '(("||\n[i]" "RET")))
   (sp-pair "[" nil :post-handlers '(("||\n[i]" "RET")))
 
-  (define-key emacs-lisp-mode-map "C-c <" 'sp-forward-slurp-sexp)
-  (define-key emacs-lisp-mode-map "C-c >" 'sp-forward-barf-sexp))
+  (define-key emacs-lisp-mode-map (kbd "C-c <") 'sp-forward-slurp-sexp)
+  (define-key emacs-lisp-mode-map (kbd "C-c >") 'sp-forward-barf-sexp))
 
 (use-package loccur
   :ensure t
@@ -1558,14 +1540,6 @@
   :init
   (setq iedit-use-symbol-boundaries nil)
   (ex! "iedit" 'evgeni-iedit-evil-search)
-  :config
-  (define-key evil-iedit-state-map (kbd "TAB") 'iedit-toggle-selection)
-  (define-key evil-iedit-state-map (kbd "C-c f") 'iedit-restrict-function)
-  (define-key evil-iedit-state-map (kbd "C-c C-f") 'iedit-restrict-function)
-  (define-key evil-iedit-state-map (kbd "C-c C-l") 'iedit-restrict-current-line)
-  (define-key evil-iedit-state-map (kbd "C-c l") 'iedit-restrict-current-line)
-  (unbind-key "TAB" iedit-mode-keymap)
-
   (defun evgeni-iedit-evil-search ()
     (interactive)
     (unless (require 'evil-iedit-state nil t)
@@ -1584,11 +1558,20 @@
              (message "Matches are not the same length.")
              (iedit-done))
             (t
-             (evil-iedit-state))))))
+             (evil-iedit-state)))))
+  :config
+  (define-key evil-iedit-state-map (kbd "TAB") 'iedit-toggle-selection)
+  (define-key evil-iedit-state-map (kbd "C-c f") 'iedit-restrict-function)
+  (define-key evil-iedit-state-map (kbd "C-c C-f") 'iedit-restrict-function)
+  (define-key evil-iedit-state-map (kbd "C-c C-l") 'iedit-restrict-current-line)
+  (define-key evil-iedit-state-map (kbd "C-c l") 'iedit-restrict-current-line)
+  (unbind-key "TAB" iedit-mode-keymap))
 
 (use-package beacon
   :ensure t
+  :disabled t
   :diminish beacon-mode
+  :defer 4
   :config
   ;; (setq beacon-color "#d7dfff")
   (setq beacon-color (face-background 'region))
@@ -1624,7 +1607,13 @@
 
 (use-package yaml-mode
   :ensure t
-  :commands yaml-mode)
+  :mode (("\\.yml$" . yaml-mode))
+  :config
+  (setq yaml-imenu-generic-expression
+        '((nil  "^[ ]\\{0,2\\}\\(:?[a-zA-Z_-]+\\):"          1)))
+  (modify-syntax-entry ?_ "w" yaml-mode-syntax-table)
+  (modify-syntax-entry ?- "w" yaml-mode-syntax-table)
+  (modify-syntax-entry ?$ "." yaml-mode-syntax-table))
 
 (use-package package-lint
   :ensure t
@@ -1644,6 +1633,7 @@
   )
 
 (use-package idle-highlight-mode
+  :disabled t
   :commands idle-highlight-mode
   :ensure t
   :bind (:map evil-normal-state-map
@@ -1705,7 +1695,9 @@
 
 (use-package docker-tramp
   :ensure t
-  :after tramp)
+  :after tramp
+  :config
+  (setq docker-tramp-use-names t))
 
 (use-package restclient
   :ensure t
@@ -1736,3 +1728,23 @@
   :defer t
   :config
   (add-hook 'edebug-mode-hook 'evil-normalize-keymaps))
+
+(use-package counsel-projectile
+  :ensure t
+  :bind (:map evil-normal-state-map
+              ("g SPC" . counsel-projectile)))
+
+(use-package lua-mode
+  :ensure t
+  :mode "\\.lua\\'")
+
+(use-package sh-script
+  :mode (("\\.sh$" . sh-mode))
+  :config
+  (define-abbrev-table 'sh-mode-abbrev-table
+    '(("done" "done" indent-according-to-mode :system t)
+      ("fi"  "fi"    indent-according-to-mode :system t))))
+
+(use-package try
+  :ensure t
+  :commands try)
