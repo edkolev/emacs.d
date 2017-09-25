@@ -10,7 +10,6 @@
 
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
-(add-to-list 'package-directory-list (expand-file-name "~/.emacs.d/src"))
 (package-initialize)
 
 (setq gc-cons-threshold 64000000)
@@ -213,7 +212,7 @@
                                           (interactive)
                                           (save-excursion
                                             (evil-ex-search-word-forward))))
-
+  
   (define-key evil-motion-state-map "g*" (lambda ()
                                            (interactive)
                                            (save-excursion
@@ -242,15 +241,6 @@
         (load-file file)
       (load-file (concat user-emacs-directory "init.el"))))
 
-  ;; :colorscheme
-  (evil-ex-define-cmd "colo[rscheme]" 'evgeni-colorscheme)
-  (evil-define-command evgeni-colorscheme (&optional theme)
-    :repeat nil
-    (interactive "<a>")
-    (if theme
-        (load-theme (intern theme) t)
-      (call-interactively 'load-theme)))
-
   (define-key evil-normal-state-map "Y" (lambda () (interactive) (evil-yank (point) (point-at-eol))))
 
   ;; navigate b/w emacs windows and tmux panes
@@ -270,8 +260,9 @@
   (define-key evil-insert-state-map (kbd "C-u") (lambda () (interactive) (evil-delete (point-at-bol) (point))))
   (define-key evil-insert-state-map (kbd "C-x s") 'complete-symbol)
   (define-key evil-insert-state-map (kbd "C-a") 'evgeni-beginning-of-line)
+
   ;; auto-indent on RET
-  (define-key global-map (kbd "RET") 'newline-and-indent)
+  ;; (define-key global-map (kbd "RET") 'newline-and-indent)
 
   (defun evgeni-beginning-of-line ()
     (interactive)
@@ -455,9 +446,7 @@
                                            try-expand-dabbrev
                                            try-expand-dabbrev-all-buffers
                                            try-expand-dabbrev-from-kill
-                                           try-expand-tag
-                                           ;; my-yas-hippie-try-expand
-                                           )))
+                                           try-expand-tag)))
 
 (use-package ace-window
   :ensure t
@@ -498,6 +487,7 @@
   (define-key evil-outer-text-objects-map "l" 'evgeni--avy-region))
 
 (use-package evil-surround
+  :ensure t
   :commands
   (evil-surround-edit
    evil-Surround-edit
@@ -519,7 +509,7 @@
               ("g L " . evil-lion-right)))
 
 (use-package evil-expat
-  :load-path "src/evil-expat"
+  :load-path "~/dev/evil-expat"
   :defer 1)
 
 (use-package evil-commentary
@@ -550,13 +540,15 @@
 (use-package evil-goggles
   :defer 1
   :ensure t
+  :load-path "~/dev/evil-goggles"
   :config
 
-  ;; enable experimental undo/redo
-  (setq evil-goggles-enable-undo t
-        evil-goggles-enable-redo t)
+  (setq evil-goggles-duration 0.100)
+  (setq evil-goggles-pulse (display-graphic-p))
   (evil-goggles-mode)
-  (evil-goggles-use-diff-faces))
+  (evil-goggles-use-diff-faces)
+  ;; (evil-goggles-use-magit-faces)
+  )
 
 (use-package evil-magit
   :ensure t
@@ -821,10 +813,10 @@
   (unbind-key "C-w" company-active-map)
   (define-key company-active-map (kbd "C-n") 'company-select-next)
   (define-key company-active-map (kbd "C-p") 'company-select-previous)
-  (general-imap "TAB" (lambda () (interactive)
-                        (if (looking-at "\\_>")
-                            (company-complete-common)
-                          (indent-according-to-mode))))
+  ;; (general-imap "TAB" (lambda () (interactive)
+  ;;                       (if (looking-at "\\_>")
+  ;;                           (company-complete-common)
+  ;;                         (indent-according-to-mode))))
   (global-company-mode t))
 
 (use-package company-dabbrev
@@ -986,7 +978,7 @@
   (setq smart-compile-check-makefile nil)
   (setq smart-compile-alist '((cperl-mode . "perl -w -Mstrict -c %f")
                               (perl-mode . "perl -w -Mstrict -c %f")
-                              (haskell-mode . "stack --silent ghc -- -Wall -e :q %f")
+                              (haskell-mode . "stack --silent ghc -- -e :q %f")
                               ("docker-compose*\\.yml$" . "docker-compose -f %f config -q")
                               (emacs-lisp-mode    . (emacs-lisp-byte-compile))))
 
@@ -996,7 +988,7 @@
          (buffer-live-p buffer)
          (string-match "compilation" (buffer-name buffer))
          (string-match "finished" string)
-         (= 8 (line-number-at-pos (point-max)))) ;; check lines are exactly 8
+         (<= (line-number-at-pos (point-max)) 8))
         (delete-windows-on buffer)
       (with-selected-window (get-buffer-window buffer)
         (goto-char (point-min))
@@ -1065,7 +1057,7 @@
 
   ;; use different colors in ivy-switch-buffer
   (setq ivy-switch-buffer-faces-alist
-        '((emacs-lisp-mode . swiper-match-face-1)
+        '((emacs-lisp-mode . ivy-minibuffer-match-face-1)
           (dired-mode . ivy-subdir)
           (org-mode . org-level-4))))
 
@@ -1330,17 +1322,16 @@
       (evil-previous-line)
       (evil-open-above 1)))
 
-  (general-evil-define-key 'normal 'perl-mode-map "C-c f" 'evgeni-define-perl-function)
-  (general-evil-define-key 'normal 'perl-mode-map "] d" 'evgeni-perl-dump)
+  (evil-define-key 'normal perl-mode-map
+    (kbd "C-c f") 'evgeni-define-perl-function
+    (kbd "] d" ) 'evgeni-perl-dump)
 
   (modify-syntax-entry ?_ "w" perl-mode-syntax-table)
 
   (add-hook 'perl-mode-hook #'(lambda ()
                                 ;; taken from cperl-mode, used for beginning-of-defun / end-of-defun
                                 (setq defun-prompt-regexp
-                                      "^[ 	]*\\(\\(?:sub\\)\\(\\([ 	\n]\\|#[^\n]*\n\\)+\\(::[a-zA-Z_0-9:']+\\|[a-zA-Z_'][a-zA-Z_0-9:']*\\)\\)\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*\\(([^()]*)\\)\\)?\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*\\(:\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*\\(\\sw\\|_\\)+\\((\\(\\\\.\\|[^\\\\()]\\|([^\\\\()]*)\\)*)\\)?\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*:\\)?\\)+\\)\\)?\\|\\(BEGIN\\|UNITCHECK\\|CHECK\\|INIT\\|END\\|AUTOLOAD\\|DESTROY\\)\\)[ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*")
-                                ))
-  )
+                                      "^[ 	]*\\(\\(?:sub\\)\\(\\([ 	\n]\\|#[^\n]*\n\\)+\\(::[a-zA-Z_0-9:']+\\|[a-zA-Z_'][a-zA-Z_0-9:']*\\)\\)\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*\\(([^()]*)\\)\\)?\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*\\(:\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*\\(\\sw\\|_\\)+\\((\\(\\\\.\\|[^\\\\()]\\|([^\\\\()]*)\\)*)\\)?\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*:\\)?\\)+\\)\\)?\\|\\(BEGIN\\|UNITCHECK\\|CHECK\\|INIT\\|END\\|AUTOLOAD\\|DESTROY\\)\\)[ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*"))))
 
 (use-package eros
   :ensure t
@@ -1351,6 +1342,7 @@
 
 (use-package markdown-mode
   :ensure t
+  :defer-install t
   :commands (markdown-mode gfm-mode)
   :mode (("README\\.md\\'" . gfm-mode)
          ("\\.md\\'" . markdown-mode)
@@ -1367,6 +1359,7 @@
 
 (use-package haskell-mode
   :mode "\\.hs\\'"
+  :defer-install t
   :config
   (setq haskell-indent-spaces 2)
 
@@ -1398,7 +1391,7 @@
     (when (and (< 1 (line-number-at-pos))
                (save-excursion
                  (forward-line -1)
-                 (string= "" (string-trim-left (string-trim-right (buffer-substring (line-beginning-position) (line-end-position)))))))
+                 (string= "" (string-trim-right (string-trim-left (buffer-substring (line-beginning-position) (line-end-position)))))))
       (delete-region (line-beginning-position) (point))))
 
   (advice-add 'haskell-indentation-newline-and-indent
@@ -1607,6 +1600,7 @@
 
 (use-package yaml-mode
   :ensure t
+  :defer-install t
   :mode (("\\.yml$" . yaml-mode))
   :config
   (setq yaml-imenu-generic-expression
@@ -1620,8 +1614,9 @@
   :commands package-lint-current-buffer)
 
 (use-package multiple-cursors
-  :load-path "src/multiple-cursors.el"
+  :load-path "~/dev/multiple-cursors.el"
   :commands mc/edit-lines
+  :disabled t
   :config
   (evil-ex-define-cmd "mc[cursors]" 'mc/edit-lines)
 
@@ -1657,10 +1652,12 @@
 
 (use-package rjsx-mode
   :ensure t
+  :defer-install t
   :mode ("\\.jsx\\'" . rjsx-mode))
 
 (use-package css-mode
   :ensure t
+  :defer-install t
   :mode ("\\.css\\'" . css-mode)
   :config
   (modify-syntax-entry ?- "w" css-mode-syntax-table))
@@ -1668,30 +1665,7 @@
 (use-package tramp-sh
   :defer t
   :config
-  ;; (setq tramp-default-method "ssh")
-
-  ;; Open files in Docker containers like so: /docker:drunk_bardeen:/etc/passwd
-  ;; from https://github.com/jwiegley/dot-emacs/blob/master/init.el
-  (push
-   (cons
-    "docker"
-    '((tramp-login-program "docker")
-      (tramp-login-args (("exec" "-it") ("%h") ("/bin/bash")))
-      (tramp-remote-shell "/bin/sh")
-      (tramp-remote-shell-args ("-i") ("-c"))))
-   tramp-methods)
-
-  (defadvice tramp-completion-handle-file-name-all-completions
-      (around dotemacs-completion-docker activate)
-    "(tramp-completion-handle-file-name-all-completions \"\" \"/docker:\" returns
-    a list of active Docker container names, followed by colons."
-    (if (equal (ad-get-arg 1) "/docker:")
-        (let* ((dockernames-raw (shell-command-to-string "docker ps | perl -we 'use strict; $_ = <>; m/^(.*)NAMES/ or die; my $offset = length($1); while(<>) {substr($_, 0, $offset, q()); chomp; for(split m/\\W+/) {print qq($_:\n)} }'"))
-               (dockernames (cl-remove-if-not
-                             #'(lambda (dockerline) (string-match ":$" dockerline))
-                             (split-string dockernames-raw "\n"))))
-          (setq ad-return-value dockernames))
-      ad-do-it)))
+  (setq tramp-default-method "ssh"))
 
 (use-package docker-tramp
   :ensure t
@@ -1704,8 +1678,9 @@
   :mode ("\\.restclient\\'" . restclient-mode))
 
 (use-package dockerfile-mode
-  :mode (".*Dockerfile.*" . dockerfile-mode)
   :ensure t
+  :defer-install t
+  :mode (".*Dockerfile.*" . dockerfile-mode)
   :config
   (modify-syntax-entry ?$ "." dockerfile-mode-syntax-table))
 
@@ -1720,6 +1695,7 @@
 
 (use-package nginx-mode
   :ensure t
+  :defer-install t
   :mode ("nginx.*\\.conf\\'" . nginx-mode)
   :config
   (setq nginx-indent-level 3))
@@ -1729,14 +1705,36 @@
   :config
   (add-hook 'edebug-mode-hook 'evil-normalize-keymaps))
 
+(use-package projectile
+  :ensure t
+  :defer 1
+  :config
+  (setq projectile-mode-line "")
+  (setq projectile-completion-system 'ivy)
+  (projectile-global-mode))
+
 (use-package counsel-projectile
   :ensure t
   :bind (:map evil-normal-state-map
-              ("g SPC" . counsel-projectile)))
+              ("g SPC" . counsel-projectile))
+  :init
+  (setq counsel-projectile-drop-to-switch-project-binding "C-6"))
+
+(use-package exec-path-from-shell
+  :if (memq window-system '(mac ns))
+  :defer 1
+  :ensure t
+  :config
+  (exec-path-from-shell-initialize))
 
 (use-package lua-mode
   :ensure t
+  :defer-install t
   :mode "\\.lua\\'")
+
+(use-package edit-indirect
+  :ensure t
+  :functions edit-indirect-region)
 
 (use-package sh-script
   :mode (("\\.sh$" . sh-mode))
@@ -1748,3 +1746,25 @@
 (use-package try
   :ensure t
   :commands try)
+
+(use-package zygospore
+  :ensure t
+  :commands zygospore-toggle-delete-other-windows
+  :init
+  (evil-ex-define-cmd "only" 'zygospore-toggle-delete-other-windows))
+
+(use-package hl-todo
+  :ensure t
+  :defer 3
+  :config
+  (global-hl-todo-mode))
+
+(use-package rust-mode
+  :ensure t
+  :defer-install t
+  :mode "\\.rs\\'")
+
+(use-package toml-mode
+  :ensure t
+  :defer-install t
+  :mode "\\.toml\\'")
