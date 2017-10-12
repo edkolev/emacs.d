@@ -19,7 +19,7 @@
 
 ;; settings
 (when (display-graphic-p)
-  (set-default-font "Source Code Pro 13")
+  (set-default-font "Source Code Pro 13" nil t)
   ;; smooth scroll
   (setq mouse-wheel-scroll-amount '(1 ((shift) . 1)))
   (setq mouse-wheel-progressive-speed nil)
@@ -41,6 +41,10 @@
 (setq default-major-mode 'text-mode)
 (setq enable-local-variables :all)
 (setq require-final-newline t)
+
+(setq initial-buffer-choice (lambda ()
+                              (interactive)
+                              (get-buffer "*Messages*")))
 
 (defun display-startup-echo-area-message ()
   (message ""))
@@ -97,6 +101,7 @@
     (package-menu-execute t)))
 
 (ex! "upgrade-packages" 'evgeni-upgrade-packages)
+(ex! "refresh-packages" 'package-refresh-contents)
 
 ;; themes
 (use-package spacemacs-theme :ensure t :defer t)
@@ -130,18 +135,14 @@
 
 ;; (set-face-bold-p 'bold nil) ;; disable bold
 (load-theme (if (display-graphic-p)
-                'spacemacs-light
+                'tango ;; flatui
               'leuven
               )
             t)
 
 (use-package no-littering
   :ensure t
-  :demand t
-  :config
-  (require 'recentf)
-  (add-to-list 'recentf-exclude no-littering-var-directory)
-  (add-to-list 'recentf-exclude no-littering-etc-directory))
+  :demand t)
 
 (use-package desktop
   :if (display-graphic-p)
@@ -228,16 +229,6 @@
                                              (evil-ex-search-unbounded-word-forward))))
 
   (defvar evgeni-conflict-marker-regex "^[<=>|]\\{7\\}")
-  (defun evgeni-next-conflict ()
-    (interactive)
-    (re-search-forward evgeni-conflict-marker-regex))
-
-  (defun evgeni-prev-conflict ()
-    (interactive)
-    (re-search-backward evgeni-conflict-marker-regex))
-
-  (define-key evil-normal-state-map (kbd "] n")'evgeni-next-conflict)
-  (define-key evil-normal-state-map (kbd "[ n")'evgeni-prev-conflict)
 
   ;; alias :On with :on
   (evil-ex-define-cmd "On" "on")
@@ -369,6 +360,13 @@
       (call-interactively 'previous-complete-history-element))
     (call-interactively 'move-end-of-line))
 
+  (defun evgeni-prev-or-prev-and-backspace ()
+    (interactive)
+    (when (not (thing-at-point 'line t))
+      (call-interactively 'previous-complete-history-element)
+      (call-interactively 'move-end-of-line))
+    (call-interactively 'evil-ex-delete-backward-char))
+
   (defun evgeni-ex-delete-or-complete ()
     (interactive)
     (if (eq (point) (point-at-eol))
@@ -378,6 +376,7 @@
   ;; tweak search and ex maps
   (define-key evil-ex-search-keymap "\C-e"  'evgeni-prev-or-move-end-of-line)
   (define-key evil-ex-completion-map "\C-e" 'evgeni-prev-or-move-end-of-line)
+  (define-key evil-ex-completion-map (kbd "DEL" ) 'evgeni-prev-or-prev-and-backspace)
   (define-key evil-ex-completion-map "\C-a" 'move-beginning-of-line)
   (define-key evil-ex-completion-map "\C-b" 'backward-char)
   (define-key evil-ex-completion-map "\C-d" 'evgeni-ex-delete-or-complete)
@@ -605,18 +604,13 @@
   ;; (evil-goggles-use-magit-faces)
   )
 
-(use-package evil-magit
-  :ensure t
-  :after magit
-  :init
-  (setq evil-magit-want-horizontal-movement t))
-
 (use-package recentf
   :defer 1
   :init
   (setq recentf-max-saved-items 500)
   (setq recentf-exclude '("/tmp/" "/ssh:"))
   (setq recentf-auto-cleanup 'never)
+  :config
   (recentf-mode))
 
 (use-package evil-indent-plus ;; indent object
@@ -650,6 +644,7 @@
   :bind (:map evil-normal-state-map
               ("-" . evgeni-dired-current-dir))
   :config
+  (unbind-key "SPC" dired-mode-map)
   (setq dired-listing-switches "-alh"
         dired-auto-revert-buffer t
         dired-dwim-target t)
@@ -735,6 +730,21 @@
 
   (add-hook 'git-commit-mode-hook 'flyspell-mode))
 
+(use-package evil-magit
+  :ensure t
+  :after magit
+  :init
+  (setq evil-magit-want-horizontal-movement t))
+
+(use-package smerge-mode
+  :defer t
+  :config
+  (evil-define-minor-mode-key 'normal 'smerge-mode (kbd "] n") 'smerge-next)
+  (evil-define-minor-mode-key 'normal 'smerge-mode (kbd "[ n") 'smerge-prev)
+  (evil-define-minor-mode-key 'normal 'smerge-mode (kbd "C-c C-c") 'smerge-keep-current)
+  (evil-define-minor-mode-key 'normal 'smerge-mode (kbd "C-c C-k") 'smerge-kill-current)
+  )
+
 (use-package vdiff
   :ensure t
   :defer t
@@ -783,6 +793,13 @@
           '("vdiff dwim" 'vdiff-magit-dwim))
   (setcdr (assoc ?E (plist-get magit-dispatch-popup :actions))
           '("vdiff popup" 'vdiff-magit-popup)))
+
+(use-package git-timemachine
+  :ensure t
+  :defer t
+  :init
+  (ex! "timemachine" 'git-timemachine)
+  (ex! "timemachine-switch-branch" 'git-timemachine-switch-branch))
 
 (use-package git-gutter+
   :ensure t
@@ -990,11 +1007,10 @@
     "C-p" 'xref-prev-line))
 
 (use-package abbrev
+  :defer t
   :diminish 'abbrev-mode
-  :config
-  (setq-default abbrev-mode t)
-  (add-hook 'evil-insert-state-exit-hook 'expand-abbrev)
-  )
+  :init
+  (setq-default abbrev-mode t))
 
 (use-package narrow
   :defer t
@@ -1122,7 +1138,6 @@
   :diminish 'ivy-mode
   :defer 4
   :bind (:map evil-normal-state-map
-              ("")
               ("SPC" . ivy-switch-buffer))
   :config
   (ivy-mode 1)
@@ -1195,7 +1210,7 @@
 (use-package counsel
   :load-path "~/dev/swiper"
   :ensure t
-  :bind (([remap find-file] . counsel-find-file)
+  :bind (([remap find-file] . evgeni-counsel-find-file)
          ([remap describe-function] . counsel-describe-function)
          ([remap describe-variable] . counsel-describe-variable)
          ([remap execute-extended-command] . counsel-M-x)
@@ -1204,9 +1219,21 @@
          :map evil-normal-state-map
          (", f"   . evgeni-counsel-imenu)
          ("K"     . evgeni-counsel-git-grep)
+         ("g P" . counsel-yank-pop)
          :map evil-visual-state-map
          ("K"     . evgeni-counsel-git-grep))
   :config
+
+  (defun evgeni-counsel-find-file ()
+    (interactive)
+    (let ((completing-read-function 'completing-read-default
+                                    ;; (if (and (not (null (buffer-file-name)))
+                                    ;;          (file-remote-p (buffer-file-name)))
+                                    ;;     'completing-read-default
+                                    ;;   'ivy-completing-read)
+                                    ))
+      (call-interactively 'find-file)))
+
   (setq counsel-git-cmd "git ls-files --cached --others --exclude-standard")
   (setq counsel-git-grep-skip-counting-lines t)
 
@@ -1280,6 +1307,7 @@
               (", F"  . imenu-anywhere)))
 
 (use-package elisp-mode
+  :defer t
   :config
   (define-key emacs-lisp-mode-map (kbd "C-c C-c") #'eval-defun)
 
@@ -1348,10 +1376,11 @@
 
 (use-package winner
   :defer 5
+  :bind (:map evil-normal-state-map
+              ("z u" . winner-undo)
+              ("z C-r" . winner-redo))
   :config
-  (winner-mode)
-  (evil-define-minor-mode-key 'normal 'winner-mode (kbd "z u") 'winner-undo)
-  (evil-define-minor-mode-key 'normal 'winner-mode (kbd "z C-r") 'winner-redo))
+  (winner-mode))
 
 (use-package undo-tree
   :ensure t
@@ -1533,12 +1562,14 @@
 
 (use-package hindent
   :ensure t
+  :after haskell-mode
   :if (executable-find "hindent")
   :init
   (add-hook 'haskell-mode-hook 'hindent-mode))
 
 (use-package smartparens
   :ensure t
+  :disabled t
   :diminish smartparens-mode
   :after prog-mode
   :config
@@ -1558,6 +1589,13 @@
 
   (define-key emacs-lisp-mode-map (kbd "C-c <") 'sp-forward-slurp-sexp)
   (define-key emacs-lisp-mode-map (kbd "C-c >") 'sp-forward-barf-sexp))
+
+(use-package paren
+  :defer 3
+  :config
+  (setq show-paren-style 'parenthesis
+        show-paren-delay 0)
+  (show-paren-mode 1))
 
 (use-package loccur
   :ensure t
@@ -1828,7 +1866,8 @@
 
 (use-package edit-indirect
   :ensure t
-  :functions edit-indirect-region)
+  :defer t
+  :defer-install t)
 
 (use-package sh-script
   :mode (("\\.sh$" . sh-mode))
@@ -1903,3 +1942,29 @@
   :defer t
   :init
   (evil-ex-define-cmd "ls" 'ibuffer))
+
+(use-package term
+  :defer t
+  :init
+  (ex! "sh" 'evgeni-ansi-term)
+  :bind* (("C-c C-z" . evgeni-ansi-term))
+  :config
+  (evil-set-initial-state 'term-mode 'emacs)
+
+  (defun evgeni-ansi-term ()
+    (interactive)
+    (cond
+     ((string-equal (buffer-name) "*ansi-term*")
+      (delete-window))
+     ((get-buffer "*ansi-term*")
+      (switch-to-buffer-other-window "*ansi-term*"))
+     (t
+      (progn
+        (split-window-vertically)
+        (other-window 1)
+        (ansi-term (getenv "SHELL")))))))
+
+(use-package elec-pair
+  :defer t
+  :init
+  (add-hook 'prog-mode-hook 'electric-pair-local-mode))
