@@ -401,1570 +401,1570 @@
     (interactive "<r>")
     (evil-exit-visual-state)
     (evil-ex-normal beg end "."))
-  (define-key evil-visual-state-map (kbd ".") 'evgeni-visual-dot-repeat))
-
-(use-package hippie-exp
-  :disabled t
-  :bind (:map evil-insert-state-map
-              ("TAB" . evgeni-tab))
-  :config
-
-  (setq hippie-expand-try-functions-list '(try-expand-dabbrev-visible
-                                           try-expand-dabbrev
-                                           try-expand-dabbrev-all-buffers
-                                           try-expand-dabbrev-from-kill
-                                           try-expand-tag))
-
-  (defun evgeni-tab ()
-    (interactive)
-    (if (looking-at "\\_>") (hippie-expand nil) (indent-for-tab-command)))
-
-  (defun my-yas-hippie-try-expand (first-time)
-    (if (not first-time)
-        (let ((yas-fallback-behavior 'return-nil))
-          (yas-expand))
-      (undo 1)
-      nil))
-
-  (defun he-tag-beg ()
-    (save-excursion
-      (backward-word 1)
-      (point)))
-
-  (defun tags-complete-tag (string predicate what)
-    (save-excursion
-      ;; If we need to ask for the tag table, allow that.
-      (if (eq what t)
-          (all-completions string (tags-completion-table) predicate)
-        (try-completion string (tags-completion-table) predicate))))
-
-  (defun try-expand-tag (old)
-    (when tags-table-list
-      (unless old
-        (he-init-string (he-tag-beg) (point))
-        (setq he-expand-list
-              (sort (all-completions he-search-string 'tags-complete-tag)
-                    'string-lessp)))
-      (while (and he-expand-list
-                  (he-string-member (car he-expand-list) he-tried-table))
-        (setq he-expand-list (cdr he-expand-list)))
-      (if (null he-expand-list)
-          (progn
-            (when old (he-reset-string))
-            ())
-        (he-substitute-string (car he-expand-list))
-        (setq he-expand-list (cdr he-expand-list))
-        t)))
-
-  (defun evgeni-hippie-expand-yasnippet ()
-    (interactive)
-    (let ((hippie-expand-try-functions-list '(my-yas-hippie-try-expand)))
-      (hippie-expand nil)))
-  (define-key evil-insert-state-map (kbd "C-x C-y") 'evgeni-hippie-expand-yasnippet)
-  (define-key evil-insert-state-map (kbd "C-x TAB") 'evgeni-hippie-expand-yasnippet))
-
-(use-package ace-window
-  :ensure t
-  :bind (:map evil-normal-state-map
-              ("C-w C-w" . ace-window)))
-
-(use-package avy
-  :ensure t
-  :defer 3
-  :bind (:map evil-motion-state-map
-              ("gh" . avy-goto-char-timer)
-              ("gY" . avy-copy-region)
-              ("gyy" . avy-copy-line))
-  :config
-  (custom-set-faces
-   '(avy-lead-face-0 ((t (:inherit 'highlight))))
-   '(avy-lead-face ((t (:inherit 'highlight)))))
-
-  ;; TODO
-  (evil-define-text-object evgeni--avy-line (count &optional beg end type)
-    (save-excursion
-      (let* ((avy-all-windows nil)
-             (beg (avy--line))
-             (end (save-excursion
-                    (goto-char beg)
-                    (move-end-of-line count)
-                    (point))))
-        (evil-range beg end 'line :expanded t))))
-
-  (evil-define-text-object evgeni--avy-region (count &optional beg end type)
-    (save-excursion
-      (let* ((beg (save-selected-window
-                    (avy--line count)))
-             (end (avy--line count)))
-        (evil-range beg end 'line :expanded t))))
-
-  (define-key evil-inner-text-objects-map "l" 'evgeni--avy-line)
-  (define-key evil-outer-text-objects-map "l" 'evgeni--avy-region))
-
-(use-package evil-surround
-  :ensure t
-  :commands
-  (evil-surround-edit
-   evil-Surround-edit
-   evil-surround-region
-   evil-Surround-region)
-  :init
-  (evil-define-key 'operator global-map "s" 'evil-surround-edit)
-  (evil-define-key 'operator global-map "S" 'evil-Surround-edit)
-  (evil-define-key 'visual global-map "S" 'evil-surround-region)
-  (evil-define-key 'visual global-map "gS" 'evil-Surround-region))
-
-(use-package evil-lion
-  :ensure t
-  :bind (:map evil-normal-state-map
-              ("g l " . evil-lion-left)
-              ("g L " . evil-lion-right)
-              :map evil-visual-state-map
-              ("g l " . evil-lion-left)
-              ("g L " . evil-lion-right)))
-
-(use-package evil-expat
-  :load-path "~/dev/evil-expat"
-  :defer 1)
-
-(use-package evil-commentary
-  :ensure t
-  :diminish 'evil-commentary-mode
-  :bind (:map evil-normal-state-map
-              ("gc" . evil-commentary))
-
-  :config
-  ;; define `gcu' to uncomment
-  (define-key evil-operator-state-map "u" 'evgeni-commentary-uncomment-adjacent)
-
-  (defun evgeni-commentary-uncomment-adjacent ()
-    (interactive)
-    (message "hello3")
-    (when (and (eq evil-this-operator 'evil-commentary))
-      (setq evil-inhibit-operator t)
-
-      (let ((beg (evil-commentary/ensure-in-comment-block (point) (point) nil))
-            (end (evil-commentary/ensure-in-comment-block (point) (point) t)))
-        (message "%s %s" beg end)
-        (evil-commentary (car beg) (cadr end)))))
-
-  ;; copied from https://github.com/linktohack/evil-commentary/issues/9
-  (defun evil-commentary/ensure-in-comment-block (beg end forward)
-    (save-excursion
-      (beginning-of-line)
-      (if (not (or (looking-at-p (concat "\\s\\*" (regexp-quote comment-start)))
-                   (looking-at-p (concat "\\s\\*$"))))
-          (list beg end)
-        (let ((saved-beg (point))
-              (saved-end (point-at-eol)))
-          (catch 'bound
-            (when (<= saved-beg (point-min))
-              (throw 'bound (list saved-beg end)))
-            (when (>= saved-end (point-max))
-              (throw 'bound (list beg saved-end)))
-            (if forward
-                (next-line)
-              (previous-line))
-            (apply #'evil-commentary/ensure-in-comment-block
-                   (if forward
-                       (list beg saved-end forward)
-                     (list saved-beg end forward)))))))))
-
-(use-package evil-exchange
-  :ensure t
-  :bind (:map evil-normal-state-map
-              ("gx" . evil-exchange)
-              ("gX" . evil-exchange-cancel)))
-
-(use-package evil-replace-with-register
-  :ensure t
-  :bind (:map evil-normal-state-map
-              ("gr" . evil-replace-with-register)
-              :map evil-visual-state-map
-              ("gr" . evil-replace-with-register))
-  :config
-  (setq evil-replace-with-register-indent t))
-
-(use-package evil-visualstar
-  :ensure t
-  :bind (:map evil-visual-state-map
-              ("*" . evil-visualstar/begin-search-forward)
-              ("#" . evil-visualstar/begin-search-backward)))
-
-(use-package evil-goggles
-  :defer 1
-  :ensure t
-  :load-path "~/dev/evil-goggles"
-  :config
-
-  (setq evil-goggles-duration 0.100)
-  (setq evil-goggles-pulse (display-graphic-p))
-  (evil-goggles-mode)
-  (evil-goggles-use-diff-faces)
-  ;; (evil-goggles-use-magit-faces)
-  )
-
-(use-package recentf
-  :defer 1
-  :init
-  (setq recentf-max-saved-items 500)
-  (setq recentf-exclude '("/tmp/" "/ssh:"))
-  (setq recentf-auto-cleanup 'never)
-  :config
-  (recentf-mode))
-
-(use-package evil-indent-plus ;; indent object
-  :ensure t
-  :defer 4
-  :config (evil-indent-plus-default-bindings)
-  ;; temprorary fix until this is addressed https://github.com/TheBB/evil-indent-plus/pull/4
-  (defun evil-indent-plus--linify (range)
-    (let ((nbeg (save-excursion (goto-char (cl-first range)) (point-at-bol)))
-          (nend (save-excursion (goto-char (cl-second range)) (+ (point-at-eol) (if (evil-visual-state-p) 0 1)))))
-      (evil-range nbeg nend 'line))))
-
-(use-package saveplace
-  :config
-  (save-place-mode))
-
-(use-package savehist
-  :init
-  (setq ;; savehist-file (concat spacemacs-cache-directory "savehist")
-   enable-recursive-minibuffers t ; Allow commands in minibuffers
-   history-length 1000
-   savehist-additional-variables '(mark-ring
-                                   global-mark-ring
-                                   search-ring
-                                   regexp-search-ring
-                                   extended-command-history)
-   savehist-autosave-interval 60)
-  (savehist-mode t))
-
-(use-package dired
-  :bind (:map evil-normal-state-map
-              ("-" . evgeni-dired-current-dir))
-  :config
-  (unbind-key "SPC" dired-mode-map)
-  (setq dired-listing-switches "-alh"
-        dired-auto-revert-buffer t
-        dired-dwim-target t)
-  (add-hook 'dired-mode-hook 'dired-hide-details-mode)
-  (evil-define-key 'normal dired-mode-map
-    "n" (lookup-key evil-motion-state-map "n")
-    "g" (lookup-key evil-motion-state-map "g")
-    "gr" 'revert-buffer)
-
-  (defun evgeni-dired-current-dir ()
-    (interactive)
-    (dired ".")))
-
-(use-package dired-single
-  :ensure t
-  :after dired
-  :config
-  (define-key dired-mode-map [return] 'dired-single-buffer)
-  (define-key dired-mode-map (kbd "RET") 'dired-single-buffer)
-  (define-key dired-mode-map [mouse-1] 'dired-single-buffer-mouse)
-  (define-key dired-mode-map "-" (lambda nil (interactive) (dired-single-buffer ".."))))
-
-(use-package wdired
-  :commands wdired-change-to-wdired-mode
-  :init
-  (ex! "wdired" 'wdired-change-to-wdired-mode))
-
-(use-package magit
-  :ensure t
-  :bind (:map evil-normal-state-map
-              ("U U" . magit-status)
-              ("U w" . magit-stage-file)
-              ("U d" . evgeni-magit-diff-unstaged-buffer-file)
-              ("U L" . magit-log-head)
-              ("U l" . magit-log-buffer-file)
-              ("U r" . magit-file-checkout)
-              ("U r" . evgeni-magit-file-checkout)
-              ("U c" . magit-commit-popup)
-              ("U b" . magit-branch-popup)
-              ("U z" . magit-stash-popup)
-              ("U p" . magit-push-popup)
-              ("U f" . magit-fetch-popup)
-              ("U F" . magit-pull-popup)
-              ("U B" . magit-checkout))
-  :commands (magit-find-file)
-  :init
-  (ex! "gedit" 'magit-find-file)
-  :config
-
-  (defun evgeni-magit-diff-unstaged-buffer-file ()
-    (interactive)
-    (magit-diff-unstaged nil (list (magit-file-relative-name))))
-
-  (defun evgeni-magit-file-checkout ()
-    (interactive)
-    (magit-file-checkout "HEAD" (magit-file-relative-name)))
-
-  (setq magit-display-buffer-function 'magit-display-buffer-fullframe-status-v1)
-  (setq magit-diff-refine-hunk 't)
-
-  (remove-hook 'magit-status-sections-hook 'magit-insert-stashes) ;; don't show stashes
-  (magit-add-section-hook 'magit-status-sections-hook
-                          'magit-insert-untracked-files 'magit-insert-staged-changes 1) ;; lower untracked
-
-  (unbind-key "C-h" magit-mode-map)
-  (unbind-key "C-j" magit-mode-map)
-  (unbind-key "C-k" magit-mode-map)
-  (unbind-key "C-l" magit-mode-map)
-  (unbind-key "SPC" magit-status-mode-map)
-
-  (evil-define-key 'insert git-commit-mode-map
-    (kbd "C-x C-x") 'evgeni-insert-ticket-number-from-git-branch
-    (kbd "C-x x") 'evgeni-insert-ticket-number-from-git-branch)
-
-  (defun evgeni-insert-ticket-number-from-git-branch ()
-    (interactive)
-    (let ((number-from-branch
-           (let ((str (shell-command-to-string "git rev-parse --abbrev-ref HEAD")))
-             (when (string-match "\\([0-9]+\\)" str)
-               (match-string-no-properties 0 str)))))
-      (when number-from-branch
-        (insert number-from-branch))))
-
-  (add-hook 'git-commit-mode-hook 'flyspell-mode))
-
-(use-package evil-magit
-  :ensure t
-  :after magit
-  :init
-  (setq evil-magit-want-horizontal-movement t))
-
-(use-package smerge-mode
-  :defer t
-  :config
-  (evil-define-minor-mode-key 'normal 'smerge-mode (kbd "] n") 'smerge-next)
-  (evil-define-minor-mode-key 'normal 'smerge-mode (kbd "[ n") 'smerge-prev)
-  (evil-define-minor-mode-key 'normal 'smerge-mode (kbd "C-c C-c") 'smerge-keep-current)
-  (evil-define-minor-mode-key 'normal 'smerge-mode (kbd "C-c C-k") 'smerge-kill-current)
-  )
-
-(use-package vdiff
-  :ensure t
-  :defer t
-  :init
-  (ex! "diff-visible-buffers" (lambda ()
-                                (interactive)
-                                (let ((bufs (mapcar 'window-buffer (window-list)))
-                                      (vdiff-2way-layout-function (lambda (&rest _args) nil)))
-                                  (cond
-                                   ((eq (length bufs) 2)
-                                    (apply 'vdiff-buffers bufs))
-                                   ((eq (length bufs) 3)
-                                    (apply 'vdiff-buffers3 bufs))
-                                   (t
-                                    (user-error "Expected 2 or 3 buffers, got %s" (length bufs)))))))
-
-  (evil-define-minor-mode-key 'normal 'vdiff-mode "]c" 'vdiff-next-hunk)
-  (evil-define-minor-mode-key 'normal 'vdiff-mode "[c" 'vdiff-previous-hunk)
-  (evil-define-minor-mode-key 'motion 'vdiff-mode "go" 'vdiff-receive-changes)
-  (evil-define-minor-mode-key 'motion 'vdiff-mode "gp" 'vdiff-send-changes)
-  (evil-define-minor-mode-key 'normal 'vdiff-mode "q" 'evgeni-vdiff-close-if-readonly)
-
-  :config
-  (setq vdiff-auto-refine t)
-  (define-key vdiff-mode-map (kbd "C-c") vdiff-mode-prefix-map)
-
-  (defun evgeni-vdiff-close-if-readonly ()
-    (interactive)
-    (if buffer-read-only
-        (vdiff-quit)
-      (call-interactively 'evil-record-macro))))
-
-(use-package vdiff-magit
-  :ensure t
-  :after magit
-  :init
-  (ex! "gdiff" 'vdiff-magit-show-unstaged)
-  :commands vdiff-magit-show-unstaged
-  :bind (:map evil-normal-state-map
-              ("U D" . vdiff-magit-popup))
-  :config
-  (setq vdiff-magit-stage-is-2way nil) ;; Only use two buffers (working file and index) for vdiff-magit-stage
-  (define-key magit-mode-map "e" 'vdiff-magit-dwim)
-  (define-key magit-mode-map "E" 'vdiff-magit-popup)
-  (setcdr (assoc ?e (plist-get magit-dispatch-popup :actions))
-          '("vdiff dwim" 'vdiff-magit-dwim))
-  (setcdr (assoc ?E (plist-get magit-dispatch-popup :actions))
-          '("vdiff popup" 'vdiff-magit-popup)))
-
-(use-package git-timemachine
-  :ensure t
-  :defer t
-  :init
-  (ex! "timemachine" 'git-timemachine)
-  (ex! "timemachine-switch-branch" 'git-timemachine-switch-branch))
-
-(use-package git-gutter+
-  :ensure t
-  :disabled t
-  :commands git-gutter+-mode
-  :init
-  (add-hook 'prog-mode-hook 'git-gutter+-mode)
-  (add-hook 'text-mode-hook 'git-gutter+-mode)
-  (add-hook 'conf-mode-hook 'git-gutter+-mode)
-  :config
-  (evil-define-minor-mode-key 'normal 'git-gutter+-mode
-    "]c" 'git-gutter+-next-hunk
-    "[c" 'git-gutter+-previous-hunk
-    "Us" 'evgeni-stage-hunk
-    ;; "Ux" 'git-gutter+-revert-hunks
-    "Ux" 'evgeni-revert-hunk
-    "U?" 'git-gutter+-show-hunk-inline-at-point)
-  (evil-define-minor-mode-key 'visual 'git-gutter+-mode
-    "Us" 'git-gutter+-stage-hunks)
-
-  (defun evgeni-stage-hunk ()
-    (interactive)
-    (-when-let (diffinfo (git-gutter+-diffinfo-at-point))
-      (let ((diff (with-temp-buffer
-                    (insert (plist-get diffinfo :content) "\n")
-                    (diff-mode)
-                    ;; Force-fontify the invisible temp buffer
-                    (font-lock-default-function 'diff-mode)
-                    (font-lock-default-fontify-buffer)
-                    (buffer-string))))
-        (momentary-string-display diff (point-at-bol) nil "Stage hunk?")
-
-        (when (eq (read-char) ?y)
-          (git-gutter+-stage-hunks)))))
-
-  (defun evgeni-revert-hunk ()
-    (interactive)
-    (-when-let (diffinfo (git-gutter+-diffinfo-at-point))
-      (let ((diff (with-temp-buffer
-                    (insert (plist-get diffinfo :content) "\n")
-                    (diff-mode)
-                    ;; Force-fontify the invisible temp buffer
-                    (font-lock-default-function 'diff-mode)
-                    (font-lock-default-fontify-buffer)
-                    (buffer-string))))
-        (momentary-string-display diff (point-at-bol) nil "Revert hunk?")
-
-        (when (eq (read-char) ?y)
-          (git-gutter+-do-revert-hunk diffinfo))))))
-
-(use-package flycheck
-  :ensure t
-  :bind (:map evil-normal-state-map
-              ( "C-c o f" . flycheck-mode))
-  :config
-  (setq flycheck-check-syntax-automatically '(mode-enabled save))
-  (setq-default flycheck-disabled-checkers '(perl-perlcritic)))
-
-;; TODO - company through hippie exp only https://github.com/jwiegley/dot-emacs/blob/master/init.el#L1355
-(use-package company
-  :disabled t
-  :ensure t
-  :commands company-mode
-  ;; :general
-  ;; (general-imap "C-x C-f" 'company-files)
-  ;; (general-imap "C-x C-]" 'company-etags)
-  ;; (general-imap "C-]" 'company-etags)
-  :init
-  (add-hook 'prog-mode-hook 'company-mode)
-  (setf company-idle-delay 0.3
-
-        company-minimum-prefix-length 2
-        company-show-numbers t
-        company-selection-wrap-around t
-        company-quickhelp-delay nil
-        company-tooltip-limit 10
-        company-tooltip-align-annotations t
-        company-require-match 'never
-
-        company-frontends
-        '(company-pseudo-tooltip-unless-just-one-frontend
-          company-preview-frontend
-          company-echo-metadata-frontend)
-
-        company-backends (list (list #'company-capf
-                                     ;; #'company-dabbrev-code
-                                     #'company-dabbrev
-                                     #'company-keywords)
-                               (list #'company-dabbrev-code
-                                     #'company-keywords)
-                               #'company-files
-                               #'company-dabbrev)
-
-
-        )
-  :config
-
-  (defadvice company-pseudo-tooltip-unless-just-one-frontend
-      (around only-show-tooltip-when-invoked activate)
-    (when (company-explicit-action-p)
-      ad-do-it))
-
-  (unbind-key "C-w" company-active-map)
-  (define-key company-active-map (kbd "C-n") 'company-select-next)
-  (define-key company-active-map (kbd "C-p") 'company-select-previous)
-  ;; (general-imap "TAB" (lambda () (interactive)
-  ;;                       (if (looking-at "\\_>")
-  ;;                           (company-complete-common)
-  ;;                         (indent-according-to-mode))))
-  (global-company-mode t))
-
-(use-package company-dabbrev
-  :disabled t
-  :after company
-  :init
-  (setf
-   company-dabbrev-ignore-case nil
-   company-dabbrev-ignore-invisible t
-   company-dabbrev-downcase nil))
-
-(use-package company-dabbrev-code
-  :disabled t
-  :after company
-  :config
-  (setq company-dabbrev-code-other-buffers t)
-  (setq company-dabbrev-code-ignore-case t))
-
-(use-package company-keywords
-  :disabled t
-  :after company
-  :config
-  (add-to-list
-   'company-keywords-alist
-   '(haskell-mode
-     "undefined" "as" "case" "ccall" "class" "contained" "data" "default"
-     "deriving" "do" "else" "error" "export" "family" "foreign" "hiding"
-     "if" "import" "in" "infix" "infixl" "infixr" "instance" "let"
-     "module" "newtype" "of" "qualified" "safe" "stdcall" "then" "trace"
-     "type" "undefined" "unsafe" "where")))
-
-(use-package org
-  :mode (("\\.org$"   . org-mode))
-  :defer t
-  :ensure t
-  :config
-  (org-babel-do-load-languages
-   'org-babel-load-languages '((shell . t)))
-
-  (evil-ex-define-cmd "cap[ture]" 'org-capture)
-
-  (setq org-confirm-babel-evaluate nil)
-
-  (evil-define-key '(normal insert) org-mode-map
-    (kbd "TAB") 'org-cycle)
-
-  (font-lock-add-keywords 'org-mode
-                          '(("^ +\\([-*]\\) "
-                             (0 (prog1 () (compose-region (match-beginning 1) (match-end 1) "•")))))))
-
-(use-package evil-org
-  :ensure t
-  :after org
-  :config
-  (add-hook 'org-mode-hook 'evil-org-mode)
-  (add-hook 'org-mode-hook (lambda ()
-                             (evil-org-mode)
-                             (evil-org-set-key-theme '(operators)))))
-(use-package org-bullets
-  :ensure t
-  :after org
-  :config
-  (add-hook 'org-mode-hook (lambda () (org-bullets-mode 1))))
-
-(use-package move-text
-  :ensure t
-  :bind (:map evil-normal-state-map
-              ("] e" . evgeni-move-text-line-up )
-              ("[ e" . evgeni-move-text-line-down ))
-  :config
-  (defun evgeni-move-text-line-up (count)
-    (interactive "p")
-    (let ((count (or count 1)))
-      (dotimes (i count)
-        (move-text-line-down))))
-
-  (defun evgeni-move-text-line-down (count)
-    (interactive "p")
-    (let ((count (or count 1)))
-      (dotimes (i count)
-        (move-text-line-up)))))
-
-(use-package xref
-  :bind (:map evil-normal-state-map
-              ("C-]" . xref-find-definitions)
-              ("g C-]" . xref-find-definitions)
-              ("C-w C-]" . xref-find-definitions-other-window))
-  :config
-  (ex! "tag" (lambda ()
-               (interactive)
-               ;; make `xref-find-definitions prompt for a tag
-               (let ((current-prefix-arg '(4)))
-                 (call-interactively 'xref-find-definitions))))
-  (evil-define-key 'normal xref--xref-buffer-mode-map "q" 'delete-window
-    "C-n" 'xref-next-line
-    "C-p" 'xref-prev-line))
-
-(use-package abbrev
-  :defer t
-  :diminish 'abbrev-mode
-  :init
-  (setq-default abbrev-mode t))
-
-(use-package narrow
-  :defer t
-  :init
-  (ex! "nar[row]" 'evgeni-narrow-or-widen)
-  (evil-define-command evgeni-narrow-or-widen (bang begin end)
-    (interactive "<!><r>")
-    (let ((buf (if bang (clone-indirect-buffer nil nil) (current-buffer))))
-      (with-current-buffer buf
-        (cond ((region-active-p) (narrow-to-region begin end))
-              ((buffer-narrowed-p) (if (buffer-base-buffer)
-                                       (kill-buffer) ;; wipe out indirect buffer
-                                     (widen)))
-              (t (narrow-to-defun))))
-      (switch-to-buffer buf))))
-
-(use-package grep
-  :commands grep-mode
-  :config
-  (unbind-key "h" grep-mode-map)
-  (unbind-key "n" grep-mode-map)
-  ;; TODO these aren't working
-  ;; (define-key grep-mode-map "C-p" 'previous-error-no-select)
-  ;; (define-key grep-mode-map "C-n" 'next-error-no-select)
-  )
-
-(use-package wgrep
-  :ensure t
-  :commands wgrep-change-to-wgrep-mode
-  :init
-  (setq wgrep-auto-save-buffer t)
-  (ex! "wgrep" 'wgrep-change-to-wgrep-mode)
-  (ex! "wgrep-finish" 'wgrep-finish-edit)
-  :config
-  (custom-set-faces
-   '(wgrep-face ((t (:inherit 'underline)))) ;; *Face used for the changed text in the grep buffer.
-   '(wgrep-file-face ((t (:inherit 'underline)))) ;; *Face used for the changed text in the file buffer.
-   '(wgrep-delete-face ((t (:inherit 'isearch-fail)))))) ;; *Face used for the deleted whole line in the grep buffer.
-
-(use-package linum
-  :bind (:map evil-normal-state-map
-              ( "C-c o n" . linum-mode))
-  :config
-  (setq linum-format "%d "))
-
-(use-package compile
-  :defer 3
-  :config
-  (setq compilation-scroll-output 'next-error)
-  (setq compilation-read-command nil)
-  (setq compilation-ask-about-save nil))
-
-(use-package smart-compile
-  :ensure t
-  :commands smart-compile
-  :bind (:map evil-normal-state-map
-              ("g m" . smart-compile)
-              ("g RET" . smart-compile))
-  :config
-  (setq compilation-read-command nil)
-  (setq compilation-ask-about-save nil)
-  (setq smart-compile-check-makefile nil)
-  (setq smart-compile-alist '((cperl-mode . "perl -w -Mstrict -c %f")
-                              (perl-mode . "perl -w -Mstrict -c %f")
-                              (haskell-mode . "stack --silent ghc -- -e :q %f")
-                              ("docker-compose*\\.yml$" . "docker-compose -f %f config -q")
-                              (emacs-lisp-mode    . (emacs-lisp-byte-compile))))
-
-  (defun evgeni-close-compile-win-if-successful (buffer string)
-    (if (and
-         (eq major-mode 'compilation-mode)
-         (buffer-live-p buffer)
-         (string-match "compilation" (buffer-name buffer))
-         (string-match "finished" string)
-         (<= (line-number-at-pos (point-max)) 8))
-        (delete-windows-on buffer)
-      (with-selected-window (get-buffer-window buffer)
-        (goto-char (point-min))
-        (scroll-up-line 4))))
-
-  (add-hook 'compilation-finish-functions 'evgeni-close-compile-win-if-successful)
-
-  (ex! "mak[e]" 'smart-compile)
-  )
-
-(use-package aggressive-indent
-  :ensure t
-  :commands aggressive-indent-mode
-  :init
-  (add-hook 'emacs-lisp-mode-hook 'aggressive-indent-mode)
-  :config
-  (add-to-list
-   'aggressive-indent-dont-indent-if
-   '(and (derived-mode-p 'perl-mode)
-         (null (string-match "\\([;{}]\\|\\b\\(if\\|for\\|while\\)\\b\\)"
-                             (thing-at-point 'line)))))
-  )
-
-(use-package shackle
-  :ensure t
-  :defer 3
-  :config
-  (shackle-mode 1)
-  (setq shackle-rules
-        '(
-          ("*xref*"                    :align below :size 10  :noselect t)
-          ("*Help*"                    :align below :size 16  :select t)
-          ("*Backtrace*"               :align below :size 25  :noselect t)
-          ("*Flycheck error messages*" :align below :size 0.25)
-          ("*compilation*"             :align below :size 10)
-          ("*grep*"                    :align below :size 10)
-          (ivy-occur-grep-mode         :align below :size 10))))
-
-(use-package which-key
-  :ensure t
-  :disabled t
-  :diminish 'which-key-mode
-  :defer 10
-  :config
-  (setq which-key-idle-delay 1.5)
-  (which-key-mode))
-
-(use-package ivy
-  :ensure t
-  :diminish 'ivy-mode
-  :defer 4
-  :bind (:map evil-normal-state-map
-              ("SPC" . ivy-switch-buffer))
-  :config
-  (ivy-mode 1)
-  (setq ivy-use-virtual-buffers t)
-  (setq ivy-virtual-abbreviate 'full)
-  (define-key ivy-minibuffer-map (kbd "C-w") 'backward-kill-word)
-  (define-key ivy-minibuffer-map (kbd "C-u") (lambda () (interactive) (kill-region (point) (point-at-bol))))
-  (define-key ivy-minibuffer-map [escape] 'minibuffer-keyboard-quit)
-
-  ;; C-r C-w to read word at point
-  (unbind-key "C-r" ivy-minibuffer-map)
-  (define-key ivy-minibuffer-map (kbd "C-r C-w") 'ivy-next-history-element)
-
-  ;; use different colors in ivy-switch-buffer
-  (setq ivy-switch-buffer-faces-alist
-        '((emacs-lisp-mode . ivy-minibuffer-match-face-1)
-          (dired-mode . ivy-subdir)
-          (org-mode . org-level-4))))
-
-(use-package swiper
-  :ensure t
-  :bind (:map evil-motion-state-map
-              ("C-c C-r" . ivy-resume)
-              ("/" . swiper))
-  :config
-  (setq swiper-goto-start-of-match t)
-
-  (defun evgeni-swiper-to-evil-iedit ()
-    (interactive)
-    (unless (require 'evil-iedit-state nil t)
-      (error "evil-iedit-state isn't installed"))
-    (unless (window-minibuffer-p)
-      (error "Call me only from `swiper'"))
-    (let ((cands (nreverse ivy--old-cands)))
-      (unless (string= ivy-text "")
-        (ivy-exit-with-action
-         (lambda (_)
-           (setq mark-active nil)
-           (run-hooks 'deactivate-mark-hook)
-           (when iedit-mode
-             (iedit-cleanup))
-           (let* ((regexp (ivy--regex ivy-text))
-                  (iedit-case-sensitive (not (and ivy-case-fold-search
-                                                  (string= regexp (downcase regexp))))))
-             (iedit-start regexp (point-min) (point-max))
-             (cond ((not iedit-occurrences-overlays)
-                    (message "No matches found for %s" regexp)
-                    (iedit-done))
-                   ((not (iedit-same-length))
-                    (message "Matches are not the same length.")
-                    (iedit-done))
-                   (t
-                    (evil-iedit-state)))))))))
-
-  (defun evgeni-swiper-to-global-normal-command ()
-    (interactive)
-    (if (null (window-minibuffer-p))
-        (user-error "Should only be called in the minibuffer through `swiper-map'")
-      (lexical-let ((enable-recursive-minibuffers t)
-                    (regex (ivy--regex ivy-text)))
-        (swiper--cleanup)
-        (ivy-exit-with-action
-         (lambda (_)
-           (with-ivy-window
-             (evil-ex (format "g/%s/norm " regex))))))))
-
-  (define-key swiper-map (kbd "C-c C-c") 'evgeni-swiper-to-evil-iedit)
-  (define-key swiper-map (kbd "C-c C-e") 'evgeni-swiper-to-global-normal-command))
-
-(use-package counsel
-  :load-path "~/dev/swiper"
-  :ensure t
-  :bind (([remap find-file] . evgeni-counsel-find-file)
-         ([remap describe-function] . counsel-describe-function)
-         ([remap describe-variable] . counsel-describe-variable)
-         ([remap execute-extended-command] . counsel-M-x)
-         :map evil-motion-state-map
-         ("g /"   . counsel-git-grep)
-         :map evil-normal-state-map
-         (", f"   . evgeni-counsel-imenu)
-         ("K"     . evgeni-counsel-git-grep)
-         ("g P" . counsel-yank-pop)
-         :map evil-visual-state-map
-         ("K"     . evgeni-counsel-git-grep))
-  :config
-
-  (defun evgeni-counsel-find-file ()
-    (interactive)
-    (let ((completing-read-function 'completing-read-default
-                                    ;; (if (and (not (null (buffer-file-name)))
-                                    ;;          (file-remote-p (buffer-file-name)))
-                                    ;;     'completing-read-default
-                                    ;;   'ivy-completing-read)
-                                    ))
-      (call-interactively 'find-file)))
-
-  (setq counsel-git-cmd "git ls-files --cached --others --exclude-standard")
-  (setq counsel-git-grep-skip-counting-lines t)
-
-  (define-key counsel-describe-map (kbd "C-]") 'counsel-find-symbol)
-  (define-key counsel-git-grep-map (kbd "C-c C-c") 'ivy-occur)
-  (define-key ivy-occur-grep-mode-map (kbd "C-c C-c") 'wgrep-change-to-wgrep-mode)
-
-  (defun evgeni-counsel-git-grep ()
-    (interactive)
-    (counsel-git-grep nil (substring-no-properties
-                           (if (region-active-p)
-                               (buffer-substring (region-beginning) (region-end))
-                             (thing-at-point 'word)))))
-  (defun evgeni-counsel-imenu ()
-    (interactive)
-    (let ((imenu-default-goto-function 'evgeni-imenu-goto))
-      (call-interactively 'counsel-imenu)))
-  (defun evgeni-imenu-goto (&rest args)
-    (evil-set-jump)
-    (apply 'imenu-default-goto-function args))
-
-  ;; (defun counsel-git-hunks ()
-  ;;   "Find file in the current Git repository."
-  ;;   (interactive)
-  ;;   (setq counsel--git-dir (locate-dominating-file
-  ;;                           default-directory ".git"))
-  ;;   (ivy-set-prompt 'counsel-git-hunks counsel-prompt-function)
-  ;;   (if (null counsel--git-dir)
-  ;;       (error "Not in a git repository")
-  ;;     (setq counsel--git-dir (expand-file-name
-  ;;                             counsel--git-dir))
-  ;;     (let* ((default-directory counsel--git-dir)
-  ;;            (fname (buffer-file-name)) ;; TODO indirect clone buffer
-  ;;            (cands (split-string
-  ;;                    (shell-command-to-string (concat "git diff -U0 " (shell-quote-argument fname) " | grep -F '@@'"))
-  ;;                    "\n"
-  ;;                    t)))
-  ;;       (ivy-read "git hunks" cands
-  ;;                 :action #'counsel-git-hunks-action
-  ;;                 :update-fn 'counsel-git-hunks-udpate-fn
-  ;;                 :caller 'counsel-git-hunks))))
-
-  ;; (defun counsel-git-hunks-action (x)
-  ;;   (with-ivy-window
-  ;;     (when (string-match "^@@ -[0-9,]+ \\+\\([0-9]+\\)" x)
-  ;;       (let ((line (string-to-number (match-string-no-properties 1 x))))
-  ;;         (save-restriction
-  ;;           (widen)
-  ;;           (goto-char (point-min))
-  ;;           (forward-line (1- line))
-  ;;           (recenter-top-bottom))))))
-
-  ;; (defun counsel-git-hunks-udpate-fn ()
-  ;;   (counsel-git-hunks-action (ivy-state-current ivy-last)))
-
-  ;; (general-nmap "Uh" 'counsel-git-hunks)
-  )
-
-(use-package smex
-  :ensure t
-  :after counsel)
-
-(use-package imenu
-  :defer t
-  :config
-  (setq imenu-auto-rescan-maxout 600000))
-
-(use-package imenu-anywhere
-  :ensure t
-  :bind (:map evil-normal-state-map
-              (", F"  . imenu-anywhere)))
-
-(use-package elisp-mode
-  :defer t
-  :config
-  (define-key emacs-lisp-mode-map (kbd "C-c C-c") #'eval-defun)
-
-  (defun evgeni-elisp-eval ()
-    (interactive)
-    (if (region-active-p)
-        (call-interactively 'eval-region)
-      (call-interactively 'eval-buffer)))
-
-  (ex! "eval" 'evgeni-elisp-eval)
-
-  (modify-syntax-entry ?- "w" emacs-lisp-mode-syntax-table)
-  (modify-syntax-entry ?. "w" emacs-lisp-mode-syntax-table)
-  (modify-syntax-entry ?! "w" emacs-lisp-mode-syntax-table))
-
-(use-package cperl-mode
-  :disabled t
-  :commands cperl-mode
-  :mode (("\\.pl$"   . cperl-mode)
-         ("\\.pm$"   . cperl-mode)
-         ("\\.t$"    . cperl-mode)
-         ("\\.html$" . cperl-mode))
-  :init
-  (setq cperl-under-as-char t)
-  :config
-  (setq cperl-invalid-face nil
-        cperl-indent-subs-specially nil
-        cperl-indent-parens-as-block t
-        cperl-indent-subs-specially nil
-        cperl-close-paren-offset -3 ;; can't be set from .dir-locals.el?
-        cperl-indent-level 2
-        )
-
-  (unbind-key "{" cperl-mode-map)
-  (unbind-key "[" cperl-mode-map)
-  (unbind-key "(" cperl-mode-map)
-  (unbind-key "<" cperl-mode-map)
-  (unbind-key "}" cperl-mode-map)
-  (unbind-key "]" cperl-mode-map)
-  (unbind-key ")" cperl-mode-map)
-  (unbind-key ";" cperl-mode-map)
-  (unbind-key ":" cperl-mode-map)
-  (unbind-key "\C-j" cperl-mode-map)
-  (unbind-key "TAB" cperl-mode-map)
-
-  ;; (add-hook 'cperl-mode-hook #'(lambda ()
-  ;;                                (general-define-key :keymaps 'local :states 'normal "] d" 'evgeni-perl-dump)
-  ;;                                (set-face-background 'cperl-hash-face nil)
-  ;;                                (set-face-foreground 'cperl-hash-face nil)
-  ;;                                (set-face-background 'cperl-array-face nil)
-  ;;                                (set-face-foreground 'cperl-array-face nil)))
-  )
-
-(use-package intero
-  :ensure t
-  :commands intero-mode)
-
-(use-package whitespace
-  :config
-  (setq whitespace-style '(face tabs trailing))
-  (defun evgeni-show-trailing-whitespace () (setq show-trailing-whitespace t))
-  (add-hook 'prog-mode-hook 'evgeni-show-trailing-whitespace)
-  (set-face-attribute 'trailing-whitespace nil
-                      :background
-                      (face-attribute 'mode-line :background)))
-
-(use-package winner
-  :defer 5
-  :bind (:map evil-normal-state-map
-              ("z u" . winner-undo)
-              ("z C-r" . winner-redo))
-  :config
-  (winner-mode))
-
-(use-package undo-tree
-  :ensure t
-  :diminish undo-tree-mode
-  :config
-  (global-undo-tree-mode)
-  (setq undo-tree-visualizer-timestamps t)
-  (setq undo-tree-visualizer-diff t)
-  (ex! "undo-tree" 'undo-tree-visualize)
-  (setq undo-tree-history-directory-alist `((".*" . ,temporary-file-directory)))
-  ;; (setq undo-tree-auto-save-history t)
-  )
-
-(use-package perl-mode
-  :commands perl-mode
-  :mode (("\\.pl$"   . perl-mode)
-         ("\\.pm$"   . perl-mode)
-         ("\\.psgi$" . perl-mode)
-         ("\\.t$"    . perl-mode)
-         ("\\.html$" . perl-mode))
-  :load-path "extra-packages"
-  :config
-  (setq perl-indent-level 3 ;; 4
-        perl-continued-statement-offset 3 ;; t 4
-        perl-continued-brace-offset -3 ;; -4
-        perl-brace-offset 0
-        perl-brace-imaginary-offset 0
-        perl-label-offset -3 ;; -2
-        perl-indent-continued-arguments 0 ;; nil
-        perl-indent-parens-as-block t ;; nil
-        perl-tab-always-indent tab-always-indent
-        perl-tab-to-comment nil
-        perl-nochange "\f")
-
-  (set-face-underline 'font-lock-variable-name-face nil)
-
-  (defun evgeni-perl-dump ()
-    (interactive)
-    (let ((word (thing-at-point 'word)))
-      (save-excursion (end-of-line)
-                      (newline)
-                      (indent-according-to-mode)
-                      (insert (concat "use Data::Dump qw(pp); warn '" word ": ' . pp($" word ") . \"\\n\";")))))
-
-  (defun evgeni-define-perl-function ()
-    (interactive)
-    (let ((function-name-at-point (thing-at-point 'word)))
-      (end-of-defun)
-      (insert "\nsub " function-name-at-point " {\n}\n")
-      (evil-previous-line)
-      (evil-open-above 1)))
-
-  (evil-define-key 'normal perl-mode-map
-    (kbd "C-c f") 'evgeni-define-perl-function
-    (kbd "] d" ) 'evgeni-perl-dump)
-
-  (modify-syntax-entry ?_ "w" perl-mode-syntax-table)
-
-  (add-hook 'perl-mode-hook #'(lambda ()
-                                ;; taken from cperl-mode, used for beginning-of-defun / end-of-defun
-                                (setq defun-prompt-regexp
-                                      "^[ 	]*\\(\\(?:sub\\)\\(\\([ 	\n]\\|#[^\n]*\n\\)+\\(::[a-zA-Z_0-9:']+\\|[a-zA-Z_'][a-zA-Z_0-9:']*\\)\\)\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*\\(([^()]*)\\)\\)?\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*\\(:\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*\\(\\sw\\|_\\)+\\((\\(\\\\.\\|[^\\\\()]\\|([^\\\\()]*)\\)*)\\)?\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*:\\)?\\)+\\)\\)?\\|\\(BEGIN\\|UNITCHECK\\|CHECK\\|INIT\\|END\\|AUTOLOAD\\|DESTROY\\)\\)[ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*"))))
-
-(use-package eros
-  :ensure t
-  :commands (eros-eval-last-sexp eros-eval-defun)
-  :init
-  (define-key global-map [remap eval-last-sexp] 'eros-eval-last-sexp)
-  (define-key global-map [remap eval-defun] 'eros-eval-defun))
-
-(use-package markdown-mode
-  :ensure t
-  :defer-install t
-  :commands (markdown-mode gfm-mode)
-  :mode (("README\\.md\\'" . gfm-mode)
-         ("\\.md\\'" . markdown-mode)
-         ("\\.markdown\\'" . markdown-mode)))
-
-(use-package origami
-  :ensure t
-  :commands origami-mode)
-
-(use-package s
-  :ensure t
-  :defer t
-  :functions s-trim)
-
-(use-package haskell-mode
-  :mode "\\.hs\\'"
-  :defer-install t
-  :config
-  (setq haskell-indent-spaces 2)
-
-  ;; (defun evgeni-haskell-evil-auto-indent () (setq evil-auto-indent nil))
-  ;; (add-hook 'haskell-mode-hook 'evgeni-haskell-evil-auto-indent)
-
-  ;; hack to get saner "o" and "O"
-  (defun evgeni-haskell-evil-open-below ()
-    (interactive)
-    (evil-append-line nil)
-    (haskell-indentation-newline-and-indent))
-
-  (defun evgeni-haskell-evil-open-above ()
-    (interactive)
-    (evil-insert-line nil)
-    (save-excursion
-      (haskell-indentation-newline-and-indent)))
-
-  (evil-define-key 'normal haskell-mode-map
-    "o" 'evgeni-haskell-evil-open-below)
-  (evil-define-key 'normal haskell-mode-map
-    "O" 'evgeni-haskell-evil-open-above)
-
-  ;; (add-hook 'haskell-mode-hook 'turn-on-haskell-indentation) <- this one
-  (if (fboundp 'electric-indent-local-mode)
-      (electric-indent-local-mode -1))
-
-  (defun haskell-indentation-advice ()
-    (when (and (< 1 (line-number-at-pos))
-               (save-excursion
-                 (forward-line -1)
-                 (string= "" (string-trim-right (string-trim-left (buffer-substring (line-beginning-position) (line-end-position)))))))
-      (delete-region (line-beginning-position) (point))))
-
-  (advice-add 'haskell-indentation-newline-and-indent
-              :after 'haskell-indentation-advice)
-
-  (define-abbrev-table 'haskell-mode-abbrev-table
-    '(("undef" "undefined")))
-
-  (with-eval-after-load 'align
-    (add-to-list 'align-rules-list
-                 '(haskell-types
-                   (regexp . "\\(\\s-+\\)\\(::\\|∷\\)\\s-+")
-                   (modes . haskell-modes)))
-    (add-to-list 'align-rules-list
-                 '(haskell-assignment
-                   (regexp . "\\(\\s-+\\)=\\s-+")
-                   (modes . haskell-modes)))
-    (add-to-list 'align-rules-list
-                 '(haskell-arrows
-                   (regexp . "\\(\\s-+\\)\\(->\\|→\\)\\s-+")
-                   (modes . haskell-modes)))
-    (add-to-list 'align-rules-list
-                 '(haskell-left-arrows
-                   (regexp . "\\(\\s-+\\)\\(<-\\|←\\)\\s-+")
-                   (modes . haskell-modes))))
-
-  ;; ;; Make "RET" behaviour in REPL saner
-  ;; (evil-define-key 'insert haskell-interactive-mode-map
-  ;;   (kbd "RET") 'haskell-interactive-mode-return)
-  ;; (evil-define-key 'normal haskell-interactive-mode-map
-  ;;   (kbd "RET") 'haskell-interactive-mode-return)
-
-  ;; smart colon
-  (defun evgeni-haskell-smart-colon ()
-    (interactive)
-    (let ((func-name (evgeni-haskell-recent-func-name)))
-      (when func-name
-        (save-excursion
-          (progn
-            (move-end-of-line nil)
-            ;; (haskell-indentation-newline-and-indent)
-            (newline)
-            (insert func-name " = undefined")))
-        ))
-    (insert ":"))
-
-  (defconst evgeni-haskell-func-name-regex "[0-9A-Za-z']+")
-
-  (defun evgeni-haskell-recent-func-name ()
-    (interactive)
-    (when (looking-back
-           ;; (format "^[\t ]*\\(%s\\)[\t *]*:" evgeni-haskell-func-name-regex))
-           (format "^\\(%s\\)[\t *]*:" evgeni-haskell-func-name-regex))
-      (match-string-no-properties 1)))
-
-  (evil-define-key 'insert haskell-mode-map ":" 'evgeni-haskell-smart-colon))
-
-(use-package hindent
-  :ensure t
-  :after haskell-mode
-  :if (executable-find "hindent")
-  :init
-  (add-hook 'haskell-mode-hook 'hindent-mode))
-
-(use-package smartparens
-  :ensure t
-  :disabled t
-  :diminish smartparens-mode
-  :after prog-mode
-  :config
-
-  (setq sp-highlight-pair-overlay nil)
-  (setq sp-highlight-wrap-overlay nil)
-  (setq sp-highlight-wrap-tag-overlay nil)
-  (setq sp-show-pair-delay 0) ;; TODO not working in insert mode?
-
-  (require 'smartparens-config)
-  (show-smartparens-global-mode)
-  (add-hook 'perl-mode-hook #'smartparens-mode)
-  (add-hook 'emacs-lisp-mode-hook #'smartparens-mode)
-
-  (sp-pair "{" nil :post-handlers '(("||\n[i]" "RET")))
-  (sp-pair "[" nil :post-handlers '(("||\n[i]" "RET")))
-
-  (define-key emacs-lisp-mode-map (kbd "C-c <") 'sp-forward-slurp-sexp)
-  (define-key emacs-lisp-mode-map (kbd "C-c >") 'sp-forward-barf-sexp))
-
-(use-package paren
-  :defer 3
-  :config
-  (setq show-paren-style 'parenthesis
-        show-paren-delay 0)
-  (show-paren-mode 1))
-
-(use-package loccur
-  :ensure t
-  :bind (:map evil-normal-state-map
-              (", *" . loccur-current)
-              :map evil-visual-state-map
-              (", *" . loccur))
-  :config
-  (evil-define-minor-mode-key 'normal 'loccur-mode (kbd "q") 'loccur)
-  (evil-define-minor-mode-key 'normal 'loccur-mode (kbd "RET") 'loccur)
-  (evil-define-minor-mode-key 'normal 'loccur-mode (kbd "<escape>") 'loccur))
-
-(use-package ledger-mode
-  :ensure t
-  :commands ledger-mode)
-
-(use-package yasnippet
-  :disabled t
-  :ensure t
-  :demand t
-  ;; :diminish yas-minor-mode
-  :commands (yas-expand yas-minor-mode)
-  :mode ("/\\.emacs\\.d/snippets/" . snippet-mode)
-  :bind (("C-c y TAB" . yas-expand)
-         ("C-c y s"   . yas-insert-snippet)
-         ("C-c y v"   . yas-visit-snippet-file))
-  :config
-  (evil-ex-define-cmd "new-snippet" 'yas-new-snippet)
-  ;; from https://github.com/haskell/haskell-snippets
-  ;; (setq-default yas-prompt-functions '(yas-ido-prompt yas-dropdown-prompt))
-
-  ;; (yas-load-directory "~/.emacs.d/snippets/")
-  (yas-global-mode 1)
-
-  (bind-key "C-i" #'yas-next-field-or-maybe-expand yas-keymap))
-
-(use-package haskell-snippets
-  :disabled t
-  :ensure t)
-
-(use-package uniquify
-  :config
-  (setq uniquify-buffer-name-style 'forward)
-  (setq uniquify-separator "/")
-  (setq uniquify-after-kill-buffer-p t)     ; rename after killing uniquified
-  (setq uniquify-ignore-buffers-re "^\\*")) ; don't muck with special buffers
-
-(use-package evil-iedit-state
-  :ensure t
-  :functions evgeni-iedit-evil-search
-  :bind (:map evil-normal-state-map
-              (", m" . evil-iedit-state/iedit-mode)
-              :map evil-visual-state-map
-              (", m" . evil-iedit-state/iedit-mode))
-  :init
-  (setq iedit-use-symbol-boundaries nil)
-  (ex! "iedit" 'evgeni-iedit-evil-search)
-  (defun evgeni-iedit-evil-search ()
-    (interactive)
-    (unless (require 'evil-iedit-state nil t)
-      (error "evil-iedit-state isn't installed"))
-    (when iedit-mode
-      (iedit-cleanup))
-    (let* ((regexp (evil-ex-pattern-regex evil-ex-search-pattern))
-           (iedit-case-sensitive (not (evil-ex-pattern-ignore-case evil-ex-search-pattern))))
-      (when (zerop (length regexp))
-        (user-error "No last search"))
-      (iedit-start regexp (point-min) (point-max))
-      (cond ((not iedit-occurrences-overlays)
-             (message "No matches found for %s" regexp)
-             (iedit-done))
-            ((not (iedit-same-length))
-             (message "Matches are not the same length.")
-             (iedit-done))
-            (t
-             (evil-iedit-state)))))
-  :config
-  (define-key evil-iedit-state-map (kbd "TAB") 'iedit-toggle-selection)
-  (define-key evil-iedit-state-map (kbd "C-c f") 'iedit-restrict-function)
-  (define-key evil-iedit-state-map (kbd "C-c C-f") 'iedit-restrict-function)
-  (define-key evil-iedit-state-map (kbd "C-c C-l") 'iedit-restrict-current-line)
-  (define-key evil-iedit-state-map (kbd "C-c l") 'iedit-restrict-current-line)
-  (unbind-key "TAB" iedit-mode-keymap))
-
-(use-package beacon
-  :ensure t
-  :disabled t
-  :diminish beacon-mode
-  :defer 4
-  :config
-  ;; (setq beacon-color "#d7dfff")
-  (setq beacon-color (face-background 'region))
-  (setq beacon-overlay-priority 1)
-  ;; (setq beacon-blink-when-window-scrolls t)
-  ;; (setq beacon-blink-when-point-moves-horizontally 10)
-  ;; (setq beacon-color 0.9)
-  (beacon-mode))
-
-(use-package regex-tool
-  :ensure t
-  :commands regex-tool)
-
-(use-package quickrun
-  :ensure t
-  :disabled t
-  :commands (quickrun
-             quickrun-region
-             quickrun-with-arg
-             quickrun-shell
-             quickrun-compile-only
-             quickrun-replace-region)
-  :init
-  (setq quickrun-focus-p nil)
-  (ex! "quickrun" 'quickrun)
-  (ex! "quickrun-region" 'quickrun-region)
-  (ex! "quickrun-replace-region" 'quickrun-replace-region))
-
-(use-package macrostep
-  :ensure t
-  :bind (:map emacs-lisp-mode-map
-              ("C-c e" . macrostep-expand)))
-
-(use-package yaml-mode
-  :ensure t
-  :defer-install t
-  :mode (("\\.yml$" . yaml-mode))
-  :config
-  (setq yaml-imenu-generic-expression
-        '((nil  "^[ ]\\{0,2\\}\\(:?[a-zA-Z_-]+\\):"          1)))
-  (modify-syntax-entry ?_ "w" yaml-mode-syntax-table)
-  (modify-syntax-entry ?- "w" yaml-mode-syntax-table)
-  (modify-syntax-entry ?$ "." yaml-mode-syntax-table))
-
-(use-package package-lint
-  :ensure t
-  :commands package-lint-current-buffer)
-
-(use-package multiple-cursors
-  :load-path "~/dev/multiple-cursors.el"
-  :commands mc/edit-lines
-  :disabled t
-  :config
-  (evil-ex-define-cmd "mc[cursors]" 'mc/edit-lines)
-
-  ;; (global-set-key (kbd "C->") 'mc/mark-next-like-this)
-  ;; (global-set-key (kbd "C-<") 'mc/mark-previous-like-this)
-  ;; (global-set-key (kbd "C-c C-<") 'mc/mark-all-like-this)
-  ;; mc/mark-next-like-this-word
-
-  )
-
-(use-package idle-highlight-mode
-  :disabled t
-  :commands idle-highlight-mode
-  :ensure t
-  :bind (:map evil-normal-state-map
-              ("C-c o h" . idle-highlight-mode)))
-
-(use-package repl-toggle
-  :disabled t
-  :ensure t
-  :bind (:map evil-normal-state-map
-              ("C-c C-z" . rtog/toggle-repl))
-  :config
-  (setq rtog/fullscreen t)
-  :init
-  (setq rtog/mode-repl-alist '((emacs-lisp-mode . ielm))))
-
-(use-package js
-  :ensure t
-  :mode ("\\.js\\'" . js-mode)
-  :config
-  (modify-syntax-entry ?_ "w" js-mode-syntax-table))
-
-(use-package rjsx-mode
-  :ensure t
-  :defer-install t
-  :mode ("\\.jsx\\'" . rjsx-mode))
-
-(use-package css-mode
-  :ensure t
-  :defer-install t
-  :mode ("\\.css\\'" . css-mode)
-  :config
-  (modify-syntax-entry ?- "w" css-mode-syntax-table))
-
-(use-package tramp-sh
-  :defer t
-  :config
-  (setq tramp-default-method "ssh"))
-
-(use-package docker-tramp
-  :ensure t
-  :after tramp
-  :config
-  (setq docker-tramp-use-names t))
-
-(use-package restclient
-  :ensure t
-  :mode ("\\.restclient\\'" . restclient-mode))
-
-(use-package dockerfile-mode
-  :ensure t
-  :defer-install t
-  :mode (".*Dockerfile.*" . dockerfile-mode)
-  :config
-  (modify-syntax-entry ?$ "." dockerfile-mode-syntax-table))
-
-(use-package suggest
-  :ensure t
-  :commands suggest)
-
-(use-package conf-mode
-  :defer t
-  :config
-  (modify-syntax-entry ?_ "w" conf-mode-syntax-table))
-
-(use-package nginx-mode
-  :ensure t
-  :defer-install t
-  :mode ("nginx.*\\.conf\\'" . nginx-mode)
-  :config
-  (setq nginx-indent-level 3)
-
-  ;; Auto indent on }
-  (add-hook 'nginx-mode-hook
-            (lambda ()
-              (setq-local
-               electric-indent-chars (cons ?} (and (boundp 'electric-indent-chars)
-                                                   electric-indent-chars))))))
-
-(use-package edebug
-  :defer t
-  :config
-  (add-hook 'edebug-mode-hook 'evil-normalize-keymaps))
-
-(use-package projectile
-  :ensure t
-  :defer 3
-  :bind (:map evil-motion-state-map
-              ("g SPC"   . evgeni-projectile-find-file))
-  :config
-  ;; TODO switch to using SPC only, no g-SPC
-  ;; should then be able to switch to different kinds of filtering
-  ;; (filter buffers, projects, projects files)
-  (defun evgeni-projectile-find-file ()
-    (interactive)
-    (if (projectile-project-p)
-        (projectile-find-file)
-      (projectile-switch-project)))
-
-  (setq projectile-switch-project-action (lambda () (dired ".")))
-  (setq projectile-mode-line (format " [%s]" (projectile-project-name)))
-  (setq projectile-completion-system 'ivy)
-  (projectile-global-mode))
-
-(use-package exec-path-from-shell
-  :if (memq window-system '(mac ns))
-  :defer 1
-  :ensure t
-  :config
-  (exec-path-from-shell-initialize))
-
-(use-package lua-mode
-  :ensure t
-  :defer-install t
-  :mode "\\.lua\\'")
-
-(use-package edit-indirect
-  :ensure t
-  :defer t
-  :defer-install t)
-
-(use-package sh-script
-  :mode (("\\.sh$" . sh-mode))
-  :config
-
-  ;; indent after }
-  (add-hook 'sh-mode-hook
-            (lambda ()
-              (setq-local
-               electric-indent-chars (cons ?} (and (boundp 'electric-indent-chars)
-                                                   electric-indent-chars)))))
-  ;; indent after done, fi
-  (define-abbrev-table 'sh-mode-abbrev-table
-    '(("done" "done" indent-according-to-mode :system t)
-      ("fi"  "fi"    indent-according-to-mode :system t))))
-
-(use-package try
-  :ensure t
-  :commands try)
-
-(use-package zygospore
-  :ensure t
-  :commands zygospore-toggle-delete-other-windows
-  :init
-  (ex! "only" 'zygospore-toggle-delete-other-windows))
-
-(use-package hl-todo
-  :ensure t
-  :defer 3
-  :config
-  (add-hook 'prog-mode-hook 'hl-todo-mode))
-
-(use-package rust-mode
-  :ensure t
-  :defer-install t
-  :mode "\\.rs\\'")
-
-(use-package toml-mode
-  :ensure t
-  :defer-install t
-  :mode "\\.toml\\'")
-
-(use-package jinja2-mode
-  :ensure t
-  :defer-install t
-  :mode (("\\.j2$"   . jinja2-mode)
-         ("\\.jinja2$"   . jinja2-mode))
-  :config
-  (modify-syntax-entry ?_ "w" jinja2-mode-syntax-table))
-
-(use-package diff-hl
-  :ensure t
-  :defer 2
-  :init
-  (setq diff-hl-margin-symbols-alist '((insert . " ") (delete . " ") (change . " ") (unknown . "?") (ignored . "i")))
-  :config
-  (global-diff-hl-mode)
-  ;; (add-hook 'prog-mode-hook 'turn-on-diff-hl-mode)
-  ;; (add-hook 'text-mode-hook 'turn-on-diff-hl-mode)
-  (unless (window-system)
-    (diff-hl-margin-mode))
-  ;; (diff-hl-flydiff-mode)
-
-  (add-hook 'magit-post-refresh-hook 'diff-hl-magit-post-refresh)
-
-  (evil-define-minor-mode-key 'normal 'diff-hl-mode
-    "]c" 'diff-hl-next-hunk
-    "[c" 'diff-hl-previous-hunk
-    "Ux" 'diff-hl-revert-hunk))
-
-(use-package ibuffer
-  :defer t
-  :init
-  (evil-ex-define-cmd "ls" 'ibuffer))
-
-(use-package term
-  :defer t
-  :init
-  (ex! "sh" 'evgeni-ansi-term)
-  :bind* (("C-c C-z" . evgeni-ansi-term))
-  :config
-  (evil-set-initial-state 'term-mode 'emacs)
-
-  (defun evgeni-ansi-term ()
-    (interactive)
-    (cond
-     ((string-equal (buffer-name) "*ansi-term*")
-      (delete-window))
-     ((get-buffer "*ansi-term*")
-      (switch-to-buffer-other-window "*ansi-term*"))
-     (t
-      (progn
-        (split-window-vertically)
-        (other-window 1)
-        (ansi-term (getenv "SHELL")))))))
-
-(use-package elec-pair
-  :defer t
-  :init
-  (add-hook 'prog-mode-hook 'electric-pair-local-mode))
+  (define-key evil-visual-state-map (kbd ".") 'evgeni-visual-dot-repeat)
+
+  (use-package hippie-exp
+    :disabled t
+    :bind (:map evil-insert-state-map
+                ("TAB" . evgeni-tab))
+    :config
+
+    (setq hippie-expand-try-functions-list '(try-expand-dabbrev-visible
+                                             try-expand-dabbrev
+                                             try-expand-dabbrev-all-buffers
+                                             try-expand-dabbrev-from-kill
+                                             try-expand-tag))
+
+    (defun evgeni-tab ()
+      (interactive)
+      (if (looking-at "\\_>") (hippie-expand nil) (indent-for-tab-command)))
+
+    (defun my-yas-hippie-try-expand (first-time)
+      (if (not first-time)
+          (let ((yas-fallback-behavior 'return-nil))
+            (yas-expand))
+        (undo 1)
+        nil))
+
+    (defun he-tag-beg ()
+      (save-excursion
+        (backward-word 1)
+        (point)))
+
+    (defun tags-complete-tag (string predicate what)
+      (save-excursion
+        ;; If we need to ask for the tag table, allow that.
+        (if (eq what t)
+            (all-completions string (tags-completion-table) predicate)
+          (try-completion string (tags-completion-table) predicate))))
+
+    (defun try-expand-tag (old)
+      (when tags-table-list
+        (unless old
+          (he-init-string (he-tag-beg) (point))
+          (setq he-expand-list
+                (sort (all-completions he-search-string 'tags-complete-tag)
+                      'string-lessp)))
+        (while (and he-expand-list
+                    (he-string-member (car he-expand-list) he-tried-table))
+          (setq he-expand-list (cdr he-expand-list)))
+        (if (null he-expand-list)
+            (progn
+              (when old (he-reset-string))
+              ())
+          (he-substitute-string (car he-expand-list))
+          (setq he-expand-list (cdr he-expand-list))
+          t)))
+
+    (defun evgeni-hippie-expand-yasnippet ()
+      (interactive)
+      (let ((hippie-expand-try-functions-list '(my-yas-hippie-try-expand)))
+        (hippie-expand nil)))
+    (define-key evil-insert-state-map (kbd "C-x C-y") 'evgeni-hippie-expand-yasnippet)
+    (define-key evil-insert-state-map (kbd "C-x TAB") 'evgeni-hippie-expand-yasnippet))
+
+  (use-package ace-window
+    :ensure t
+    :bind (:map evil-normal-state-map
+                ("C-w C-w" . ace-window)))
+
+  (use-package avy
+    :ensure t
+    :defer 3
+    :bind (:map evil-motion-state-map
+                ("gh" . avy-goto-char-timer)
+                ("gY" . avy-copy-region)
+                ("gyy" . avy-copy-line))
+    :config
+    (custom-set-faces
+     '(avy-lead-face-0 ((t (:inherit 'highlight))))
+     '(avy-lead-face ((t (:inherit 'highlight)))))
+
+    ;; TODO
+    (evil-define-text-object evgeni--avy-line (count &optional beg end type)
+      (save-excursion
+        (let* ((avy-all-windows nil)
+               (beg (avy--line))
+               (end (save-excursion
+                      (goto-char beg)
+                      (move-end-of-line count)
+                      (point))))
+          (evil-range beg end 'line :expanded t))))
+
+    (evil-define-text-object evgeni--avy-region (count &optional beg end type)
+      (save-excursion
+        (let* ((beg (save-selected-window
+                      (avy--line count)))
+               (end (avy--line count)))
+          (evil-range beg end 'line :expanded t))))
+
+    (define-key evil-inner-text-objects-map "l" 'evgeni--avy-line)
+    (define-key evil-outer-text-objects-map "l" 'evgeni--avy-region))
+
+  (use-package evil-surround
+    :ensure t
+    :commands
+    (evil-surround-edit
+     evil-Surround-edit
+     evil-surround-region
+     evil-Surround-region)
+    :init
+    (evil-define-key 'operator global-map "s" 'evil-surround-edit)
+    (evil-define-key 'operator global-map "S" 'evil-Surround-edit)
+    (evil-define-key 'visual global-map "S" 'evil-surround-region)
+    (evil-define-key 'visual global-map "gS" 'evil-Surround-region))
+
+  (use-package evil-lion
+    :ensure t
+    :bind (:map evil-normal-state-map
+                ("g l " . evil-lion-left)
+                ("g L " . evil-lion-right)
+                :map evil-visual-state-map
+                ("g l " . evil-lion-left)
+                ("g L " . evil-lion-right)))
+
+  (use-package evil-expat
+    :load-path "~/dev/evil-expat"
+    :defer 1)
+
+  (use-package evil-commentary
+    :ensure t
+    :diminish 'evil-commentary-mode
+    :bind (:map evil-normal-state-map
+                ("gc" . evil-commentary))
+
+    :config
+    ;; define `gcu' to uncomment
+    (define-key evil-operator-state-map "u" 'evgeni-commentary-uncomment-adjacent)
+
+    (defun evgeni-commentary-uncomment-adjacent ()
+      (interactive)
+      (message "hello3")
+      (when (and (eq evil-this-operator 'evil-commentary))
+        (setq evil-inhibit-operator t)
+
+        (let ((beg (evil-commentary/ensure-in-comment-block (point) (point) nil))
+              (end (evil-commentary/ensure-in-comment-block (point) (point) t)))
+          (message "%s %s" beg end)
+          (evil-commentary (car beg) (cadr end)))))
+
+    ;; copied from https://github.com/linktohack/evil-commentary/issues/9
+    (defun evil-commentary/ensure-in-comment-block (beg end forward)
+      (save-excursion
+        (beginning-of-line)
+        (if (not (or (looking-at-p (concat "\\s\\*" (regexp-quote comment-start)))
+                     (looking-at-p (concat "\\s\\*$"))))
+            (list beg end)
+          (let ((saved-beg (point))
+                (saved-end (point-at-eol)))
+            (catch 'bound
+              (when (<= saved-beg (point-min))
+                (throw 'bound (list saved-beg end)))
+              (when (>= saved-end (point-max))
+                (throw 'bound (list beg saved-end)))
+              (if forward
+                  (next-line)
+                (previous-line))
+              (apply #'evil-commentary/ensure-in-comment-block
+                     (if forward
+                         (list beg saved-end forward)
+                       (list saved-beg end forward)))))))))
+
+  (use-package evil-exchange
+    :ensure t
+    :bind (:map evil-normal-state-map
+                ("gx" . evil-exchange)
+                ("gX" . evil-exchange-cancel)))
+
+  (use-package evil-replace-with-register
+    :ensure t
+    :bind (:map evil-normal-state-map
+                ("gr" . evil-replace-with-register)
+                :map evil-visual-state-map
+                ("gr" . evil-replace-with-register))
+    :config
+    (setq evil-replace-with-register-indent t))
+
+  (use-package evil-visualstar
+    :ensure t
+    :bind (:map evil-visual-state-map
+                ("*" . evil-visualstar/begin-search-forward)
+                ("#" . evil-visualstar/begin-search-backward)))
+
+  (use-package evil-goggles
+    :defer 1
+    :ensure t
+    :load-path "~/dev/evil-goggles"
+    :config
+
+    (setq evil-goggles-duration 0.100)
+    (setq evil-goggles-pulse (display-graphic-p))
+    (evil-goggles-mode)
+    (evil-goggles-use-diff-faces)
+    ;; (evil-goggles-use-magit-faces)
+    )
+
+  (use-package recentf
+    :defer 1
+    :init
+    (setq recentf-max-saved-items 500)
+    (setq recentf-exclude '("/tmp/" "/ssh:"))
+    (setq recentf-auto-cleanup 'never)
+    :config
+    (recentf-mode))
+
+  (use-package evil-indent-plus ;; indent object
+    :ensure t
+    :defer 4
+    :config (evil-indent-plus-default-bindings)
+    ;; temprorary fix until this is addressed https://github.com/TheBB/evil-indent-plus/pull/4
+    (defun evil-indent-plus--linify (range)
+      (let ((nbeg (save-excursion (goto-char (cl-first range)) (point-at-bol)))
+            (nend (save-excursion (goto-char (cl-second range)) (+ (point-at-eol) (if (evil-visual-state-p) 0 1)))))
+        (evil-range nbeg nend 'line))))
+
+  (use-package saveplace
+    :config
+    (save-place-mode))
+
+  (use-package savehist
+    :init
+    (setq ;; savehist-file (concat spacemacs-cache-directory "savehist")
+     enable-recursive-minibuffers t ; Allow commands in minibuffers
+     history-length 1000
+     savehist-additional-variables '(mark-ring
+                                     global-mark-ring
+                                     search-ring
+                                     regexp-search-ring
+                                     extended-command-history)
+     savehist-autosave-interval 60)
+    (savehist-mode t))
+
+  (use-package dired
+    :bind (:map evil-normal-state-map
+                ("-" . evgeni-dired-current-dir))
+    :config
+    (unbind-key "SPC" dired-mode-map)
+    (setq dired-listing-switches "-alh"
+          dired-auto-revert-buffer t
+          dired-dwim-target t)
+    (add-hook 'dired-mode-hook 'dired-hide-details-mode)
+    (evil-define-key 'normal dired-mode-map
+      "n" (lookup-key evil-motion-state-map "n")
+      "g" (lookup-key evil-motion-state-map "g")
+      "gr" 'revert-buffer)
+
+    (defun evgeni-dired-current-dir ()
+      (interactive)
+      (dired ".")))
+
+  (use-package dired-single
+    :ensure t
+    :after dired
+    :config
+    (define-key dired-mode-map [return] 'dired-single-buffer)
+    (define-key dired-mode-map (kbd "RET") 'dired-single-buffer)
+    (define-key dired-mode-map [mouse-1] 'dired-single-buffer-mouse)
+    (define-key dired-mode-map "-" (lambda nil (interactive) (dired-single-buffer ".."))))
+
+  (use-package wdired
+    :commands wdired-change-to-wdired-mode
+    :init
+    (ex! "wdired" 'wdired-change-to-wdired-mode))
+
+  (use-package magit
+    :ensure t
+    :bind (:map evil-normal-state-map
+                ("U U" . magit-status)
+                ("U w" . magit-stage-file)
+                ("U d" . evgeni-magit-diff-unstaged-buffer-file)
+                ("U L" . magit-log-head)
+                ("U l" . magit-log-buffer-file)
+                ("U r" . magit-file-checkout)
+                ("U r" . evgeni-magit-file-checkout)
+                ("U c" . magit-commit-popup)
+                ("U b" . magit-branch-popup)
+                ("U z" . magit-stash-popup)
+                ("U p" . magit-push-popup)
+                ("U f" . magit-fetch-popup)
+                ("U F" . magit-pull-popup)
+                ("U B" . magit-checkout))
+    :commands (magit-find-file)
+    :init
+    (ex! "gedit" 'magit-find-file)
+    :config
+
+    (defun evgeni-magit-diff-unstaged-buffer-file ()
+      (interactive)
+      (magit-diff-unstaged nil (list (magit-file-relative-name))))
+
+    (defun evgeni-magit-file-checkout ()
+      (interactive)
+      (magit-file-checkout "HEAD" (magit-file-relative-name)))
+
+    (setq magit-display-buffer-function 'magit-display-buffer-fullframe-status-v1)
+    (setq magit-diff-refine-hunk 't)
+
+    (remove-hook 'magit-status-sections-hook 'magit-insert-stashes) ;; don't show stashes
+    (magit-add-section-hook 'magit-status-sections-hook
+                            'magit-insert-untracked-files 'magit-insert-staged-changes 1) ;; lower untracked
+
+    (unbind-key "C-h" magit-mode-map)
+    (unbind-key "C-j" magit-mode-map)
+    (unbind-key "C-k" magit-mode-map)
+    (unbind-key "C-l" magit-mode-map)
+    (unbind-key "SPC" magit-status-mode-map)
+
+    (evil-define-key 'insert git-commit-mode-map
+      (kbd "C-x C-x") 'evgeni-insert-ticket-number-from-git-branch
+      (kbd "C-x x") 'evgeni-insert-ticket-number-from-git-branch)
+
+    (defun evgeni-insert-ticket-number-from-git-branch ()
+      (interactive)
+      (let ((number-from-branch
+             (let ((str (shell-command-to-string "git rev-parse --abbrev-ref HEAD")))
+               (when (string-match "\\([0-9]+\\)" str)
+                 (match-string-no-properties 0 str)))))
+        (when number-from-branch
+          (insert number-from-branch))))
+
+    (add-hook 'git-commit-mode-hook 'flyspell-mode))
+
+  (use-package evil-magit
+    :ensure t
+    :after magit
+    :init
+    (setq evil-magit-want-horizontal-movement t))
+
+  (use-package smerge-mode
+    :defer t
+    :config
+    (evil-define-minor-mode-key 'normal 'smerge-mode (kbd "] n") 'smerge-next)
+    (evil-define-minor-mode-key 'normal 'smerge-mode (kbd "[ n") 'smerge-prev)
+    (evil-define-minor-mode-key 'normal 'smerge-mode (kbd "C-c C-c") 'smerge-keep-current)
+    (evil-define-minor-mode-key 'normal 'smerge-mode (kbd "C-c C-k") 'smerge-kill-current)
+    )
+
+  (use-package vdiff
+    :ensure t
+    :defer t
+    :init
+    (ex! "diff-visible-buffers" (lambda ()
+                                  (interactive)
+                                  (let ((bufs (mapcar 'window-buffer (window-list)))
+                                        (vdiff-2way-layout-function (lambda (&rest _args) nil)))
+                                    (cond
+                                     ((eq (length bufs) 2)
+                                      (apply 'vdiff-buffers bufs))
+                                     ((eq (length bufs) 3)
+                                      (apply 'vdiff-buffers3 bufs))
+                                     (t
+                                      (user-error "Expected 2 or 3 buffers, got %s" (length bufs)))))))
+
+    (evil-define-minor-mode-key 'normal 'vdiff-mode "]c" 'vdiff-next-hunk)
+    (evil-define-minor-mode-key 'normal 'vdiff-mode "[c" 'vdiff-previous-hunk)
+    (evil-define-minor-mode-key 'motion 'vdiff-mode "go" 'vdiff-receive-changes)
+    (evil-define-minor-mode-key 'motion 'vdiff-mode "gp" 'vdiff-send-changes)
+    (evil-define-minor-mode-key 'normal 'vdiff-mode "q" 'evgeni-vdiff-close-if-readonly)
+
+    :config
+    (setq vdiff-auto-refine t)
+    (define-key vdiff-mode-map (kbd "C-c") vdiff-mode-prefix-map)
+
+    (defun evgeni-vdiff-close-if-readonly ()
+      (interactive)
+      (if buffer-read-only
+          (vdiff-quit)
+        (call-interactively 'evil-record-macro))))
+
+  (use-package vdiff-magit
+    :ensure t
+    :after magit
+    :init
+    (ex! "gdiff" 'vdiff-magit-show-unstaged)
+    :commands vdiff-magit-show-unstaged
+    :bind (:map evil-normal-state-map
+                ("U D" . vdiff-magit-popup))
+    :config
+    (setq vdiff-magit-stage-is-2way nil) ;; Only use two buffers (working file and index) for vdiff-magit-stage
+    (define-key magit-mode-map "e" 'vdiff-magit-dwim)
+    (define-key magit-mode-map "E" 'vdiff-magit-popup)
+    (setcdr (assoc ?e (plist-get magit-dispatch-popup :actions))
+            '("vdiff dwim" 'vdiff-magit-dwim))
+    (setcdr (assoc ?E (plist-get magit-dispatch-popup :actions))
+            '("vdiff popup" 'vdiff-magit-popup)))
+
+  (use-package git-timemachine
+    :ensure t
+    :defer t
+    :init
+    (ex! "timemachine" 'git-timemachine)
+    (ex! "timemachine-switch-branch" 'git-timemachine-switch-branch))
+
+  (use-package git-gutter+
+    :ensure t
+    :disabled t
+    :commands git-gutter+-mode
+    :init
+    (add-hook 'prog-mode-hook 'git-gutter+-mode)
+    (add-hook 'text-mode-hook 'git-gutter+-mode)
+    (add-hook 'conf-mode-hook 'git-gutter+-mode)
+    :config
+    (evil-define-minor-mode-key 'normal 'git-gutter+-mode
+      "]c" 'git-gutter+-next-hunk
+      "[c" 'git-gutter+-previous-hunk
+      "Us" 'evgeni-stage-hunk
+      ;; "Ux" 'git-gutter+-revert-hunks
+      "Ux" 'evgeni-revert-hunk
+      "U?" 'git-gutter+-show-hunk-inline-at-point)
+    (evil-define-minor-mode-key 'visual 'git-gutter+-mode
+      "Us" 'git-gutter+-stage-hunks)
+
+    (defun evgeni-stage-hunk ()
+      (interactive)
+      (-when-let (diffinfo (git-gutter+-diffinfo-at-point))
+                 (let ((diff (with-temp-buffer
+                               (insert (plist-get diffinfo :content) "\n")
+                               (diff-mode)
+                               ;; Force-fontify the invisible temp buffer
+                               (font-lock-default-function 'diff-mode)
+                               (font-lock-default-fontify-buffer)
+                               (buffer-string))))
+                   (momentary-string-display diff (point-at-bol) nil "Stage hunk?")
+
+                   (when (eq (read-char) ?y)
+                     (git-gutter+-stage-hunks)))))
+
+    (defun evgeni-revert-hunk ()
+      (interactive)
+      (-when-let (diffinfo (git-gutter+-diffinfo-at-point))
+                 (let ((diff (with-temp-buffer
+                               (insert (plist-get diffinfo :content) "\n")
+                               (diff-mode)
+                               ;; Force-fontify the invisible temp buffer
+                               (font-lock-default-function 'diff-mode)
+                               (font-lock-default-fontify-buffer)
+                               (buffer-string))))
+                   (momentary-string-display diff (point-at-bol) nil "Revert hunk?")
+
+                   (when (eq (read-char) ?y)
+                     (git-gutter+-do-revert-hunk diffinfo))))))
+
+  (use-package flycheck
+    :ensure t
+    :bind (:map evil-normal-state-map
+                ( "C-c o f" . flycheck-mode))
+    :config
+    (setq flycheck-check-syntax-automatically '(mode-enabled save))
+    (setq-default flycheck-disabled-checkers '(perl-perlcritic)))
+
+  ;; TODO - company through hippie exp only https://github.com/jwiegley/dot-emacs/blob/master/init.el#L1355
+  (use-package company
+    :disabled t
+    :ensure t
+    :commands company-mode
+    ;; :general
+    ;; (general-imap "C-x C-f" 'company-files)
+    ;; (general-imap "C-x C-]" 'company-etags)
+    ;; (general-imap "C-]" 'company-etags)
+    :init
+    (add-hook 'prog-mode-hook 'company-mode)
+    (setf company-idle-delay 0.3
+
+          company-minimum-prefix-length 2
+          company-show-numbers t
+          company-selection-wrap-around t
+          company-quickhelp-delay nil
+          company-tooltip-limit 10
+          company-tooltip-align-annotations t
+          company-require-match 'never
+
+          company-frontends
+          '(company-pseudo-tooltip-unless-just-one-frontend
+            company-preview-frontend
+            company-echo-metadata-frontend)
+
+          company-backends (list (list #'company-capf
+                                       ;; #'company-dabbrev-code
+                                       #'company-dabbrev
+                                       #'company-keywords)
+                                 (list #'company-dabbrev-code
+                                       #'company-keywords)
+                                 #'company-files
+                                 #'company-dabbrev)
+
+
+          )
+    :config
+
+    (defadvice company-pseudo-tooltip-unless-just-one-frontend
+        (around only-show-tooltip-when-invoked activate)
+      (when (company-explicit-action-p)
+        ad-do-it))
+
+    (unbind-key "C-w" company-active-map)
+    (define-key company-active-map (kbd "C-n") 'company-select-next)
+    (define-key company-active-map (kbd "C-p") 'company-select-previous)
+    ;; (general-imap "TAB" (lambda () (interactive)
+    ;;                       (if (looking-at "\\_>")
+    ;;                           (company-complete-common)
+    ;;                         (indent-according-to-mode))))
+    (global-company-mode t))
+
+  (use-package company-dabbrev
+    :disabled t
+    :after company
+    :init
+    (setf
+     company-dabbrev-ignore-case nil
+     company-dabbrev-ignore-invisible t
+     company-dabbrev-downcase nil))
+
+  (use-package company-dabbrev-code
+    :disabled t
+    :after company
+    :config
+    (setq company-dabbrev-code-other-buffers t)
+    (setq company-dabbrev-code-ignore-case t))
+
+  (use-package company-keywords
+    :disabled t
+    :after company
+    :config
+    (add-to-list
+     'company-keywords-alist
+     '(haskell-mode
+       "undefined" "as" "case" "ccall" "class" "contained" "data" "default"
+       "deriving" "do" "else" "error" "export" "family" "foreign" "hiding"
+       "if" "import" "in" "infix" "infixl" "infixr" "instance" "let"
+       "module" "newtype" "of" "qualified" "safe" "stdcall" "then" "trace"
+       "type" "undefined" "unsafe" "where")))
+
+  (use-package org
+    :mode (("\\.org$"   . org-mode))
+    :defer t
+    :ensure t
+    :config
+    (org-babel-do-load-languages
+     'org-babel-load-languages '((shell . t)))
+
+    (evil-ex-define-cmd "cap[ture]" 'org-capture)
+
+    (setq org-confirm-babel-evaluate nil)
+
+    (evil-define-key '(normal insert) org-mode-map
+      (kbd "TAB") 'org-cycle)
+
+    (font-lock-add-keywords 'org-mode
+                            '(("^ +\\([-*]\\) "
+                               (0 (prog1 () (compose-region (match-beginning 1) (match-end 1) "•")))))))
+
+  (use-package evil-org
+    :ensure t
+    :after org
+    :config
+    (add-hook 'org-mode-hook 'evil-org-mode)
+    (add-hook 'org-mode-hook (lambda ()
+                               (evil-org-mode)
+                               (evil-org-set-key-theme '(operators)))))
+  (use-package org-bullets
+    :ensure t
+    :after org
+    :config
+    (add-hook 'org-mode-hook (lambda () (org-bullets-mode 1))))
+
+  (use-package move-text
+    :ensure t
+    :bind (:map evil-normal-state-map
+                ("] e" . evgeni-move-text-line-up )
+                ("[ e" . evgeni-move-text-line-down ))
+    :config
+    (defun evgeni-move-text-line-up (count)
+      (interactive "p")
+      (let ((count (or count 1)))
+        (dotimes (i count)
+          (move-text-line-down))))
+
+    (defun evgeni-move-text-line-down (count)
+      (interactive "p")
+      (let ((count (or count 1)))
+        (dotimes (i count)
+          (move-text-line-up)))))
+
+  (use-package xref
+    :bind (:map evil-normal-state-map
+                ("C-]" . xref-find-definitions)
+                ("g C-]" . xref-find-definitions)
+                ("C-w C-]" . xref-find-definitions-other-window))
+    :config
+    (ex! "tag" (lambda ()
+                 (interactive)
+                 ;; make `xref-find-definitions prompt for a tag
+                 (let ((current-prefix-arg '(4)))
+                   (call-interactively 'xref-find-definitions))))
+    (evil-define-key 'normal xref--xref-buffer-mode-map "q" 'delete-window
+      "C-n" 'xref-next-line
+      "C-p" 'xref-prev-line))
+
+  (use-package abbrev
+    :defer t
+    :diminish 'abbrev-mode
+    :init
+    (setq-default abbrev-mode t))
+
+  (use-package narrow
+    :defer t
+    :init
+    (ex! "nar[row]" 'evgeni-narrow-or-widen)
+    (evil-define-command evgeni-narrow-or-widen (bang begin end)
+      (interactive "<!><r>")
+      (let ((buf (if bang (clone-indirect-buffer nil nil) (current-buffer))))
+        (with-current-buffer buf
+          (cond ((region-active-p) (narrow-to-region begin end))
+                ((buffer-narrowed-p) (if (buffer-base-buffer)
+                                         (kill-buffer) ;; wipe out indirect buffer
+                                       (widen)))
+                (t (narrow-to-defun))))
+        (switch-to-buffer buf))))
+
+  (use-package grep
+    :commands grep-mode
+    :config
+    (unbind-key "h" grep-mode-map)
+    (unbind-key "n" grep-mode-map)
+    ;; TODO these aren't working
+    ;; (define-key grep-mode-map "C-p" 'previous-error-no-select)
+    ;; (define-key grep-mode-map "C-n" 'next-error-no-select)
+    )
+
+  (use-package wgrep
+    :ensure t
+    :commands wgrep-change-to-wgrep-mode
+    :init
+    (setq wgrep-auto-save-buffer t)
+    (ex! "wgrep" 'wgrep-change-to-wgrep-mode)
+    (ex! "wgrep-finish" 'wgrep-finish-edit)
+    :config
+    (custom-set-faces
+     '(wgrep-face ((t (:inherit 'underline)))) ;; *Face used for the changed text in the grep buffer.
+     '(wgrep-file-face ((t (:inherit 'underline)))) ;; *Face used for the changed text in the file buffer.
+     '(wgrep-delete-face ((t (:inherit 'isearch-fail)))))) ;; *Face used for the deleted whole line in the grep buffer.
+
+  (use-package linum
+    :bind (:map evil-normal-state-map
+                ( "C-c o n" . linum-mode))
+    :config
+    (setq linum-format "%d "))
+
+  (use-package compile
+    :defer 3
+    :config
+    (setq compilation-scroll-output 'next-error)
+    (setq compilation-read-command nil)
+    (setq compilation-ask-about-save nil))
+
+  (use-package smart-compile
+    :ensure t
+    :commands smart-compile
+    :bind (:map evil-normal-state-map
+                ("g m" . smart-compile)
+                ("g RET" . smart-compile))
+    :config
+    (setq compilation-read-command nil)
+    (setq compilation-ask-about-save nil)
+    (setq smart-compile-check-makefile nil)
+    (setq smart-compile-alist '((cperl-mode . "perl -w -Mstrict -c %f")
+                                (perl-mode . "perl -w -Mstrict -c %f")
+                                (haskell-mode . "stack --silent ghc -- -e :q %f")
+                                ("docker-compose*\\.yml$" . "docker-compose -f %f config -q")
+                                (emacs-lisp-mode    . (emacs-lisp-byte-compile))))
+
+    (defun evgeni-close-compile-win-if-successful (buffer string)
+      (if (and
+           (eq major-mode 'compilation-mode)
+           (buffer-live-p buffer)
+           (string-match "compilation" (buffer-name buffer))
+           (string-match "finished" string)
+           (<= (line-number-at-pos (point-max)) 8))
+          (delete-windows-on buffer)
+        (with-selected-window (get-buffer-window buffer)
+          (goto-char (point-min))
+          (scroll-up-line 4))))
+
+    (add-hook 'compilation-finish-functions 'evgeni-close-compile-win-if-successful)
+
+    (ex! "mak[e]" 'smart-compile)
+    )
+
+  (use-package aggressive-indent
+    :ensure t
+    :commands aggressive-indent-mode
+    :init
+    (add-hook 'emacs-lisp-mode-hook 'aggressive-indent-mode)
+    :config
+    (add-to-list
+     'aggressive-indent-dont-indent-if
+     '(and (derived-mode-p 'perl-mode)
+           (null (string-match "\\([;{}]\\|\\b\\(if\\|for\\|while\\)\\b\\)"
+                               (thing-at-point 'line)))))
+    )
+
+  (use-package shackle
+    :ensure t
+    :defer 3
+    :config
+    (shackle-mode 1)
+    (setq shackle-rules
+          '(
+            ("*xref*"                    :align below :size 10  :noselect t)
+            ("*Help*"                    :align below :size 16  :select t)
+            ("*Backtrace*"               :align below :size 25  :noselect t)
+            ("*Flycheck error messages*" :align below :size 0.25)
+            ("*compilation*"             :align below :size 10)
+            ("*grep*"                    :align below :size 10)
+            (ivy-occur-grep-mode         :align below :size 10))))
+
+  (use-package which-key
+    :ensure t
+    :disabled t
+    :diminish 'which-key-mode
+    :defer 10
+    :config
+    (setq which-key-idle-delay 1.5)
+    (which-key-mode))
+
+  (use-package ivy
+    :ensure t
+    :diminish 'ivy-mode
+    :defer 4
+    :bind (:map evil-normal-state-map
+                ("SPC" . ivy-switch-buffer))
+    :config
+    (ivy-mode 1)
+    (setq ivy-use-virtual-buffers t)
+    (setq ivy-virtual-abbreviate 'full)
+    (define-key ivy-minibuffer-map (kbd "C-w") 'backward-kill-word)
+    (define-key ivy-minibuffer-map (kbd "C-u") (lambda () (interactive) (kill-region (point) (point-at-bol))))
+    (define-key ivy-minibuffer-map [escape] 'minibuffer-keyboard-quit)
+
+    ;; C-r C-w to read word at point
+    (unbind-key "C-r" ivy-minibuffer-map)
+    (define-key ivy-minibuffer-map (kbd "C-r C-w") 'ivy-next-history-element)
+
+    ;; use different colors in ivy-switch-buffer
+    (setq ivy-switch-buffer-faces-alist
+          '((emacs-lisp-mode . ivy-minibuffer-match-face-1)
+            (dired-mode . ivy-subdir)
+            (org-mode . org-level-4))))
+
+  (use-package swiper
+    :ensure t
+    :bind (:map evil-motion-state-map
+                ("C-c C-r" . ivy-resume)
+                ("/" . swiper))
+    :config
+    (setq swiper-goto-start-of-match t)
+
+    (defun evgeni-swiper-to-evil-iedit ()
+      (interactive)
+      (unless (require 'evil-iedit-state nil t)
+        (error "evil-iedit-state isn't installed"))
+      (unless (window-minibuffer-p)
+        (error "Call me only from `swiper'"))
+      (let ((cands (nreverse ivy--old-cands)))
+        (unless (string= ivy-text "")
+          (ivy-exit-with-action
+           (lambda (_)
+             (setq mark-active nil)
+             (run-hooks 'deactivate-mark-hook)
+             (when iedit-mode
+               (iedit-cleanup))
+             (let* ((regexp (ivy--regex ivy-text))
+                    (iedit-case-sensitive (not (and ivy-case-fold-search
+                                                    (string= regexp (downcase regexp))))))
+               (iedit-start regexp (point-min) (point-max))
+               (cond ((not iedit-occurrences-overlays)
+                      (message "No matches found for %s" regexp)
+                      (iedit-done))
+                     ((not (iedit-same-length))
+                      (message "Matches are not the same length.")
+                      (iedit-done))
+                     (t
+                      (evil-iedit-state)))))))))
+
+    (defun evgeni-swiper-to-global-normal-command ()
+      (interactive)
+      (if (null (window-minibuffer-p))
+          (user-error "Should only be called in the minibuffer through `swiper-map'")
+        (lexical-let ((enable-recursive-minibuffers t)
+                      (regex (ivy--regex ivy-text)))
+          (swiper--cleanup)
+          (ivy-exit-with-action
+           (lambda (_)
+             (with-ivy-window
+               (evil-ex (format "g/%s/norm " regex))))))))
+
+    (define-key swiper-map (kbd "C-c C-c") 'evgeni-swiper-to-evil-iedit)
+    (define-key swiper-map (kbd "C-c C-e") 'evgeni-swiper-to-global-normal-command))
+
+  (use-package counsel
+    :load-path "~/dev/swiper"
+    :ensure t
+    :bind (([remap find-file] . evgeni-counsel-find-file)
+           ([remap describe-function] . counsel-describe-function)
+           ([remap describe-variable] . counsel-describe-variable)
+           ([remap execute-extended-command] . counsel-M-x)
+           :map evil-motion-state-map
+           ("g /"   . counsel-git-grep)
+           :map evil-normal-state-map
+           (", f"   . evgeni-counsel-imenu)
+           ("K"     . evgeni-counsel-git-grep)
+           ("g P" . counsel-yank-pop)
+           :map evil-visual-state-map
+           ("K"     . evgeni-counsel-git-grep))
+    :config
+
+    (defun evgeni-counsel-find-file ()
+      (interactive)
+      (let ((completing-read-function 'completing-read-default
+                                      ;; (if (and (not (null (buffer-file-name)))
+                                      ;;          (file-remote-p (buffer-file-name)))
+                                      ;;     'completing-read-default
+                                      ;;   'ivy-completing-read)
+                                      ))
+        (call-interactively 'find-file)))
+
+    (setq counsel-git-cmd "git ls-files --cached --others --exclude-standard")
+    (setq counsel-git-grep-skip-counting-lines t)
+
+    (define-key counsel-describe-map (kbd "C-]") 'counsel-find-symbol)
+    (define-key counsel-git-grep-map (kbd "C-c C-c") 'ivy-occur)
+    (define-key ivy-occur-grep-mode-map (kbd "C-c C-c") 'wgrep-change-to-wgrep-mode)
+
+    (defun evgeni-counsel-git-grep ()
+      (interactive)
+      (counsel-git-grep nil (substring-no-properties
+                             (if (region-active-p)
+                                 (buffer-substring (region-beginning) (region-end))
+                               (thing-at-point 'word)))))
+    (defun evgeni-counsel-imenu ()
+      (interactive)
+      (let ((imenu-default-goto-function 'evgeni-imenu-goto))
+        (call-interactively 'counsel-imenu)))
+    (defun evgeni-imenu-goto (&rest args)
+      (evil-set-jump)
+      (apply 'imenu-default-goto-function args))
+
+    ;; (defun counsel-git-hunks ()
+    ;;   "Find file in the current Git repository."
+    ;;   (interactive)
+    ;;   (setq counsel--git-dir (locate-dominating-file
+    ;;                           default-directory ".git"))
+    ;;   (ivy-set-prompt 'counsel-git-hunks counsel-prompt-function)
+    ;;   (if (null counsel--git-dir)
+    ;;       (error "Not in a git repository")
+    ;;     (setq counsel--git-dir (expand-file-name
+    ;;                             counsel--git-dir))
+    ;;     (let* ((default-directory counsel--git-dir)
+    ;;            (fname (buffer-file-name)) ;; TODO indirect clone buffer
+    ;;            (cands (split-string
+    ;;                    (shell-command-to-string (concat "git diff -U0 " (shell-quote-argument fname) " | grep -F '@@'"))
+    ;;                    "\n"
+    ;;                    t)))
+    ;;       (ivy-read "git hunks" cands
+    ;;                 :action #'counsel-git-hunks-action
+    ;;                 :update-fn 'counsel-git-hunks-udpate-fn
+    ;;                 :caller 'counsel-git-hunks))))
+
+    ;; (defun counsel-git-hunks-action (x)
+    ;;   (with-ivy-window
+    ;;     (when (string-match "^@@ -[0-9,]+ \\+\\([0-9]+\\)" x)
+    ;;       (let ((line (string-to-number (match-string-no-properties 1 x))))
+    ;;         (save-restriction
+    ;;           (widen)
+    ;;           (goto-char (point-min))
+    ;;           (forward-line (1- line))
+    ;;           (recenter-top-bottom))))))
+
+    ;; (defun counsel-git-hunks-udpate-fn ()
+    ;;   (counsel-git-hunks-action (ivy-state-current ivy-last)))
+
+    ;; (general-nmap "Uh" 'counsel-git-hunks)
+    )
+
+  (use-package smex
+    :ensure t
+    :after counsel)
+
+  (use-package imenu
+    :defer t
+    :config
+    (setq imenu-auto-rescan-maxout 600000))
+
+  (use-package imenu-anywhere
+    :ensure t
+    :bind (:map evil-normal-state-map
+                (", F"  . imenu-anywhere)))
+
+  (use-package elisp-mode
+    :defer t
+    :config
+    (define-key emacs-lisp-mode-map (kbd "C-c C-c") #'eval-defun)
+
+    (defun evgeni-elisp-eval ()
+      (interactive)
+      (if (region-active-p)
+          (call-interactively 'eval-region)
+        (call-interactively 'eval-buffer)))
+
+    (ex! "eval" 'evgeni-elisp-eval)
+
+    (modify-syntax-entry ?- "w" emacs-lisp-mode-syntax-table)
+    (modify-syntax-entry ?. "w" emacs-lisp-mode-syntax-table)
+    (modify-syntax-entry ?! "w" emacs-lisp-mode-syntax-table))
+
+  (use-package cperl-mode
+    :disabled t
+    :commands cperl-mode
+    :mode (("\\.pl$"   . cperl-mode)
+           ("\\.pm$"   . cperl-mode)
+           ("\\.t$"    . cperl-mode)
+           ("\\.html$" . cperl-mode))
+    :init
+    (setq cperl-under-as-char t)
+    :config
+    (setq cperl-invalid-face nil
+          cperl-indent-subs-specially nil
+          cperl-indent-parens-as-block t
+          cperl-indent-subs-specially nil
+          cperl-close-paren-offset -3 ;; can't be set from .dir-locals.el?
+          cperl-indent-level 2
+          )
+
+    (unbind-key "{" cperl-mode-map)
+    (unbind-key "[" cperl-mode-map)
+    (unbind-key "(" cperl-mode-map)
+    (unbind-key "<" cperl-mode-map)
+    (unbind-key "}" cperl-mode-map)
+    (unbind-key "]" cperl-mode-map)
+    (unbind-key ")" cperl-mode-map)
+    (unbind-key ";" cperl-mode-map)
+    (unbind-key ":" cperl-mode-map)
+    (unbind-key "\C-j" cperl-mode-map)
+    (unbind-key "TAB" cperl-mode-map)
+
+    ;; (add-hook 'cperl-mode-hook #'(lambda ()
+    ;;                                (general-define-key :keymaps 'local :states 'normal "] d" 'evgeni-perl-dump)
+    ;;                                (set-face-background 'cperl-hash-face nil)
+    ;;                                (set-face-foreground 'cperl-hash-face nil)
+    ;;                                (set-face-background 'cperl-array-face nil)
+    ;;                                (set-face-foreground 'cperl-array-face nil)))
+    )
+
+  (use-package intero
+    :ensure t
+    :commands intero-mode)
+
+  (use-package whitespace
+    :config
+    (setq whitespace-style '(face tabs trailing))
+    (defun evgeni-show-trailing-whitespace () (setq show-trailing-whitespace t))
+    (add-hook 'prog-mode-hook 'evgeni-show-trailing-whitespace)
+    (set-face-attribute 'trailing-whitespace nil
+                        :background
+                        (face-attribute 'mode-line :background)))
+
+  (use-package winner
+    :defer 5
+    :bind (:map evil-normal-state-map
+                ("z u" . winner-undo)
+                ("z C-r" . winner-redo))
+    :config
+    (winner-mode))
+
+  (use-package undo-tree
+    :ensure t
+    :diminish undo-tree-mode
+    :config
+    (global-undo-tree-mode)
+    (setq undo-tree-visualizer-timestamps t)
+    (setq undo-tree-visualizer-diff t)
+    (ex! "undo-tree" 'undo-tree-visualize)
+    (setq undo-tree-history-directory-alist `((".*" . ,temporary-file-directory)))
+    ;; (setq undo-tree-auto-save-history t)
+    )
+
+  (use-package perl-mode
+    :commands perl-mode
+    :mode (("\\.pl$"   . perl-mode)
+           ("\\.pm$"   . perl-mode)
+           ("\\.psgi$" . perl-mode)
+           ("\\.t$"    . perl-mode)
+           ("\\.html$" . perl-mode))
+    :load-path "extra-packages"
+    :config
+    (setq perl-indent-level 3 ;; 4
+          perl-continued-statement-offset 3 ;; t 4
+          perl-continued-brace-offset -3 ;; -4
+          perl-brace-offset 0
+          perl-brace-imaginary-offset 0
+          perl-label-offset -3 ;; -2
+          perl-indent-continued-arguments 0 ;; nil
+          perl-indent-parens-as-block t ;; nil
+          perl-tab-always-indent tab-always-indent
+          perl-tab-to-comment nil
+          perl-nochange "\f")
+
+    (set-face-underline 'font-lock-variable-name-face nil)
+
+    (defun evgeni-perl-dump ()
+      (interactive)
+      (let ((word (thing-at-point 'word)))
+        (save-excursion (end-of-line)
+                        (newline)
+                        (indent-according-to-mode)
+                        (insert (concat "use Data::Dump qw(pp); warn '" word ": ' . pp($" word ") . \"\\n\";")))))
+
+    (defun evgeni-define-perl-function ()
+      (interactive)
+      (let ((function-name-at-point (thing-at-point 'word)))
+        (end-of-defun)
+        (insert "\nsub " function-name-at-point " {\n}\n")
+        (evil-previous-line)
+        (evil-open-above 1)))
+
+    (evil-define-key 'normal perl-mode-map
+      (kbd "C-c f") 'evgeni-define-perl-function
+      (kbd "] d" ) 'evgeni-perl-dump)
+
+    (modify-syntax-entry ?_ "w" perl-mode-syntax-table)
+
+    (add-hook 'perl-mode-hook #'(lambda ()
+                                  ;; taken from cperl-mode, used for beginning-of-defun / end-of-defun
+                                  (setq defun-prompt-regexp
+                                        "^[ 	]*\\(\\(?:sub\\)\\(\\([ 	\n]\\|#[^\n]*\n\\)+\\(::[a-zA-Z_0-9:']+\\|[a-zA-Z_'][a-zA-Z_0-9:']*\\)\\)\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*\\(([^()]*)\\)\\)?\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*\\(:\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*\\(\\sw\\|_\\)+\\((\\(\\\\.\\|[^\\\\()]\\|([^\\\\()]*)\\)*)\\)?\\([ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*:\\)?\\)+\\)\\)?\\|\\(BEGIN\\|UNITCHECK\\|CHECK\\|INIT\\|END\\|AUTOLOAD\\|DESTROY\\)\\)[ 	\n]*\\(#[^\n]*\n[ 	\n]*\\)*"))))
+
+  (use-package eros
+    :ensure t
+    :commands (eros-eval-last-sexp eros-eval-defun)
+    :init
+    (define-key global-map [remap eval-last-sexp] 'eros-eval-last-sexp)
+    (define-key global-map [remap eval-defun] 'eros-eval-defun))
+
+  (use-package markdown-mode
+    :ensure t
+    :defer-install t
+    :commands (markdown-mode gfm-mode)
+    :mode (("README\\.md\\'" . gfm-mode)
+           ("\\.md\\'" . markdown-mode)
+           ("\\.markdown\\'" . markdown-mode)))
+
+  (use-package origami
+    :ensure t
+    :commands origami-mode)
+
+  (use-package s
+    :ensure t
+    :defer t
+    :functions s-trim)
+
+  (use-package haskell-mode
+    :mode "\\.hs\\'"
+    :defer-install t
+    :config
+    (setq haskell-indent-spaces 2)
+
+    ;; (defun evgeni-haskell-evil-auto-indent () (setq evil-auto-indent nil))
+    ;; (add-hook 'haskell-mode-hook 'evgeni-haskell-evil-auto-indent)
+
+    ;; hack to get saner "o" and "O"
+    (defun evgeni-haskell-evil-open-below ()
+      (interactive)
+      (evil-append-line nil)
+      (haskell-indentation-newline-and-indent))
+
+    (defun evgeni-haskell-evil-open-above ()
+      (interactive)
+      (evil-insert-line nil)
+      (save-excursion
+        (haskell-indentation-newline-and-indent)))
+
+    (evil-define-key 'normal haskell-mode-map
+      "o" 'evgeni-haskell-evil-open-below)
+    (evil-define-key 'normal haskell-mode-map
+      "O" 'evgeni-haskell-evil-open-above)
+
+    ;; (add-hook 'haskell-mode-hook 'turn-on-haskell-indentation) <- this one
+    (if (fboundp 'electric-indent-local-mode)
+        (electric-indent-local-mode -1))
+
+    (defun haskell-indentation-advice ()
+      (when (and (< 1 (line-number-at-pos))
+                 (save-excursion
+                   (forward-line -1)
+                   (string= "" (string-trim-right (string-trim-left (buffer-substring (line-beginning-position) (line-end-position)))))))
+        (delete-region (line-beginning-position) (point))))
+
+    (advice-add 'haskell-indentation-newline-and-indent
+                :after 'haskell-indentation-advice)
+
+    (define-abbrev-table 'haskell-mode-abbrev-table
+      '(("undef" "undefined")))
+
+    (with-eval-after-load 'align
+      (add-to-list 'align-rules-list
+                   '(haskell-types
+                     (regexp . "\\(\\s-+\\)\\(::\\|∷\\)\\s-+")
+                     (modes . haskell-modes)))
+      (add-to-list 'align-rules-list
+                   '(haskell-assignment
+                     (regexp . "\\(\\s-+\\)=\\s-+")
+                     (modes . haskell-modes)))
+      (add-to-list 'align-rules-list
+                   '(haskell-arrows
+                     (regexp . "\\(\\s-+\\)\\(->\\|→\\)\\s-+")
+                     (modes . haskell-modes)))
+      (add-to-list 'align-rules-list
+                   '(haskell-left-arrows
+                     (regexp . "\\(\\s-+\\)\\(<-\\|←\\)\\s-+")
+                     (modes . haskell-modes))))
+
+    ;; ;; Make "RET" behaviour in REPL saner
+    ;; (evil-define-key 'insert haskell-interactive-mode-map
+    ;;   (kbd "RET") 'haskell-interactive-mode-return)
+    ;; (evil-define-key 'normal haskell-interactive-mode-map
+    ;;   (kbd "RET") 'haskell-interactive-mode-return)
+
+    ;; smart colon
+    (defun evgeni-haskell-smart-colon ()
+      (interactive)
+      (let ((func-name (evgeni-haskell-recent-func-name)))
+        (when func-name
+          (save-excursion
+            (progn
+              (move-end-of-line nil)
+              ;; (haskell-indentation-newline-and-indent)
+              (newline)
+              (insert func-name " = undefined")))
+          ))
+      (insert ":"))
+
+    (defconst evgeni-haskell-func-name-regex "[0-9A-Za-z']+")
+
+    (defun evgeni-haskell-recent-func-name ()
+      (interactive)
+      (when (looking-back
+             ;; (format "^[\t ]*\\(%s\\)[\t *]*:" evgeni-haskell-func-name-regex))
+             (format "^\\(%s\\)[\t *]*:" evgeni-haskell-func-name-regex))
+        (match-string-no-properties 1)))
+
+    (evil-define-key 'insert haskell-mode-map ":" 'evgeni-haskell-smart-colon))
+
+  (use-package hindent
+    :ensure t
+    :after haskell-mode
+    :if (executable-find "hindent")
+    :init
+    (add-hook 'haskell-mode-hook 'hindent-mode))
+
+  (use-package smartparens
+    :ensure t
+    :disabled t
+    :diminish smartparens-mode
+    :after prog-mode
+    :config
+
+    (setq sp-highlight-pair-overlay nil)
+    (setq sp-highlight-wrap-overlay nil)
+    (setq sp-highlight-wrap-tag-overlay nil)
+    (setq sp-show-pair-delay 0) ;; TODO not working in insert mode?
+
+    (require 'smartparens-config)
+    (show-smartparens-global-mode)
+    (add-hook 'perl-mode-hook #'smartparens-mode)
+    (add-hook 'emacs-lisp-mode-hook #'smartparens-mode)
+
+    (sp-pair "{" nil :post-handlers '(("||\n[i]" "RET")))
+    (sp-pair "[" nil :post-handlers '(("||\n[i]" "RET")))
+
+    (define-key emacs-lisp-mode-map (kbd "C-c <") 'sp-forward-slurp-sexp)
+    (define-key emacs-lisp-mode-map (kbd "C-c >") 'sp-forward-barf-sexp))
+
+  (use-package paren
+    :defer 3
+    :config
+    (setq show-paren-style 'parenthesis
+          show-paren-delay 0)
+    (show-paren-mode 1))
+
+  (use-package loccur
+    :ensure t
+    :bind (:map evil-normal-state-map
+                (", *" . loccur-current)
+                :map evil-visual-state-map
+                (", *" . loccur))
+    :config
+    (evil-define-minor-mode-key 'normal 'loccur-mode (kbd "q") 'loccur)
+    (evil-define-minor-mode-key 'normal 'loccur-mode (kbd "RET") 'loccur)
+    (evil-define-minor-mode-key 'normal 'loccur-mode (kbd "<escape>") 'loccur))
+
+  (use-package ledger-mode
+    :ensure t
+    :commands ledger-mode)
+
+  (use-package yasnippet
+    :disabled t
+    :ensure t
+    :demand t
+    ;; :diminish yas-minor-mode
+    :commands (yas-expand yas-minor-mode)
+    :mode ("/\\.emacs\\.d/snippets/" . snippet-mode)
+    :bind (("C-c y TAB" . yas-expand)
+           ("C-c y s"   . yas-insert-snippet)
+           ("C-c y v"   . yas-visit-snippet-file))
+    :config
+    (evil-ex-define-cmd "new-snippet" 'yas-new-snippet)
+    ;; from https://github.com/haskell/haskell-snippets
+    ;; (setq-default yas-prompt-functions '(yas-ido-prompt yas-dropdown-prompt))
+
+    ;; (yas-load-directory "~/.emacs.d/snippets/")
+    (yas-global-mode 1)
+
+    (bind-key "C-i" #'yas-next-field-or-maybe-expand yas-keymap))
+
+  (use-package haskell-snippets
+    :disabled t
+    :ensure t)
+
+  (use-package uniquify
+    :config
+    (setq uniquify-buffer-name-style 'forward)
+    (setq uniquify-separator "/")
+    (setq uniquify-after-kill-buffer-p t)     ; rename after killing uniquified
+    (setq uniquify-ignore-buffers-re "^\\*")) ; don't muck with special buffers
+
+  (use-package evil-iedit-state
+    :ensure t
+    :functions evgeni-iedit-evil-search
+    :bind (:map evil-normal-state-map
+                (", m" . evil-iedit-state/iedit-mode)
+                :map evil-visual-state-map
+                (", m" . evil-iedit-state/iedit-mode))
+    :init
+    (setq iedit-use-symbol-boundaries nil)
+    (ex! "iedit" 'evgeni-iedit-evil-search)
+    (defun evgeni-iedit-evil-search ()
+      (interactive)
+      (unless (require 'evil-iedit-state nil t)
+        (error "evil-iedit-state isn't installed"))
+      (when iedit-mode
+        (iedit-cleanup))
+      (let* ((regexp (evil-ex-pattern-regex evil-ex-search-pattern))
+             (iedit-case-sensitive (not (evil-ex-pattern-ignore-case evil-ex-search-pattern))))
+        (when (zerop (length regexp))
+          (user-error "No last search"))
+        (iedit-start regexp (point-min) (point-max))
+        (cond ((not iedit-occurrences-overlays)
+               (message "No matches found for %s" regexp)
+               (iedit-done))
+              ((not (iedit-same-length))
+               (message "Matches are not the same length.")
+               (iedit-done))
+              (t
+               (evil-iedit-state)))))
+    :config
+    (define-key evil-iedit-state-map (kbd "TAB") 'iedit-toggle-selection)
+    (define-key evil-iedit-state-map (kbd "C-c f") 'iedit-restrict-function)
+    (define-key evil-iedit-state-map (kbd "C-c C-f") 'iedit-restrict-function)
+    (define-key evil-iedit-state-map (kbd "C-c C-l") 'iedit-restrict-current-line)
+    (define-key evil-iedit-state-map (kbd "C-c l") 'iedit-restrict-current-line)
+    (unbind-key "TAB" iedit-mode-keymap))
+
+  (use-package beacon
+    :ensure t
+    :disabled t
+    :diminish beacon-mode
+    :defer 4
+    :config
+    ;; (setq beacon-color "#d7dfff")
+    (setq beacon-color (face-background 'region))
+    (setq beacon-overlay-priority 1)
+    ;; (setq beacon-blink-when-window-scrolls t)
+    ;; (setq beacon-blink-when-point-moves-horizontally 10)
+    ;; (setq beacon-color 0.9)
+    (beacon-mode))
+
+  (use-package regex-tool
+    :ensure t
+    :commands regex-tool)
+
+  (use-package quickrun
+    :ensure t
+    :disabled t
+    :commands (quickrun
+               quickrun-region
+               quickrun-with-arg
+               quickrun-shell
+               quickrun-compile-only
+               quickrun-replace-region)
+    :init
+    (setq quickrun-focus-p nil)
+    (ex! "quickrun" 'quickrun)
+    (ex! "quickrun-region" 'quickrun-region)
+    (ex! "quickrun-replace-region" 'quickrun-replace-region))
+
+  (use-package macrostep
+    :ensure t
+    :bind (:map emacs-lisp-mode-map
+                ("C-c e" . macrostep-expand)))
+
+  (use-package yaml-mode
+    :ensure t
+    :defer-install t
+    :mode (("\\.yml$" . yaml-mode))
+    :config
+    (setq yaml-imenu-generic-expression
+          '((nil  "^[ ]\\{0,2\\}\\(:?[a-zA-Z_-]+\\):"          1)))
+    (modify-syntax-entry ?_ "w" yaml-mode-syntax-table)
+    (modify-syntax-entry ?- "w" yaml-mode-syntax-table)
+    (modify-syntax-entry ?$ "." yaml-mode-syntax-table))
+
+  (use-package package-lint
+    :ensure t
+    :commands package-lint-current-buffer)
+
+  (use-package multiple-cursors
+    :load-path "~/dev/multiple-cursors.el"
+    :commands mc/edit-lines
+    :disabled t
+    :config
+    (evil-ex-define-cmd "mc[cursors]" 'mc/edit-lines)
+
+    ;; (global-set-key (kbd "C->") 'mc/mark-next-like-this)
+    ;; (global-set-key (kbd "C-<") 'mc/mark-previous-like-this)
+    ;; (global-set-key (kbd "C-c C-<") 'mc/mark-all-like-this)
+    ;; mc/mark-next-like-this-word
+
+    )
+
+  (use-package idle-highlight-mode
+    :disabled t
+    :commands idle-highlight-mode
+    :ensure t
+    :bind (:map evil-normal-state-map
+                ("C-c o h" . idle-highlight-mode)))
+
+  (use-package repl-toggle
+    :disabled t
+    :ensure t
+    :bind (:map evil-normal-state-map
+                ("C-c C-z" . rtog/toggle-repl))
+    :config
+    (setq rtog/fullscreen t)
+    :init
+    (setq rtog/mode-repl-alist '((emacs-lisp-mode . ielm))))
+
+  (use-package js
+    :ensure t
+    :mode ("\\.js\\'" . js-mode)
+    :config
+    (modify-syntax-entry ?_ "w" js-mode-syntax-table))
+
+  (use-package rjsx-mode
+    :ensure t
+    :defer-install t
+    :mode ("\\.jsx\\'" . rjsx-mode))
+
+  (use-package css-mode
+    :ensure t
+    :defer-install t
+    :mode ("\\.css\\'" . css-mode)
+    :config
+    (modify-syntax-entry ?- "w" css-mode-syntax-table))
+
+  (use-package tramp-sh
+    :defer t
+    :config
+    (setq tramp-default-method "ssh"))
+
+  (use-package docker-tramp
+    :ensure t
+    :after tramp
+    :config
+    (setq docker-tramp-use-names t))
+
+  (use-package restclient
+    :ensure t
+    :mode ("\\.restclient\\'" . restclient-mode))
+
+  (use-package dockerfile-mode
+    :ensure t
+    :defer-install t
+    :mode (".*Dockerfile.*" . dockerfile-mode)
+    :config
+    (modify-syntax-entry ?$ "." dockerfile-mode-syntax-table))
+
+  (use-package suggest
+    :ensure t
+    :commands suggest)
+
+  (use-package conf-mode
+    :defer t
+    :config
+    (modify-syntax-entry ?_ "w" conf-mode-syntax-table))
+
+  (use-package nginx-mode
+    :ensure t
+    :defer-install t
+    :mode ("nginx.*\\.conf\\'" . nginx-mode)
+    :config
+    (setq nginx-indent-level 3)
+
+    ;; Auto indent on }
+    (add-hook 'nginx-mode-hook
+              (lambda ()
+                (setq-local
+                 electric-indent-chars (cons ?} (and (boundp 'electric-indent-chars)
+                                                     electric-indent-chars))))))
+
+  (use-package edebug
+    :defer t
+    :config
+    (add-hook 'edebug-mode-hook 'evil-normalize-keymaps))
+
+  (use-package projectile
+    :ensure t
+    :defer 3
+    :bind (:map evil-motion-state-map
+                ("g SPC"   . evgeni-projectile-find-file))
+    :config
+    ;; TODO switch to using SPC only, no g-SPC
+    ;; should then be able to switch to different kinds of filtering
+    ;; (filter buffers, projects, projects files)
+    (defun evgeni-projectile-find-file ()
+      (interactive)
+      (if (projectile-project-p)
+          (projectile-find-file)
+        (projectile-switch-project)))
+
+    (setq projectile-switch-project-action (lambda () (dired ".")))
+    (setq projectile-mode-line (format " [%s]" (projectile-project-name)))
+    (setq projectile-completion-system 'ivy)
+    (projectile-global-mode))
+
+  (use-package exec-path-from-shell
+    :if (memq window-system '(mac ns))
+    :defer 1
+    :ensure t
+    :config
+    (exec-path-from-shell-initialize))
+
+  (use-package lua-mode
+    :ensure t
+    :defer-install t
+    :mode "\\.lua\\'")
+
+  (use-package edit-indirect
+    :ensure t
+    :defer t
+    :defer-install t)
+
+  (use-package sh-script
+    :mode (("\\.sh$" . sh-mode))
+    :config
+
+    ;; indent after }
+    (add-hook 'sh-mode-hook
+              (lambda ()
+                (setq-local
+                 electric-indent-chars (cons ?} (and (boundp 'electric-indent-chars)
+                                                     electric-indent-chars)))))
+    ;; indent after done, fi
+    (define-abbrev-table 'sh-mode-abbrev-table
+      '(("done" "done" indent-according-to-mode :system t)
+        ("fi"  "fi"    indent-according-to-mode :system t))))
+
+  (use-package try
+    :ensure t
+    :commands try)
+
+  (use-package zygospore
+    :ensure t
+    :commands zygospore-toggle-delete-other-windows
+    :init
+    (ex! "only" 'zygospore-toggle-delete-other-windows))
+
+  (use-package hl-todo
+    :ensure t
+    :defer 3
+    :config
+    (add-hook 'prog-mode-hook 'hl-todo-mode))
+
+  (use-package rust-mode
+    :ensure t
+    :defer-install t
+    :mode "\\.rs\\'")
+
+  (use-package toml-mode
+    :ensure t
+    :defer-install t
+    :mode "\\.toml\\'")
+
+  (use-package jinja2-mode
+    :ensure t
+    :defer-install t
+    :mode (("\\.j2$"   . jinja2-mode)
+           ("\\.jinja2$"   . jinja2-mode))
+    :config
+    (modify-syntax-entry ?_ "w" jinja2-mode-syntax-table))
+
+  (use-package diff-hl
+    :ensure t
+    :defer 2
+    :init
+    (setq diff-hl-margin-symbols-alist '((insert . " ") (delete . " ") (change . " ") (unknown . "?") (ignored . "i")))
+    :config
+    (global-diff-hl-mode)
+    ;; (add-hook 'prog-mode-hook 'turn-on-diff-hl-mode)
+    ;; (add-hook 'text-mode-hook 'turn-on-diff-hl-mode)
+    (unless (window-system)
+      (diff-hl-margin-mode))
+    ;; (diff-hl-flydiff-mode)
+
+    (add-hook 'magit-post-refresh-hook 'diff-hl-magit-post-refresh)
+
+    (evil-define-minor-mode-key 'normal 'diff-hl-mode
+      "]c" 'diff-hl-next-hunk
+      "[c" 'diff-hl-previous-hunk
+      "Ux" 'diff-hl-revert-hunk))
+
+  (use-package ibuffer
+    :defer t
+    :init
+    (evil-ex-define-cmd "ls" 'ibuffer))
+
+  (use-package term
+    :defer t
+    :init
+    (ex! "sh" 'evgeni-ansi-term)
+    :bind* (("C-c C-z" . evgeni-ansi-term))
+    :config
+    (evil-set-initial-state 'term-mode 'emacs)
+
+    (defun evgeni-ansi-term ()
+      (interactive)
+      (cond
+       ((string-equal (buffer-name) "*ansi-term*")
+        (delete-window))
+       ((get-buffer "*ansi-term*")
+        (switch-to-buffer-other-window "*ansi-term*"))
+       (t
+        (progn
+          (split-window-vertically)
+          (other-window 1)
+          (ansi-term (getenv "SHELL")))))))
+
+  (use-package elec-pair
+    :defer t
+    :init
+    (add-hook 'prog-mode-hook 'electric-pair-local-mode)))
