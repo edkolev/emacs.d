@@ -125,6 +125,7 @@
 (use-package spacegray-theme :ensure t :defer t)
 (use-package gotham-theme :ensure t :defer t)
 (use-package phoenix-dark-pink-theme :ensure t :defer t)
+(use-package material-theme :ensure t :defer t)
 
 ;; minimal themes
 (use-package minimal-theme :ensure t :defer t)
@@ -161,6 +162,7 @@
 (use-package evil
   :load-path "~/dev/evil"
   :ensure t
+  :defer .1
   :init
   (setq evil-search-module 'evil-search)
   (setq evil-ex-complete-emacs-commands nil)
@@ -168,14 +170,20 @@
   (setq evil-split-window-below t)
   (setq evil-shift-round nil)
   (setq evil-want-C-u-scroll t)
-  (setq evil-maybe-remove-spaces t) ;; clean whitespace on lines with nothing but whitespace
+  (setq evil-shift-width 2)
   :config
   (evil-mode)
 
+  (message
+   "Loading evil-mode...done (%.3fs)"
+   (float-time (time-subtract (current-time) emacs-start-time)))
+
   ;; auto-clear highlight
   (defun evgeni-nohighlight-hook (&rest _)
-    (remove-hook 'pre-command-hook 'evgeni-nohighlight-hook 'local)
-    (evil-ex-nohighlight))
+    (unless (memq this-command '(evil-ex-search-next evil-ex-search-previous))
+      (remove-hook 'pre-command-hook 'evgeni-nohighlight-hook 'local)
+      (evil-ex-nohighlight)))
+
   (defun evgeni-add-nohighlight-hook (&rest _)
     (add-hook 'pre-command-hook 'evgeni-nohighlight-hook nil 'local))
   (dolist (f '(evil-ex-search-backward
@@ -249,11 +257,10 @@
         (funcall emacs-cmd)
       (error (if (getenv "TMUX") (let ((default-directory "~"))
                                    (shell-command-to-string tmux-cmd))))))
-
-  (define-key evil-motion-state-map (kbd "C-h") (lambda () (interactive) (evgeni-window-navigate 'windmove-left "tmux select-pane -L")))
-  (define-key evil-motion-state-map (kbd "C-j") (lambda () (interactive) (evgeni-window-navigate 'windmove-down "tmux select-pane -D")))
-  (define-key evil-motion-state-map (kbd "C-k") (lambda () (interactive) (evgeni-window-navigate 'windmove-up "tmux select-pane -U")))
-  (define-key evil-motion-state-map (kbd "C-l") (lambda () (interactive) (evgeni-window-navigate 'windmove-right "tmux select-pane -R")))
+  (bind-key* "C-h" (lambda () (interactive) (evgeni-window-navigate 'windmove-left  "tmux select-pane -L")))
+  (bind-key* "C-j" (lambda () (interactive) (evgeni-window-navigate 'windmove-down  "tmux select-pane -D")))
+  (bind-key* "C-k" (lambda () (interactive) (evgeni-window-navigate 'windmove-up    "tmux select-pane -U")))
+  (bind-key* "C-l" (lambda () (interactive) (evgeni-window-navigate 'windmove-right "tmux select-pane -R")))
 
   ;; insert state
   (define-key evil-insert-state-map (kbd "C-e") 'end-of-line)
@@ -715,6 +722,9 @@
     (unbind-key "C-l" magit-mode-map)
     (unbind-key "SPC" magit-status-mode-map)
 
+    (define-key magit-dispatch-popup-map "/" 'isearch-forward)
+    (define-key magit-dispatch-popup-map "?" 'isearch-backward)
+
     (evil-define-key 'insert git-commit-mode-map
       (kbd "C-x C-x") 'evgeni-insert-ticket-number-from-git-branch
       (kbd "C-x x") 'evgeni-insert-ticket-number-from-git-branch)
@@ -799,7 +809,17 @@
     :defer t
     :init
     (ex! "timemachine" 'git-timemachine)
-    (ex! "timemachine-switch-branch" 'git-timemachine-switch-branch))
+    (ex! "timemachine-switch-branch" 'git-timemachine-switch-branch)
+    :config
+
+    (evil-define-minor-mode-key 'normal 'git-timemachine-mode
+      "c" 'git-timemachine-show-current-revision
+      "g" 'git-timemachine-show-nth-revision
+      "p" 'git-timemachine-show-previous-revision
+      "n" 'git-timemachine-show-next-revision
+      "N" 'git-timemachine-show-previous-revision
+      "Y" 'git-timemachine-kill-revision
+      "q" 'git-timemachine-quit))
 
   (use-package git-gutter+
     :ensure t
@@ -1098,6 +1118,7 @@
 
   (use-package aggressive-indent
     :ensure t
+    :disabled t
     :commands aggressive-indent-mode
     :init
     (add-hook 'emacs-lisp-mode-hook 'aggressive-indent-mode)
@@ -1106,8 +1127,7 @@
      'aggressive-indent-dont-indent-if
      '(and (derived-mode-p 'perl-mode)
            (null (string-match "\\([;{}]\\|\\b\\(if\\|for\\|while\\)\\b\\)"
-                               (thing-at-point 'line)))))
-    )
+                               (thing-at-point 'line))))))
 
   (use-package shackle
     :ensure t
@@ -1208,9 +1228,8 @@
     (define-key swiper-map (kbd "C-c C-e") 'evgeni-swiper-to-global-normal-command))
 
   (use-package counsel
-    :load-path "~/dev/swiper"
     :ensure t
-    :bind (([remap find-file] . evgeni-counsel-find-file)
+    :bind (([remap find-file] . counsel-find-file)
            ([remap describe-function] . counsel-describe-function)
            ([remap describe-variable] . counsel-describe-variable)
            ([remap execute-extended-command] . counsel-M-x)
@@ -1223,17 +1242,6 @@
            :map evil-visual-state-map
            ("K"     . evgeni-counsel-git-grep))
     :config
-
-    (defun evgeni-counsel-find-file ()
-      (interactive)
-      (let ((completing-read-function 'completing-read-default
-                                      ;; (if (and (not (null (buffer-file-name)))
-                                      ;;          (file-remote-p (buffer-file-name)))
-                                      ;;     'completing-read-default
-                                      ;;   'ivy-completing-read)
-                                      ))
-        (call-interactively 'find-file)))
-
     (setq counsel-git-cmd "git ls-files --cached --others --exclude-standard")
     (setq counsel-git-grep-skip-counting-lines t)
 
@@ -1423,7 +1431,8 @@
         (save-excursion (end-of-line)
                         (newline)
                         (indent-according-to-mode)
-                        (insert (concat "use Data::Dump qw(pp); warn '" word ": ' . pp($" word ") . \"\\n\";")))))
+                        ;; (insert (concat "use Data::Dump qw(pp); warn '" word ": ' . pp($" word ") . \"\\n\";"))
+                        (insert (concat "use Data::Dumper; warn '" word ": ' . Dumper($" word ") . \"\\n\";")))))
 
     (defun evgeni-define-perl-function ()
       (interactive)
@@ -1653,6 +1662,7 @@
     :init
     (setq iedit-use-symbol-boundaries nil)
     (ex! "iedit" 'evgeni-iedit-evil-search)
+    :config
     (defun evgeni-iedit-evil-search ()
       (interactive)
       (unless (require 'evil-iedit-state nil t)
@@ -1672,13 +1682,12 @@
                (iedit-done))
               (t
                (evil-iedit-state)))))
-    :config
+
     (define-key evil-iedit-state-map (kbd "TAB") 'iedit-toggle-selection)
     (define-key evil-iedit-state-map (kbd "C-c f") 'iedit-restrict-function)
     (define-key evil-iedit-state-map (kbd "C-c C-f") 'iedit-restrict-function)
     (define-key evil-iedit-state-map (kbd "C-c C-l") 'iedit-restrict-current-line)
-    (define-key evil-iedit-state-map (kbd "C-c l") 'iedit-restrict-current-line)
-    (unbind-key "TAB" iedit-mode-keymap))
+    (define-key evil-iedit-state-map (kbd "C-c l") 'iedit-restrict-current-line))
 
   (use-package beacon
     :ensure t
@@ -1835,7 +1844,7 @@
   (use-package projectile
     :ensure t
     :defer 3
-    :bind (:map evil-motion-state-map
+    :bind (:map evil-normal-state-map
                 ("g SPC"   . evgeni-projectile-find-file))
     :config
     ;; TODO switch to using SPC only, no g-SPC
@@ -1910,14 +1919,6 @@
     :defer-install t
     :mode "\\.toml\\'")
 
-  (use-package jinja2-mode
-    :ensure t
-    :defer-install t
-    :mode (("\\.j2$"   . jinja2-mode)
-           ("\\.jinja2$"   . jinja2-mode))
-    :config
-    (modify-syntax-entry ?_ "w" jinja2-mode-syntax-table))
-
   (use-package diff-hl
     :ensure t
     :defer 2
@@ -1941,7 +1942,10 @@
   (use-package ibuffer
     :defer t
     :init
-    (evil-ex-define-cmd "ls" 'ibuffer))
+    (evil-ex-define-cmd "ls" 'ibuffer)
+    :config
+    (define-key ibuffer-mode-map "j" 'ibuffer-forward-line)
+    (define-key ibuffer-mode-map "k" 'ibuffer-backward-line))
 
   (use-package term
     :defer t
@@ -1967,4 +1971,9 @@
   (use-package elec-pair
     :defer t
     :init
-    (add-hook 'prog-mode-hook 'electric-pair-local-mode)))
+    (add-hook 'prog-mode-hook 'electric-pair-local-mode))
+
+  (use-package whitespace
+    :defer t
+    :init
+    (ex! "clean-whitespace" 'whitespace-cleanup)))
