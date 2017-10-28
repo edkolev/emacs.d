@@ -1104,12 +1104,14 @@
   (recentf-mode))
 
 (use-package saveplace
+  :defer 1
   :config
   (save-place-mode))
 
 (use-package savehist
+  :defer 1
   :init
-  (setq ;; savehist-file (concat spacemacs-cache-directory "savehist")
+  (setq
    enable-recursive-minibuffers t ; Allow commands in minibuffers
    history-length 1000
    savehist-additional-variables '(mark-ring
@@ -1272,6 +1274,9 @@
   :commands intero-mode)
 
 (use-package whitespace
+  :defer t
+  :init
+  (ex! "clean-whitespace" 'whitespace-cleanup)
   :config
   (setq whitespace-style '(face tabs trailing))
   (defun evgeni-show-trailing-whitespace () (setq show-trailing-whitespace t))
@@ -1283,6 +1288,7 @@
 (use-package undo-tree
   :ensure t
   :diminish undo-tree-mode
+  :disabled t
   :config
   (global-undo-tree-mode)
   (setq undo-tree-visualizer-timestamps t)
@@ -1468,8 +1474,8 @@
 
 (use-package smartparens
   :ensure t
-  :functions sp-forward-slurp-sexp sp-forward-barf-sexp
-  :config
+  :commands sp-forward-slurp-sexp sp-forward-barf-sexp
+  :init
   (define-key emacs-lisp-mode-map (kbd "C-c <") 'sp-forward-slurp-sexp)
   (define-key emacs-lisp-mode-map (kbd "C-c >") 'sp-forward-barf-sexp))
 
@@ -1694,8 +1700,3 @@
   :defer t
   :init
   (add-hook 'prog-mode-hook 'electric-pair-local-mode))
-
-(use-package whitespace
-  :defer t
-  :init
-  (ex! "clean-whitespace" 'whitespace-cleanup))
