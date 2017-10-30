@@ -121,8 +121,8 @@
 (use-package soft-stone-theme :ensure t :defer t)
 (use-package flatui-theme :ensure t :defer t)
 (use-package faff-theme :ensure t :defer t)
-(use-package apropospriate-theme :ensure t :defer t)
-(use-package spacegray-theme :ensure t :defer t)
+(use-package apropospriate-theme :ensure t :defer t) ;; ok
+(use-package spacegray-theme :ensure t :defer t) ;; ok
 (use-package gotham-theme :ensure t :defer t)
 (use-package phoenix-dark-pink-theme :ensure t :defer t)
 (use-package material-theme :ensure t :defer t)
@@ -613,7 +613,8 @@
     (unbind-key "SPC" dired-mode-map)
     (setq dired-listing-switches "-alh"
           dired-auto-revert-buffer t
-          dired-dwim-target t)
+          dired-dwim-target t
+          dired-use-ls-dired nil)
     (add-hook 'dired-mode-hook 'dired-hide-details-mode)
     (evil-define-key 'normal dired-mode-map
       "n" (lookup-key evil-motion-state-map "n")
@@ -1060,8 +1061,10 @@
   (use-package projectile
     :ensure t
     :defer 3
-    :bind (:map evil-normal-state-map
+    :bind (:map evil-motion-state-map
                 ("g SPC"   . evgeni-projectile-find-file))
+    :init
+    (ex! "proj[ectile]" 'projectile-switch-project)
     :config
     ;; TODO switch to using SPC only, no g-SPC
     ;; should then be able to switch to different kinds of filtering
@@ -1074,7 +1077,7 @@
 
     (setq projectile-switch-project-action (lambda () (dired ".")))
     (setq projectile-mode-line (format " [%s]" (projectile-project-name)))
-    (setq projectile-completion-system 'ivy)
+    (setq projectile-completion-system 'default)
     (projectile-global-mode)))
 
 (use-package evil-expat
@@ -1700,3 +1703,7 @@
   :defer t
   :init
   (add-hook 'prog-mode-hook 'electric-pair-local-mode))
+
+(use-package nameless
+  :ensure t
+  :defer t)
