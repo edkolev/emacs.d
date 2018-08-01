@@ -9,7 +9,8 @@
           t)
 
 (require 'package)
-(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+(add-to-list 'package-archives '("melpa" . "http://melpa.org/packages/") t)
+(add-to-list 'package-archives '("melpa-stable" . "http://stable.melpa.org/packages/") t)
 (add-to-list 'package-archives '("org" . "http://orgmode.org/elpa/") t)
 
 (unless (boundp 'package-quickstart)
@@ -42,7 +43,6 @@
 (setq inhibit-startup-screen t)
 (setq backup-inhibited t)
 (setq auto-save-default nil)
-(setq custom-safe-themes t)
 (setq suggest-key-bindings nil)
 (setq-default truncate-lines t)
 (setq blink-cursor-mode nil)
@@ -51,13 +51,13 @@
       initial-major-mode 'emacs-lisp-mode)
 (setq echo-keystrokes 0.02)
 (setq scroll-step 2)
-(setq default-major-mode 'text-mode)
+(setq-default major-mode 'text-mode)
 (setq enable-local-variables :all)
 (setq require-final-newline t)
 
-(setq initial-buffer-choice (lambda ()
-                              (interactive)
-                              (get-buffer "*Messages*")))
+;; (setq initial-buffer-choice (lambda ()
+;;                               (interactive)
+;;                               (get-buffer "*Messages*")))
 
 (defun display-startup-echo-area-message ()
   (message ""))
@@ -66,13 +66,16 @@
 (when (fboundp 'tool-bar-mode) (tool-bar-mode -1))
 (when (fboundp 'menu-bar-mode) (menu-bar-mode -1))
 (when (fboundp 'toggle-scroll-bar)
-  (toggle-scroll-bar -1)
-  (add-to-list 'default-frame-alist '(vertical-scroll-bars . nil)))
+  (toggle-scroll-bar -1))
+
+(setq-default default-frame-alist '((ns-transparent-titlebar . t) (ns-appearance . dark) (vertical-scroll-bars)))
+(setq ns-use-proxy-icon nil)
+(setq frame-title-format "emacs")
 
 (global-set-key "\C-ch" help-map)
 
 (setq-default indent-tabs-mode nil)
-(setq-default tab-width 8)
+(setq-default tab-width 4)
 (setq-default sentence-end-double-space nil)
 
 ;; disable VC
@@ -85,9 +88,19 @@
 
 ;; project root
 (defun evgeni-project-root ()
-  (if (project-current)
-      (cdr (project-current))
+  (if-let ((prj (project-current)))
+      (cdr prj)
     default-directory))
+
+;; in modeline, show file path, relative to the project root
+(with-eval-after-load 'subr-x
+  (setq-default mode-line-buffer-identification
+                '(:eval (format-mode-line (or (when-let* ((buffer-file-truename buffer-file-truename)
+                                                          (prj (cdr-safe (project-current)))
+                                                          (prj-parent (file-name-directory (directory-file-name (expand-file-name prj)))))
+                                                (concat (file-relative-name (file-name-directory buffer-file-truename) prj-parent)
+                                                        (propertize (file-name-nondirectory buffer-file-truename) 'face 'mode-line-buffer-id)))
+                                              (propertized-buffer-identification "%b"))))))
 
 ;; etags
 (defun evgeni-find-etags-file ()
@@ -102,15 +115,6 @@
   `(with-eval-after-load 'evil
      (evil-ex-define-cmd ,cmd ,func)))
 
-(defmacro jump! (fun)
-  "Register the given function as an evil jump"
-  (let ((advice (intern (concat "evgeni-evil-jump-advice--" (symbol-name fun)))))
-    `(progn
-       (defun ,advice (&rest args)
-         (evil-set-jump))
-
-       (advice-add (quote ,fun) :before (quote ,advice)))))
-
 (defmacro use-package! (name &rest plist)
   (declare (indent 1))
   `(with-eval-after-load 'evil
@@ -123,12 +127,10 @@
                                         (or (bound-and-true-p lisp-mode-symbol-regexp)
                                             "\\(?:\\sw\\|\\s_\\|\\\\.\\)+") "\\)") 2)))
 
-
-
-
 ;; use-package
 (setq use-package-enable-imenu-support t)
 (unless (package-installed-p 'use-package)
+  ;; (package-initialize)
   (package-refresh-contents)
   (package-install 'use-package))
 (eval-when-compile
@@ -144,57 +146,36 @@
     (package-menu-mark-upgrades)
     (package-menu-execute t)))
 
-(ex! "upgrade-packages" 'evgeni-upgrade-packages)
-(ex! "refresh-packages" 'package-refresh-contents)
+(defun evgeni-refresh-packages ()
+  (interactive)
+  (package-refresh-contents t))
 
-;; themes
-(use-package spacemacs-theme :ensure t :defer t)
-(use-package molokai-theme :ensure t :defer t)
-(use-package color-theme-sanityinc-tomorrow :ensure t :defer t)
-(use-package gruvbox-theme :ensure t :defer t)
-(use-package darktooth-theme :ensure t :defer t)
-(use-package seoul256-theme :ensure t :defer t)
+(ex! "upgrade-packages" 'evgeni-upgrade-packages)
+(ex! "refresh-packages" 'evgeni-refresh-packages)
+
+;;; themes
+(setq custom-safe-themes t)
+(use-package habamax-theme :ensure t :defer t)     ;; nice
+(use-package one-themes :ensure t :defer t)        ;; ok
+(use-package greymatters-theme :ensure t :defer t) ;; ok
+(use-package chyla-theme :ensure t :defer t)       ;; ok, green
 (use-package doom-themes :ensure t :defer t)
-(use-package ujelly-theme :ensure t :defer t)
-(use-package zenburn-theme :ensure t :defer t)
 (use-package eclipse-theme :ensure t :defer t)
 (use-package flatui-theme :ensure t :defer t)
-(use-package plan9-theme :ensure t :defer t)
-(use-package twilight-bright-theme :ensure t :defer t
-  :config
-  (require 'color)
-  (let ((bg (face-attribute 'default :background)))
-    (custom-set-faces
-     ;; `(company-tooltip ((t (:inherit default :background ,(color-darken-name bg 5)))))
-     ;; `(company-scrollbar-bg ((t (:background ,(color-darken-name bg 10)))))
-     ;; `(company-scrollbar-fg ((t (:background ,(color-darken-name bg 5)))))
-     `(company-tooltip-selection ((t (:inherit font-lock-function-name-face))))
-     `(company-tooltip-common ((t (:inherit font-lock-constant-face)))))))
+(use-package twilight-bright-theme :ensure t :defer t)
 (use-package espresso-theme :ensure t :defer t)
-(use-package soft-stone-theme :ensure t :defer t)
-(use-package flatui-theme :ensure t :defer t)
-(use-package faff-theme :ensure t :defer t)
-(use-package apropospriate-theme :ensure t :defer t) ;; ok
-(use-package spacegray-theme :ensure t :defer t) ;; ok
-(use-package gotham-theme :ensure t :defer t)
-(use-package phoenix-dark-pink-theme :ensure t :defer t)
+(use-package apropospriate-theme :ensure t :defer t)
 (use-package material-theme :ensure t :defer t)
 (use-package tango-plus-theme :ensure t :defer t)
-
-;; minimal themes
-(use-package minimal-theme :ensure t :defer t)
-(use-package paper-theme :ensure t :defer t)
-(use-package white-theme :ensure t :defer t)
-(use-package tao-theme :ensure t :defer t)
-(use-package basic-theme :ensure t :defer t)
+(use-package kaolin-themes :ensure t :defer t)     ;; kaolin-ligh & kaolin-valley-light
 
 (use-package emacs
   :defer .15
   :config
   ;; load theme
   (load-theme (if (display-graphic-p)
-                  'twilight-bright ;; 'apropospriate-dark ;;'tango-dark ;; tango-plus flatui
-                'twilight-bright
+                  'habamax ;; 'dichromacy ;; 'doom-one-light ;; 'twilight-bright ;; 'apropospriate-dark ;;'tango-dark ;; tango-plus flatui
+                'doom-one-light
                 )
               t)
   ;; bind command-option-H to hide other windows, just like every other OS X app
@@ -221,7 +202,7 @@
 
 ;; load mail.el if any
 (when (file-readable-p (concat user-emacs-directory "mail.el"))
-  (load-file (concat user-emacs-directory "mail.el")))
+  (run-with-idle-timer 2 nil 'load-file (concat user-emacs-directory "mail.el")))
 
 ;; workaround for OSX https://emacs.stackexchange.com/questions/18045/how-can-i-retrieve-an-https-url-on-mac-os-x-without-warnings-about-an-untrusted
 ;; the .pem file is installed with brew install libresll
@@ -235,19 +216,28 @@
 ;; load evil early
 (use-package evil
   :ensure t
+  ;; :load-path "~/dev/evil"
   :init
   (setq evil-want-integration nil)
   (setq evil-search-module 'evil-search)
+  (setq evil-ex-search-vim-style-regexp t)
   (setq evil-ex-complete-emacs-commands nil)
   (setq evil-vsplit-window-right t)
   (setq evil-split-window-below t)
   (setq evil-shift-round nil)
   (setq evil-want-C-u-scroll t)
+  (setq evil-want-Y-yank-to-eol t)
   (setq evil-shift-width 2)
   (setq evil-ex-substitute-global t)
   :config
   (evil-mode)
   (message "Loading evil-mode...done (%.3fs)" (float-time (time-subtract (current-time) emacs-start-time))))
+
+;; use M-u instaed of C-u for universal argument
+(define-key global-map (kbd "C-u") 'kill-whole-line)
+(define-key global-map (kbd "M-u") 'universal-argument)
+(define-key universal-argument-map (kbd "C-u") nil)
+(define-key universal-argument-map (kbd "M-u") 'universal-argument-more)
 
 ;; configure evil after startup
 (use-package evil
@@ -311,8 +301,8 @@
 
   (define-key evil-normal-state-map (kbd "[ m")'beginning-of-defun)
   (define-key evil-normal-state-map (kbd "] m")'end-of-defun)
-  (jump! beginning-of-defun)
-  (jump! end-of-defun)
+  (evil-set-command-properties 'beginning-of-defun :jump t)
+  (evil-set-command-properties 'end-of-defun :jump t)
   (define-key evil-normal-state-map (kbd "] M")'end-of-defun)
   (define-key evil-motion-state-map (kbd "0") 'evil-first-non-blank)
   (define-key evil-normal-state-map (kbd "g n") (lambda () (interactive) (evil-ex "%normal ")))
@@ -342,8 +332,9 @@
   (define-key evil-normal-state-map (kbd ", *" )
     (lambda ()
       (interactive)
-      (occur (evil-ex-pattern-regex evil-ex-search-pattern))
-      (pop-to-buffer-same-window "*Occur*")))
+      ;; (occur (evil-ex-pattern-regex evil-ex-search-pattern))
+      ;; (pop-to-buffer-same-window "*Occur*")
+      (swiper (substring-no-properties (thing-at-point 'word)))))
 
   (defvar evgeni-conflict-marker-regex "^[<=>|]\\{7\\}")
 
@@ -355,7 +346,16 @@
         (load-file file)
       (load-file (concat user-emacs-directory "init.el"))))
 
-  (define-key evil-normal-state-map "Y" (lambda () (interactive) (evil-yank (point) (point-at-eol))))
+  ;; my intercept map
+  (defvar evgeni-intercept-mode-map (make-sparse-keymap))
+  (define-minor-mode evgeni-intercept-mode
+    "Global minor mode for higher precedence evil keybindings."
+    :global t)
+  (evgeni-intercept-mode)
+  (dolist (state '(normal insert))
+    (evil-make-intercept-map
+     (evil-get-auxiliary-keymap evgeni-intercept-mode-map state t t)
+     state))
 
   ;; my intercept map
   (defvar evgeni-intercept-mode-map (make-sparse-keymap))
@@ -407,10 +407,10 @@
   (define-key evil-insert-state-map (kbd "C-x C-l") 'evil-complete-next-line)
 
   ;; completion
-  (define-key evil-insert-state-map (kbd "C-x C-x") 'completion-at-point)
-  (define-key evil-insert-state-map (kbd "C-k") 'completion-at-point)
+  ;; (define-key evil-insert-state-map (kbd "C-x C-x") 'completion-at-point)
+  ;; (define-key evil-insert-state-map (kbd "C-k") 'completion-at-point)
   (define-key evil-insert-state-map (kbd "C-x C-]") 'complete-tag)
-  (define-key evil-insert-state-map (kbd "C-]") 'complete-tag)
+  (define-key evil-insert-state-map (kbd "C-]") 'completion-at-point)
 
   ;; complete file paths
   (define-key evil-insert-state-map (kbd "C-x C-f")(lambda ()
@@ -527,13 +527,8 @@
   (define-key evil-visual-state-map (kbd "@") 'evgeni-run-macro)
   (define-key evil-normal-state-map (kbd "g@") 'evgeni-run-macro)
 
-  ;; TODO not working
-  (evil-define-operator evgeni-visual-dot-repeat (beg end)
-    :repeat abort
-    (interactive "<r>")
-    (evil-exit-visual-state)
-    (evil-ex-normal beg end "."))
-  (define-key evil-visual-state-map (kbd ".") 'evgeni-visual-dot-repeat)
+  (evil-define-key 'visual 'global
+    "." (kbd ":norm. RET"))
 
   ;; re-define evil-indent to save-excursion
   (evil-define-operator evil-indent (beg end)
@@ -564,7 +559,7 @@
               (setq ln (1+ ln)))))
         (back-to-indentation))))
 
-  ;; start %s/.../... with the word at point
+  ;; start %s/.../... with the last search pattern
   (defun evgeni-start-ex-substitute ()
     (interactive)
     (let ((pattern (or (evil-ex-pattern-regex evil-ex-search-pattern) "")))
@@ -594,6 +589,7 @@
   ;; other packages which integrate with evil
   (use-package evil-collection
     :ensure t
+    ;; :load-path "~/dev/evil-collection"
     :init
     (evil-collection-init))
 
@@ -676,16 +672,28 @@
         (dotimes (i count)
           (move-text-line-up))))))
 
+
+(use-package doom-modeline
+  :ensure t
+  :disabled
+  :defer .5
+  :hook (after-init . doom-modeline-init)
+  :config
+  (setq doom-modeline-height 20))
+
 (use-package! avy
   :ensure t
-  :defer 3
+  :defer 1
   :bind (:map evil-normal-state-map
-              ("gj" . avy-goto-line-below)
-              ("gk" . avy-goto-line-above)
+              ;; ("gj" . avy-goto-word-1-below)
+              ;; ("gk" . avy-goto-word-1-above)
+              ("gj" . avy-goto-char-timer)
+              ("gk" . avy-goto-char-timer)
               :map evil-motion-state-map
-              ("gh" . avy-goto-char-timer))
+              ;; ("gh" . avy-goto-char-timer)
+              )
   :config
-  (setq avy-timeout-seconds 1.2)
+  (setq avy-timeout-seconds .5)
   (custom-set-faces
    '(avy-lead-face-0 ((t (:inherit 'highlight))))
    '(avy-lead-face ((t (:inherit 'highlight)))))
@@ -736,6 +744,7 @@
 (use-package! magit
   :ensure t
   :defer 30
+  :pin melpa-stable
   :bind (:map evil-normal-state-map
               ("U U" . magit-status)
               ("U w" . magit-stage-file)
@@ -782,6 +791,18 @@
 
   (add-hook 'git-commit-mode-hook 'flyspell-mode))
 
+(use-package magit-org-todos
+  :ensure t
+  :disabled
+  :after magit
+  :config
+  (magit-org-todos-autoinsert)
+  (magit-add-section-hook
+   'magit-status-sections-hook
+   'magit-org-todos-insert-org-todos
+   'magit-insert-stashes
+   t))
+
 (use-package! smerge-mode
   :defer t
   :config
@@ -813,11 +834,14 @@
 
   :config
 
-  (add-hook 'vdiff-mode-hook (lambda () (diff-hl-mode -1)))
+  (setq vdiff-diff-algorithm 'git-diff-patience)
+
+  ;; (add-hook 'vdiff-mode-hook (lambda () (diff-hl-mode -1)))
   ;; (add-hook 'vdiff-mode-off-hook (lambda () (diff-hl-mode +1)))
 
   (setq vdiff-auto-refine t)
   (define-key vdiff-mode-map (kbd "C-c") vdiff-mode-prefix-map)
+  (define-key vdiff-3way-mode-map (kbd "C-c") vdiff-mode-prefix-map)
 
   (defun evgeni-vdiff-close-if-readonly ()
     (interactive)
@@ -833,7 +857,7 @@
   :bind (:map evil-normal-state-map
               ("U D" . vdiff-magit-popup))
   :config
-  (setq vdiff-magit-stage-is-2way nil) ;; Only use two buffers (working file and index) for vdiff-magit-stage
+  (setq vdiff-magit-stage-is-2way t) ;; Only use two buffers (working file and index) for vdiff-magit-stage
   (define-key magit-mode-map "e" 'vdiff-magit-dwim)
   (define-key magit-mode-map "E" 'vdiff-magit-popup)
   (setcdr (assoc ?e (plist-get magit-dispatch-popup :actions))
@@ -845,6 +869,11 @@
   :defer 60
   :ensure t
   :config
+  ;; text-mode-like parapgraph separation
+  (add-hook 'org-mode-hook (lambda ()
+                             (setq paragraph-start "\\|[ 	]*$"
+                                   paragraph-separate "[ 	]*$")))
+
   (org-babel-do-load-languages
    'org-babel-load-languages '((shell . t)))
 
@@ -887,44 +916,11 @@
   ;; don't use swiper in this buffer - swiper clears the highlighting in the xref buffer
   (evil-define-key 'normal xref--xref-buffer-mode-map "/" 'evil-ex-search-forward))
 
-(use-package! smart-compile
+(use-package ivy-xref
   :ensure t
-  :commands smart-compile
-  :bind (:map evil-normal-state-map
-              ("g m" . evgeni-smart-compile)
-              ("g RET" . evgeni-smart-compile))
-  :config
-  (evil-define-command evgeni-smart-compile ()
-    :motion nil
-    :move-point nil
-    :repeat nil
-    (interactive)
-    (call-interactively 'smart-compile))
-
-  (setq compilation-read-command nil)
-  (setq compilation-ask-about-save nil)
-  (setq smart-compile-check-makefile nil)
-  (setq smart-compile-alist '((cperl-mode . "perl -w -Mstrict -c %f")
-                              (perl-mode . "perl -w -Mstrict -c %f")
-                              (haskell-mode . "stack --silent ghc -- -e :q %f")
-                              ("docker-compose*\\.yml$" . "docker-compose -f %f config -q")
-                              (emacs-lisp-mode    . (emacs-lisp-byte-compile))))
-
-  (defun evgeni-close-compile-win-if-successful (buffer string)
-    (if (and
-         (eq major-mode 'compilation-mode)
-         (buffer-live-p buffer)
-         (string-match "compilation" (buffer-name buffer))
-         (string-match "finished" string)
-         (<= (line-number-at-pos (point-max)) 8))
-        (delete-windows-on buffer)
-      (with-selected-window (get-buffer-window buffer)
-        (goto-char (point-min))
-        (scroll-up-line 4))))
-
-  (add-hook 'compilation-finish-functions 'evgeni-close-compile-win-if-successful)
-
-  (ex! "mak[e]" 'evgeni-smart-compile))
+  :defer t
+  :init (setq xref-show-xrefs-function #'ivy-xref-show-xrefs)
+  :config)
 
 (use-package! ivy
   :ensure t
@@ -976,7 +972,7 @@
               (", /" . swiper-all))
   :config
   (setq swiper-goto-start-of-match t)
-  (jump! swiper))
+  (evil-set-command-properties 'swiper :jump t))
 
 (use-package! counsel
   :ensure t
@@ -994,7 +990,8 @@
          (", f"   . counsel-imenu)
          ("K"     . evgeni-counsel-git-grep)
          ("g P" . counsel-yank-pop)
-         ("C-c C-z" . evgeni-shell)
+         ;; ("C-c C-z" . evgeni-shell)
+         ("g p" . counsel-evil-registers)
          :map evil-visual-state-map
          ("K"     . evgeni-counsel-git-grep))
   :config
@@ -1022,20 +1019,20 @@
                                (buffer-substring (region-beginning) (region-end))
                              (thing-at-point 'word)))))
 
-  (jump! counsel-imenu)
-  (jump! counsel-find-file)
-  (jump! counsel-git-grep)
-  (jump! evgeni-counsel-git-grep))
+  (evil-set-command-properties 'counsel-imenu :jump t)
+  (evil-set-command-properties 'counsel-find-file :jump t)
+  (evil-set-command-properties 'counsel-git-grep :jump t)
+  (evil-set-command-properties 'evgeni-counsel-git-grep :jump t))
 
 (use-package! imenu-anywhere
   :ensure t
   :bind (:map evil-normal-state-map
               (", F"  . imenu-anywhere))
   :config
-  (jump! imenu-anywhere))
+  (evil-set-command-properties 'imenu-anywhere :jump t))
 
 (use-package! winner
-  :defer 2
+  :defer .5
   :bind (:map evil-normal-state-map ("z u" . hydra-winner/winner-undo))
   :config
   (winner-mode)
@@ -1047,7 +1044,7 @@
 
 (use-package! projectile
   :ensure t
-  :defer 3
+  :defer 1
   :bind (:map evil-motion-state-map
               ("g SPC"   . evgeni-projectile-find-file))
   :init
@@ -1072,10 +1069,40 @@
 (use-package! company
   :ensure t
   :config
-  (setq company-idle-delay nil)
+  (setq company-idle-delay .2)
+  (setq company-minimum-prefix-length 2)
   (setq company-dabbrev-downcase nil)
-  (evil-global-set-key 'insert (kbd "TAB") 'company-complete-common-or-cycle)
+
+  (setq company-transformers '(company-sort-by-occurrence))
+  (unbind-key "\C-w" company-active-map)
+  (unbind-key "\C-u" company-active-map)
+  (define-key company-active-map (kbd "C-/") 'company-search-candidates)
+
+  (setq company-tooltip-align-annotations 't)
   (global-company-mode))
+
+(use-package company-box
+  :ensure t
+  :disabled
+  :if (display-graphic-p)
+  :after company
+  :hook (company-mode . company-box-mode)
+  :config
+  (setq company-box-enable-icon nil))
+
+(use-package! yasnippet
+  :ensure t
+  :defer 1
+  :config
+  (setq yas-verbosity 2)
+  (yas-global-mode)
+  (evil-define-minor-mode-key 'insert yas-minor-mode (kbd "C-c y") 'yas-insert-snippet)
+  (ex! "yas-new" 'yas-new-snippet))
+
+(use-package yasnippet-snippets
+  :ensure t
+  :after yasnippet
+  :config (yasnippet-snippets-initialize))
 
 (use-package! yasnippet
   :ensure t
@@ -1085,20 +1112,20 @@
     :ensure t))
 (use-package evil-expat
   :load-path "~/dev/evil-expat"
-  :defer 1)
+  :defer .5)
 
 (use-package evil-goggles
-  :defer 1
+  :defer .5
   :ensure t
   :load-path "~/dev/evil-goggles"
   :config
-  (setq evil-goggles-blocking-duration 0.100)
-  ;; (setq evil-goggles-async-duration 0.200)
-
-  (evil-goggles-mode)
+  ;; (setq evil-goggles-blocking-duration 0.100)
+  (setq evil-goggles-pulse nil)
   (evil-goggles-use-diff-faces)
-  ;; (evil-goggles-use-magit-faces)
-  )
+
+  ;; (setq evil-goggles-duration 0.1
+  ;;       evil-goggles-enable-delete nil)
+  (evil-goggles-mode))
 
 (use-package! evil-regression
   :load-path "~/dev/evil-regression"
@@ -1107,21 +1134,22 @@
               ( "C-r" . evil-regression-paste-from-register)))
 
 (use-package recentf
-  :defer 1
+  :defer .5
   :init
   (setq recentf-max-saved-items 500)
-  (setq recentf-exclude '("/tmp/" "/ssh:" (expand-file-name "~/Maildir/")))
+  (setq recentf-exclude '("/tmp/" ;; "/ssh:"
+                          (expand-file-name "~/Maildir/")))
   (setq recentf-auto-cleanup 'never)
   :config
   (recentf-mode))
 
 (use-package saveplace
-  :defer 1
+  :defer .5
   :config
   (save-place-mode))
 
 (use-package savehist
-  :defer 1
+  :defer .5
   :init
   (setq
    enable-recursive-minibuffers t ; commands in minibuffers
@@ -1144,6 +1172,7 @@
 (use-package wdired
   :commands wdired-change-to-wdired-mode
   :init
+  (evil-set-initial-state 'wdired-mode 'normal)
   (ex! "wdired" 'wdired-change-to-wdired-mode))
 
 (use-package evil-magit
@@ -1203,11 +1232,29 @@
    '(wgrep-delete-face ((t (:inherit 'isearch-fail)))))) ;; *Face used for the deleted whole line in the grep buffer.
 
 (use-package compile
-  :defer 3
+  :bind (:map evil-normal-state-map
+              ("g m" . compile)
+              ("g RET" . compile))
   :config
   (setq compilation-scroll-output 'next-error)
   (setq compilation-read-command nil)
-  (setq compilation-ask-about-save nil))
+  (setq compilation-ask-about-save nil)
+
+  (defun evgeni-close-compile-win-if-successful (buffer string)
+    (if (and
+         (eq major-mode 'compilation-mode)
+         (buffer-live-p buffer)
+         ;; (<= (line-number-at-pos (point-max)) 8)
+         (string-match "compilation" (buffer-name buffer))
+         (string-match "finished" string))
+        (progn
+          (sit-for .8)
+          (delete-windows-on buffer))
+      (with-selected-window (get-buffer-window buffer)
+        (goto-char (point-min))
+        (scroll-up-line 4))))
+
+  (add-hook 'compilation-finish-functions 'evgeni-close-compile-win-if-successful))
 
 (use-package aggressive-indent
   :ensure t
@@ -1218,7 +1265,7 @@
 
 (use-package shackle
   :ensure t
-  :defer 3
+  :defer .5
   :config
   (shackle-mode 1)
   (setq shackle-rules
@@ -1230,6 +1277,9 @@
           ("*compilation*"             :align below :size 10)
           ("*grep*"                    :align below :size 10)
           ("*Occur*"                   :align below :size 10)
+          ("*Go Test*"                 :align below :size 15)
+          ("*Gofmt Errors*"            :align below :size 10)
+          ("*shell-1*"                 :same t :align below)
           (ivy-occur-grep-mode         :align below :size 10))))
 
 (use-package smex
@@ -1305,7 +1355,16 @@
   :commands (markdown-mode gfm-mode)
   :mode (("README\\.md\\'" . gfm-mode)
          ("\\.md\\'" . markdown-mode)
-         ("\\.markdown\\'" . markdown-mode)))
+         ("\\.markdown\\'" . markdown-mode))
+  :config
+  (evil-define-key 'normal markdown-mode-map
+    (kbd "<tab>") 'markdown-cycle
+    (kbd "<S-tab>") 'markdown-shifttab)
+
+  ;; text-mode-like parapgraph separation
+  (add-hook 'markdown-mode-hook (lambda ()
+                             (setq paragraph-start "\\|[ 	]*$"
+                                   paragraph-separate "[ 	]*$"))))
 
 (use-package origami
   :ensure t
@@ -1422,7 +1481,7 @@
   (define-key emacs-lisp-mode-map (kbd "C-c >") 'sp-forward-barf-sexp))
 
 (use-package paren
-  :defer 1
+  :defer .5
   :config
   (setq show-paren-style 'parenthesis
         show-paren-delay 0)
@@ -1433,7 +1492,8 @@
   :commands ledger-mode)
 
 (use-package uniquify
-  :defer 1
+  :disabled t
+  :defer .5
   :config
   (setq uniquify-buffer-name-style 'forward)
   (setq uniquify-separator "/")
@@ -1504,6 +1564,10 @@
   :ensure t
   :mode ("\\.restclient\\'" . restclient-mode))
 
+(use-package company-restclient
+  :ensure t
+  :after (company restclient))
+
 (use-package dockerfile-mode
   :ensure t
   :mode (".*Dockerfile.*" . dockerfile-mode)
@@ -1539,7 +1603,7 @@
 
 (use-package exec-path-from-shell
   :if (memq window-system '(mac ns))
-  :defer 1
+  :defer .5
   :ensure t
   :config
   (exec-path-from-shell-initialize))
@@ -1583,7 +1647,7 @@
 
 (use-package hl-todo
   :ensure t
-  :defer 3
+  :defer 1
   :config
   (add-hook 'prog-mode-hook 'hl-todo-mode)
   (add-hook 'text-mode-hook 'hl-todo-mode))
@@ -1596,11 +1660,18 @@
   :ensure t
   :mode "\\.toml\\'")
 
-(use-package diff-hl
+(use-package diff
+  :defer t
+  :config
+  (add-hook 'diff-mode-hook 'diff-auto-refine-mode))
+
+(use-package! diff-hl
   :ensure t
-  :defer 2
+  :load-path "~/dev/diff-hl"
+  :defer .5
   :init
-  (setq diff-hl-margin-symbols-alist '((insert . " ") (delete . " ") (change . " ") (unknown . "?") (ignored . "i")))
+  ;; (setq diff-hl-margin-symbols-alist '((insert . " ") (delete . " ") (change . " ") (unknown . "?") (ignored . "i")))
+  (setq diff-hl-margin-symbols-alist '((insert . "+") (delete . "-") (change . "|") (unknown . "?") (ignored . "i")))
   :config
   (global-diff-hl-mode)
   ;; (add-hook 'prog-mode-hook 'turn-on-diff-hl-mode)
@@ -1608,10 +1679,11 @@
   (unless (window-system)
     (diff-hl-margin-mode))
 
-  ;; (diff-hl-flydiff-mode)
   (add-hook 'diff-hl-mode-hook 'diff-hl-flydiff-mode)
-
   (add-hook 'magit-post-refresh-hook 'diff-hl-magit-post-refresh)
+
+  (evil-add-command-properties 'diff-hl-next-hunk :jump t :repeat 'motion)
+  (evil-add-command-properties 'diff-hl-previous-hunk :jump t :repeat 'motion)
 
   (evil-define-minor-mode-key 'normal 'diff-hl-mode
     "]c" 'diff-hl-next-hunk
@@ -1650,6 +1722,16 @@
   :bind* ("C-c C-z" . shell-toggle)
   :init
   (setq shell-toggle-launch-shell 'shell-toggle-eshell))
+
+(use-package! shell-pop
+  :ensure t
+  :commands shell-pop
+  :init
+  (evil-define-key '(normal insert) evgeni-intercept-mode-map
+    (kbd "C-c C-z") 'shell-pop)
+  (setq shell-pop-shell-type '("eshell" "*eshell*" (lambda () (eshell))))
+  :config
+  (setq shell-pop-full-span t))
 
 (use-package git-commit
   :ensure t
@@ -1711,12 +1793,11 @@
   (defhydra evgeni-hydra-zoom nil
     "zoom"
     ("j" text-scale-decrease "out")
-    ("k" text-scale-increase "in")
+    ("k" text-scale-adjust "in")
     ("0" (text-scale-set 0) "reset"))
 
   (defun evgeni-toggles ()
     (interactive)
-    (message "hi2")
     (setq evil-inhibit-operator t)
     (evgeni-toggles-hydra/body))
 
@@ -1732,9 +1813,23 @@
     ("c" global-hl-line-mode "global-hl-line-mode")
     ("w" visual-line-mode "visual-line-mode")
     ("k" toggle-input-method "toggle-input-method")
-    ("n" display-line-numbers-mode "toggle-input-method")
+    ("n" display-line-numbers-mode "display-line-numbers-mode")
+    ("s" flyspell-mode "flyspell-mode")
+    ;; TODO the relative toggles isn't working well
+    ("r" linum-relative-toggle "display-line-numbers-mode")
     ("h" auto-fill-mode "auto-fill-mode")))
 
+(use-package linum-relative
+  :ensure t
+  :defer t)
+
+(use-package! goto-chg
+  :bind (:map evil-normal-state-map ("g ;" . hydra-goto-last-change/goto-last-change))
+  :config
+  (defhydra hydra-goto-last-change ()
+    "Change List"
+    (";" goto-last-change "undo")
+    ("." goto-last-change-reverse "redo")))
 
 (use-package clojure-mode
   :ensure t
@@ -1776,15 +1871,6 @@
   :config
   (setq which-key-idle-delay 0.4))
 
-(use-package helpful
-  :ensure t
-  :disabled t
-  :bind (([remap describe-function] . helpful-callable)
-         ([remap describe-key] . helpful-key)
-         ([remap describe-variable] . helpful-variable))
-  :config
-  (evil-define-key 'normal helpful-mode-map "q" 'quit-window))
-
 (use-package ox-hugo
   :ensure t
   :after ox)
@@ -1799,18 +1885,55 @@
 
 (use-package! eshell
   :defer t
-  :config
-  (evil-define-key 'insert eshell-mode-map (kbd "C-p") 'eshell-previous-matching-input-from-input)
-  (evil-define-key 'insert eshell-mode-map (kbd "C-n") 'eshell-next-matching-input-from-input))
+  :init
+
+  (evil-define-key 'insert eshell-mode-map (kbd "C-a") 'eshell-bol)
+
+  (setq ;; eshell-buffer-shorthand t ...  Can't see Bug#19391
+   eshell-scroll-to-bottom-on-input 'all
+   eshell-error-if-no-glob t
+   eshell-hist-ignoredups t
+   eshell-save-history-on-exit t
+   eshell-prefer-lisp-functions nil
+   eshell-destroy-buffer-when-process-dies t)
+
+  (add-hook 'eshell-mode-hook
+            (lambda ()
+              (add-to-list 'eshell-visual-commands "ssh")
+              (add-to-list 'eshell-visual-commands "tail")
+              (add-to-list 'eshell-visual-commands "top")))
+
+  (add-hook 'eshell-mode-hook (lambda ()
+                                (eshell/alias "e" "find-file $1")
+                                (eshell/alias "ff" "find-file $1")
+                                (eshell/alias "emacs" "find-file $1")
+                                (eshell/alias "ee" "find-file-other-window $1")
+
+                                (eshell/alias "gd" "magit-diff-unstaged")
+                                (eshell/alias "gds" "magit-diff-staged")
+                                (eshell/alias "d" "dired $1")
+
+                                ;; The 'ls' executable requires the Gnu version on the Mac
+                                (let ((ls (if (file-exists-p "/usr/local/bin/gls")
+                                              "/usr/local/bin/gls"
+                                            "/bin/ls")))
+                                  (eshell/alias "ll" (concat ls " -AlohG --color=always")))))
+
+  (defun eshell/clear ()
+    "Clear the eshell buffer."
+    (let ((inhibit-read-only t))
+      (erase-buffer)
+      (eshell-send-input))))
 
 (use-package atomic-chrome
   :ensure t
   :if (display-graphic-p)
-  :defer 5
+  :defer 1
   :config
   (setq atomic-chrome-buffer-open-style 'frame)
   (setq atomic-chrome-default-major-mode 'markdown-mode)
   (atomic-chrome-start-server))
+
 (use-package! evil-numbers
   :ensure t
   :bind (:map evil-normal-state-map
@@ -1861,6 +1984,13 @@
   (setq cperl-lazy-help-time 3)
   (setq cperl-indent-parens-as-block t)
 
+  ;; compile command
+  (add-hook 'cperl-mode-hook (lambda ()
+                               (set (make-local-variable 'compile-command)
+                                    (concat "perl -w -Mstrict -c "
+                                            (shell-quote-argument
+                                             (buffer-file-name))))))
+
   ;; does this work?
   (setq cperl-highlight-variables-indiscriminately t)
 
@@ -1900,6 +2030,7 @@
   (minions-mode))
 
 (use-package moody
+  :disabled t
   :ensure t
   :if (display-graphic-p)
   :config
@@ -1958,3 +2089,98 @@
   (setq beacon-color
         (face-attribute 'mode-line :background)))
 
+(use-package dired-sidebar
+  :ensure t
+  :commands dired-sidebar-toggle-sidebar
+  :init
+  (ex! "sidebar" 'dired-sidebar-toggle-sidebar))
+
+(use-package go-mode
+  :ensure t
+  :defer t
+  :config
+
+  (with-eval-after-load 'exec-path-from-shell
+    (exec-path-from-shell-copy-env "GOPATH"))
+
+  ;; compile command
+  (add-hook 'go-mode-hook (lambda ()
+                            (set (make-local-variable 'compile-command)
+                                 "go test")))
+
+  ;; gofmt on save
+  (add-hook 'go-mode-hook (lambda ()
+                            (add-hook 'before-save-hook 'gofmt-before-save nil t)))
+
+  ;; prefer goimports over gofmt
+  (let ((goimports (executable-find "goimports")))
+    (when goimports
+      (setq gofmt-command goimports))))
+
+;; (use-package lsp-go
+;;   :ensure t
+;;   :functions lsp-go-enable
+;;   :init
+;;   (add-hook 'go-mode-hook #'lsp-go-enable))
+
+(use-package company-go
+  :ensure t
+  :after go-mode
+  :config
+  (add-hook 'go-mode-hook (lambda ()
+                            (set (make-local-variable 'company-backends) '(company-go)))))
+
+(use-package go-eldoc
+  :ensure t
+  :after go-mode
+  :config
+  (add-hook 'go-mode-hook 'go-eldoc-setup))
+
+(use-package! evil-multiedit
+  :ensure t
+  :commands evgeni-evil-multiedit
+  :init
+  (ex! "iedit" 'evgeni-evil-multiedit)
+  :config
+  (evil-define-command evgeni-evil-multiedit (&optional beg end regexp)
+    :motion nil
+    :move-point nil
+    :repeat nil
+    (interactive "<r><a>")
+    (evil-multiedit-abort)
+    (evil-multiedit--start-regexp (or regexp (evil-ex-pattern-regex evil-ex-search-pattern)) beg end)))
+
+(use-package! outshine
+  :ensure t
+  :defer .1
+  :config
+  (add-hook 'outline-minor-mode-hook 'outshine-hook-function)
+  (add-hook 'prog-mode-hook 'outline-minor-mode)
+
+  ;; make narrowing work within the headline rather than require point to be on it
+  (advice-add 'outshine-narrow-to-subtree :before
+              (lambda (&rest args) (unless (outline-on-heading-p t)
+                                     (outline-previous-visible-heading 1))))
+
+  (evil-define-minor-mode-key 'normal 'outline-minor-mode (kbd "<backtab>") 'outshine-cycle-buffer))
+
+(use-package! rainbow-mode
+  :ensure t
+  :commands rainbow-mode)
+
+(use-package text-mode
+  :defer t
+  :config
+  (add-hook 'text-mode-hook 'auto-fill-mode))
+
+;; (use-package! gotest
+;;   :ensure t
+;;   :after go-mode
+;;   :config
+;;   (evil-define-key 'normal go-mode-map (kbd "g m") 'go-test-current-file)
+
+;;   (add-hook 'go-mode-hook (lambda ()
+;;                             (set (make-local-variable 'compilation-error-regexp-alist-alist)
+;;                                  go-test-compilation-error-regexp-alist-alist)
+;;                             (set (make-local-variable 'compilation-error-regexp-alist)
+;;                                  go-test-compilation-error-regexp-alist))))
