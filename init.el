@@ -43,6 +43,7 @@
 (setq inhibit-startup-screen t)
 (setq backup-inhibited t)
 (setq auto-save-default nil)
+(setq make-backup-files nil)
 (setq suggest-key-bindings nil)
 (setq-default truncate-lines t)
 (setq blink-cursor-mode nil)
@@ -54,6 +55,7 @@
 (setq-default major-mode 'text-mode)
 (setq enable-local-variables :all)
 (setq require-final-newline t)
+(setq ring-bell-function 'ignore)
 
 ;; (setq initial-buffer-choice (lambda ()
 ;;                               (interactive)
@@ -80,17 +82,13 @@
 
 ;; disable VC
 (setq vc-handled-backends '(Git))
+;; don't ask when following a symlink to a version-controlled file
+(setq vc-follow-symlinks t)
 
 (modify-syntax-entry ?_ "w" (standard-syntax-table))
 (modify-syntax-entry ?' "." (standard-syntax-table))
 (modify-syntax-entry ?' "." text-mode-syntax-table)
 (add-hook 'prog-mode-hook (lambda () (modify-syntax-entry ?_ "w")))
-
-;; project root
-(defun evgeni-project-root ()
-  (if-let ((prj (project-current)))
-      (cdr prj)
-    default-directory))
 
 ;; in modeline, show file path, relative to the project root
 (with-eval-after-load 'subr-x
@@ -102,13 +100,15 @@
                                                         (propertize (file-name-nondirectory buffer-file-truename) 'face 'mode-line-buffer-id)))
                                               (propertized-buffer-identification "%b"))))))
 
-;; etags
-(defun evgeni-find-etags-file ()
-  (let ((etags-file (expand-file-name ".git/etags" (evgeni-project-root))))
-    (when (file-exists-p etags-file)
-      etags-file)))
-(setq default-tags-table-function 'evgeni-find-etags-file)
 (setq tags-revert-without-query t)
+
+;; prompt to create missing dirs
+(defun evgeni-create-non-existent-directory ()
+      (let ((parent-directory (file-name-directory buffer-file-name)))
+        (when (and (not (file-exists-p parent-directory))
+                   (y-or-n-p (format "Directory `%s' does not exist. Create it?" parent-directory)))
+          (make-directory parent-directory t))))
+(add-to-list 'find-file-not-found-functions #'evgeni-create-non-existent-directory)
 
 (defmacro ex! (cmd func)
   "Shortcut for defining ex commands"
@@ -120,7 +120,7 @@
   `(with-eval-after-load 'evil
      (use-package ,name ,@plist)))
 
-;; imenu should recognize use-package!
+;; imenu should recognize `use-package!`
 (with-eval-after-load 'lisp-mode
   (add-to-list 'lisp-imenu-generic-expression
                (list "Packages" (concat (concat "^\\s-*(" (regexp-opt '("use-package!") t) "\\s-+\\(")
@@ -155,7 +155,16 @@
 
 ;;; themes
 (setq custom-safe-themes t)
-(use-package habamax-theme :ensure t :defer t)     ;; nice
+(use-package habamax-theme :ensure t :defer t
+  :config
+  (let ((color-bg-highlight "#ececef")
+        (color-dim-bg "#f5f9fe"))
+    (custom-theme-set-faces
+     'habamax
+     `(dired-directory ((t (:inherit default :background ,color-dim-bg))))
+     `(company-tooltip-selection ((t (:inherit ivy-current-match))))
+     `(company-tooltip ((t (:background "#f5f5f5"))))
+     `(company-scrollbar-bg ((t (:background ,color-bg-highlight)))))))
 (use-package one-themes :ensure t :defer t)        ;; ok
 (use-package greymatters-theme :ensure t :defer t) ;; ok
 (use-package chyla-theme :ensure t :defer t)       ;; ok, green
@@ -167,16 +176,20 @@
 (use-package apropospriate-theme :ensure t :defer t)
 (use-package material-theme :ensure t :defer t)
 (use-package tango-plus-theme :ensure t :defer t)
-(use-package kaolin-themes :ensure t :defer t)     ;; kaolin-ligh & kaolin-valley-light
+(use-package plan9-theme :ensure t :defer t)
+(use-package doom-themes :ensure t :defer t)
+
+;; dark themes
+(use-package dracula-theme :ensure t :defer t)
+(use-package leuven-theme :ensure t :defer t)
 
 (use-package emacs
-  :defer .15
+  :defer .1
   :config
   ;; load theme
   (load-theme (if (display-graphic-p)
-                  'habamax ;; 'dichromacy ;; 'doom-one-light ;; 'twilight-bright ;; 'apropospriate-dark ;;'tango-dark ;; tango-plus flatui
-                'doom-one-light
-                )
+                  'doom-one-light ;; 'habamax ;; 'dichromacy ;; 'doom-one-light ;; 'twilight-bright ;; 'apropospriate-dark ;;'tango-dark ;; tango-plus flatui
+                'doom-one-light)
               t)
   ;; bind command-option-H to hide other windows, just like every other OS X app
   (when (string-equal system-type "darwin")
@@ -187,6 +200,7 @@
   :demand t)
 
 (use-package desktop
+  :disabled
   :if (display-graphic-p)
   :config
   (add-to-list 'frameset-filter-alist '(background-color . :never))
@@ -199,6 +213,47 @@
         desktop-buffers-not-to-save ".*"
         desktop-save t)
   (desktop-save-mode))
+
+;; restore frame position - https://github.com/aaronjensen/restore-frame-position
+(when (display-graphic-p)
+  (setq restore-frame-position-file (expand-file-name "frame-position.el" no-littering-var-directory))
+
+  (defun restore-frame-position--number-or-zero (maybe-number)
+    "Return 0 if MAYBE-NUMBER is a non-number."
+    (if (number-or-marker-p maybe-number)
+        maybe-number
+      0))
+
+  (defun restore-frame-position-save ()
+    "Save the current frame's size and position to `restore-frame-position-file'."
+    (when (window-system)
+      (let* ((frame-geometry-left (restore-frame-position--number-or-zero (frame-parameter (selected-frame) 'left)))
+             (frame-geometry-top (restore-frame-position--number-or-zero (frame-parameter (selected-frame) 'top)))
+             (frame-geometry-width (restore-frame-position--number-or-zero (frame-text-width)))
+             (frame-geometry-height (restore-frame-position--number-or-zero (frame-text-height))))
+
+        (with-temp-buffer
+          (insert
+           (format "(add-to-list 'initial-frame-alist '(top . %d))\n" (max frame-geometry-top 0))
+           (format "(add-to-list 'initial-frame-alist '(left . %d))\n" (max frame-geometry-left 0))
+           (format "(add-to-list 'initial-frame-alist '(width . (text-pixels . %d)))\n" (max frame-geometry-width 0))
+           (format "(add-to-list 'initial-frame-alist '(height . (text-pixels . %d)))\n" (max frame-geometry-height 0)))
+          (when (file-writable-p restore-frame-position-file)
+            (write-file restore-frame-position-file))))))
+
+  (defun restore-frame-position-load ()
+    "Load the current frame's size and position from `restore-frame-position-file'."
+    (when (file-readable-p restore-frame-position-file)
+      (load-file restore-frame-position-file)))
+
+  (defun restore-frame-position ()
+    "Install hooks to remember and restore initial frame poosition."
+    (if after-init-time
+        (restore-frame-position-load)
+      (add-hook 'after-init-hook 'restore-frame-position-load))
+    (add-hook 'kill-emacs-hook 'restore-frame-position-save))
+
+  (restore-frame-position))
 
 ;; load mail.el if any
 (when (file-readable-p (concat user-emacs-directory "mail.el"))
@@ -213,12 +268,29 @@
   (add-to-list
    'gnutls-trustfiles "/usr/local/etc/libressl/cert.pem"))
 
+;; use M-u instaed of C-u for universal argument
+(define-key global-map (kbd "C-u") 'kill-whole-line)
+(define-key global-map (kbd "M-u") 'universal-argument)
+(define-key universal-argument-map (kbd "C-u") nil)
+(define-key universal-argument-map (kbd "M-u") 'universal-argument-more)
+
+(use-package dashboard
+  :ensure t
+  :config
+  (setq dashboard-items nil)
+  (setq dashboard-startup-banner 'logo)
+  (setq dashboard-startup-banner "~/Desktop/emacs-icon.png")
+  (setq dashboard-banner-logo-title "")
+  (setq dashboard-page-separator "\n")
+  (dashboard-setup-startup-hook))
+
 ;; load evil early
 (use-package evil
   :ensure t
   ;; :load-path "~/dev/evil"
   :init
-  (setq evil-want-integration nil)
+  (setq evil-want-integration t)
+  (setq evil-want-keybinding nil)
   (setq evil-search-module 'evil-search)
   (setq evil-ex-search-vim-style-regexp t)
   (setq evil-ex-complete-emacs-commands nil)
@@ -231,19 +303,6 @@
   (setq evil-ex-substitute-global t)
   :config
   (evil-mode)
-  (message "Loading evil-mode...done (%.3fs)" (float-time (time-subtract (current-time) emacs-start-time))))
-
-;; use M-u instaed of C-u for universal argument
-(define-key global-map (kbd "C-u") 'kill-whole-line)
-(define-key global-map (kbd "M-u") 'universal-argument)
-(define-key universal-argument-map (kbd "C-u") nil)
-(define-key universal-argument-map (kbd "M-u") 'universal-argument-more)
-
-;; configure evil after startup
-(use-package evil
-  :defer .1
-  :config
-
   ;; face for %s///
   (custom-set-faces
    '(evil-ex-substitute-replacement ((t (:inherit 'query-replace)))))
@@ -287,12 +346,35 @@
     (windmove-right)
     (balance-windows))
 
+
+  (defun evgeni-find-next-file (&optional backward)
+    "Find the next file (by name) in the current directory.
+
+With prefix arg, find the previous file."
+    (interactive "P")
+    (when buffer-file-name
+      (let* ((file (expand-file-name buffer-file-name))
+             (files (cl-remove-if (lambda (file) (cl-first (file-attributes file)))
+                                  (sort (directory-files (file-name-directory file) t nil t) 'string<)))
+             (pos (mod (+ (cl-position file files :test 'equal) (if backward -1 1))
+                       (length files))))
+        (find-file (nth pos files)))))
+
+  (defun evgeni-find-prev-file ()
+    "Find previous file in the current directory"
+    (interactive)
+    (evgeni-find-next-file t))
+
   (define-key evil-normal-state-map (kbd "RET") 'evgeni-save-file)
   (define-key evil-normal-state-map (kbd "[ Q") 'first-error)
   (define-key evil-normal-state-map (kbd "] Q") (lambda () (interactive) (goto-char (point-max)) (previous-error)))
   (define-key evil-normal-state-map (kbd "] q") 'next-error)
   (define-key evil-normal-state-map (kbd "[ q") 'previous-error)
   (define-key evil-normal-state-map (kbd ", w") 'evgeni-window-vsplit)
+  (define-key evil-normal-state-map (kbd "g C-g") 'count-words)
+
+  (define-key evil-normal-state-map (kbd "] f") 'evgeni-find-next-file)
+  (define-key evil-normal-state-map (kbd "[ f") 'evgeni-find-prev-file)
 
   (define-key evil-normal-state-map (kbd "C-c C-b")'ido-switch-buffer)
 
@@ -345,17 +427,6 @@
     (if file
         (load-file file)
       (load-file (concat user-emacs-directory "init.el"))))
-
-  ;; my intercept map
-  (defvar evgeni-intercept-mode-map (make-sparse-keymap))
-  (define-minor-mode evgeni-intercept-mode
-    "Global minor mode for higher precedence evil keybindings."
-    :global t)
-  (evgeni-intercept-mode)
-  (dolist (state '(normal insert))
-    (evil-make-intercept-map
-     (evil-get-auxiliary-keymap evgeni-intercept-mode-map state t t)
-     state))
 
   ;; my intercept map
   (defvar evgeni-intercept-mode-map (make-sparse-keymap))
@@ -443,12 +514,6 @@
 
   (define-key evil-inner-text-objects-map "e" 'evgeni-entire-text-object)
   (define-key evil-outer-text-objects-map "e" 'evgeni-entire-text-object)
-
-  ;; ;; toggles
-  ;; (define-key evil-normal-state-map (kbd "C-c o c") 'hl-line-mode)
-  ;; (define-key evil-normal-state-map (kbd "C-c o w") 'visual-line-mode)
-  ;; (define-key evil-normal-state-map (kbd "C-c o k") 'toggle-input-method)
-  ;; (define-key evil-normal-state-map (kbd "C-c o h") 'auto-fill-mode)
 
   ;; auto-fill on dot
   (aset auto-fill-chars ?. t)
@@ -573,10 +638,8 @@
   ;; system clipboard integration
   (when (display-graphic-p)
     (setq x-select-enable-clipboard nil)
-    (define-key evil-visual-state-map (kbd "s-c") (kbd "\"+y"))
-    (define-key evil-insert-state-map  (kbd "s-v") (kbd "+"))
-    (define-key evil-ex-completion-map (kbd "s-v") (kbd "+"))
-    (define-key evil-ex-search-keymap  (kbd "s-v") (kbd "+")))
+    (define-key global-map [remap ns-copy-including-secondary] 'clipboard-kill-ring-save)
+    (define-key global-map [remap yank] 'clipboard-yank))
 
   ;; don't move point on :s// and :g//
   (defun evgeni-save-excursion-advice (orig-fun &rest args)
@@ -670,20 +733,17 @@
       (interactive "p")
       (let ((count (or count 1)))
         (dotimes (i count)
-          (move-text-line-up))))))
+          (move-text-line-up)))))
 
+  (message "Loading evil-mode...done (%.3fs)" (float-time (time-subtract (current-time) emacs-start-time))))
 
 (use-package doom-modeline
   :ensure t
-  :disabled
-  :defer .5
-  :hook (after-init . doom-modeline-init)
-  :config
-  (setq doom-modeline-height 20))
+  :hook (after-init . doom-modeline-init))
 
 (use-package! avy
   :ensure t
-  :defer 1
+  :defer .5
   :bind (:map evil-normal-state-map
               ;; ("gj" . avy-goto-word-1-below)
               ;; ("gk" . avy-goto-word-1-above)
@@ -777,6 +837,11 @@
 
   (setq magit-display-buffer-function 'magit-display-buffer-fullframe-status-v1)
   (setq magit-diff-refine-hunk 't)
+  (setq magit-save-repository-buffers 'dontask)
+
+  ;; `q' should call `magit-mode-bury-buffer', for some reason it call `quit-window' with evil-mode/evil-collection
+  (evil-define-key 'normal magit-status-mode-map
+    "q" 'magit-mode-bury-buffer)
 
   ;; lower untracked
   (magit-add-section-hook 'magit-status-sections-hook
@@ -791,18 +856,6 @@
 
   (add-hook 'git-commit-mode-hook 'flyspell-mode))
 
-(use-package magit-org-todos
-  :ensure t
-  :disabled
-  :after magit
-  :config
-  (magit-org-todos-autoinsert)
-  (magit-add-section-hook
-   'magit-status-sections-hook
-   'magit-org-todos-insert-org-todos
-   'magit-insert-stashes
-   t))
-
 (use-package! smerge-mode
   :defer t
   :config
@@ -811,8 +864,9 @@
     (kbd "[ n")     'smerge-prev
     (kbd "C-c C-c") 'smerge-keep-current
     (kbd "C-c C-k") 'smerge-kill-current
-    ;; "b" mnemonic for both
-    (kbd "C-c C-b") 'smerge-keep-all))
+    ;; "b" mnemonic for both, "a" for all
+    (kbd "C-c C-b") 'smerge-keep-all
+    (kbd "C-c C-a") 'smerge-keep-all))
 
 (use-package! vdiff
   :ensure t
@@ -830,8 +884,6 @@
                                    (t
                                     (user-error "Expected 2 or 3 buffers, got %s" (length bufs)))))))
 
-  (evil-define-minor-mode-key 'normal 'vdiff-mode "q" 'evgeni-vdiff-close-if-readonly)
-
   :config
 
   (setq vdiff-diff-algorithm 'git-diff-patience)
@@ -843,11 +895,8 @@
   (define-key vdiff-mode-map (kbd "C-c") vdiff-mode-prefix-map)
   (define-key vdiff-3way-mode-map (kbd "C-c") vdiff-mode-prefix-map)
 
-  (defun evgeni-vdiff-close-if-readonly ()
-    (interactive)
-    (if buffer-read-only
-        (vdiff-quit)
-      (call-interactively 'evil-record-macro))))
+  (evil-define-minor-mode-key 'normal 'vdiff-mode "q" 'vdiff-quit)
+  (evil-define-minor-mode-key 'normal 'vdiff-3way-mode "q" 'vdiff-quit))
 
 (use-package! vdiff-magit
   :ensure t
@@ -866,7 +915,7 @@
           '("vdiff popup" 'vdiff-magit-popup)))
 
 (use-package! org
-  :defer 60
+  :defer 30
   :ensure t
   :config
   ;; text-mode-like parapgraph separation
@@ -884,27 +933,39 @@
   (setq org-confirm-babel-evaluate nil)
 
   (evil-define-key '(normal insert) org-mode-map
-    (kbd "TAB") 'org-cycle)
+    (kbd "TAB") 'org-cycle))
 
-  (use-package org-bullets
-    :ensure t
-    :after org
-    :config
-    (add-hook 'org-mode-hook (lambda () (org-bullets-mode 1))))
+(use-package org-bullets
+  :ensure t
+  :after org
+  :config
 
-  (use-package evil-org
-    :ensure t
-    :after org
-    :config
-    (add-hook 'org-mode-hook 'evil-org-mode)
-    (add-hook 'org-mode-hook (lambda ()
-                               (evil-org-mode)
-                               (evil-org-set-key-theme '(operators))))))
+  (setq org-bullets-bullet-list
+        '("◉" "○" "•" "▸"))
+
+  (add-hook 'org-mode-hook (lambda () (org-bullets-mode 1))))
+
+(use-package evil-org
+  :ensure t
+  :after org
+  :config
+  (add-hook 'org-mode-hook 'evil-org-mode)
+  (add-hook 'org-mode-hook (lambda ()
+                             (evil-org-mode)
+                             (evil-org-set-key-theme '(operators)))))
+
+(use-package ob-restclient
+  :ensure t
+  :after org
+  :config
+  (org-babel-do-load-languages
+   'org-babel-load-languages
+   '((restclient . t))))
 
 (use-package! xref
   :bind (:map evil-normal-state-map
               ("C-]" . xref-find-definitions)
-              ("g C-]" . xref-find-definitions)
+              ("g C-]" . xref-find-references)
               ("C-w C-]" . xref-find-definitions-other-window))
   :config
   (ex! "tag" (lambda ()
@@ -925,6 +986,7 @@
 (use-package! ivy
   :ensure t
   :defer t
+  :pin melpa-stable
   :bind (:map evil-normal-state-map
               ("SPC" . ivy-switch-buffer))
   :init
@@ -976,48 +1038,57 @@
 
 (use-package! counsel
   :ensure t
+  :pin melpa-stable
   :init
   (ex! "faces" 'counsel-faces)
-  (ex! "find-lib" 'counsel-find-library)
+  ;; (ex! "find-lib" 'counsel-find-library)
+  (ex! "find-lib" 'find-library)
+  (ex! "set[-variable]" 'counsel-set-variable)
+
+  (evil-define-key '(normal visual) evgeni-intercept-mode-map
+    (kbd "K") 'evgeni-counsel-git-grep)
+
   :bind (([remap find-file] . counsel-find-file)
          ([remap execute-extended-command] . counsel-M-x)
          ([remap describe-function] . counsel-describe-function)
          ([remap describe-key] . describe-key)
          ([remap describe-variable] . counsel-describe-variable)
-         :map evil-motion-state-map
-         ("g /"   . counsel-git-grep)
          :map evil-normal-state-map
          (", f"   . counsel-imenu)
-         ("K"     . evgeni-counsel-git-grep)
          ("g P" . counsel-yank-pop)
-         ;; ("C-c C-z" . evgeni-shell)
-         ("g p" . counsel-evil-registers)
-         :map evil-visual-state-map
-         ("K"     . evgeni-counsel-git-grep))
+         ("g p" . counsel-evil-registers))
   :config
 
-  (defun evgeni-shell ()
-    "Switch to a shell buffer, or create one."
-    (interactive)
-    (ivy-read "Switch to shell buffer: "
-              (counsel-list-buffers-with-mode 'shell-mode)
-              :action #'counsel-switch-to-buffer-or-window
-              :initial-input (concat (expand-file-name (or (cdr (project-current)) default-directory)) " (shell)")
-              :caller 'counsel-switch-to-shell-buffer))
-
   (setq counsel-git-cmd "git ls-files --cached --others --exclude-standard")
+  (setq counsel-rg-base-command "rg -i -M 120 --no-heading --line-number --color never %s .")
+
   (setq counsel-git-grep-skip-counting-lines t)
+  (setq counsel-yank-pop-after-point t)
 
   (define-key counsel-describe-map (kbd "C-]") 'counsel-find-symbol)
   (define-key counsel-git-grep-map (kbd "C-c C-c") 'ivy-occur)
   (define-key ivy-occur-grep-mode-map (kbd "C-c C-c") 'wgrep-change-to-wgrep-mode)
 
+  ;; TODO maybe drop the "rg" support in here - always use git grep
+  (setq evgeni-counsel-git-grep-rigpreg-found (executable-find "rg"))
+
+  (when evgeni-counsel-git-grep-rigpreg-found
+    (setq counsel-rg-base-command "rg -S -M 500 --no-heading --hidden -g '!.git' --line-number --color never %s ."))
+
+  (evil-define-key 'normal evgeni-intercept-mode-map
+    (kbd "g /") (if evgeni-counsel-git-grep-rigpreg-found
+                    'counsel-rg
+                  'counsel-git-grep))
+
   (defun evgeni-counsel-git-grep ()
     (interactive)
-    (counsel-git-grep nil (substring-no-properties
-                           (if (region-active-p)
-                               (buffer-substring (region-beginning) (region-end))
-                             (thing-at-point 'word)))))
+    (let ((word (substring-no-properties
+                 (if (region-active-p)
+                     (buffer-substring (region-beginning) (region-end))
+                   (thing-at-point 'word)))))
+      (if evgeni-counsel-git-grep-rigpreg-found
+          (funcall-interactively 'counsel-rg word) ;; TODO try funcall-interactively, counsel-rg hungs occasionally
+        (counsel-git-grep nil word))))
 
   (evil-set-command-properties 'counsel-imenu :jump t)
   (evil-set-command-properties 'counsel-find-file :jump t)
@@ -1044,7 +1115,7 @@
 
 (use-package! projectile
   :ensure t
-  :defer 1
+  :defer 3
   :bind (:map evil-motion-state-map
               ("g SPC"   . evgeni-projectile-find-file))
   :init
@@ -1061,57 +1132,76 @@
 
   (setq projectile-switch-project-action
         (lambda ()
-          (dired (projectile-project-root))))
+          (dired (projectile-project-root))
+          (magit-status)))
   (setq projectile-mode-line (format " [%s]" (projectile-project-name)))
   (setq projectile-completion-system 'default)
   (projectile-global-mode))
 
 (use-package! company
   :ensure t
+  :defer .5
   :config
-  (setq company-idle-delay .2)
-  (setq company-minimum-prefix-length 2)
-  (setq company-dabbrev-downcase nil)
 
-  (setq company-transformers '(company-sort-by-occurrence))
+  (setq company-minimum-prefix-length 2
+        company-tooltip-limit 20
+        company-idle-delay .3 ;; .05
+        company-echo-delay 0 ;; remove annoying blinking
+        company-begin-commands '(self-insert-command)
+        company-dabbrev-downcase nil
+        company-dabbrev-ignore-case nil
+        company-dabbrev-code-other-buffers t
+        company-tooltip-align-annotations t
+        company-backends '(company-capf company-dabbrev company-ispell)
+        company-transformers '(company-sort-by-occurrence))
+
+  (with-eval-after-load 'yasnippet
+          (nconc company-backends '(company-yasnippet)))
+
+  ;; with company's tab-and-go feature, allow snippet/template expansion with RET
+  (define-key company-active-map [return] 'company-complete-selection)
+  (define-key company-active-map (kbd "RET") 'company-complete-selection)
+
   (unbind-key "\C-w" company-active-map)
   (unbind-key "\C-u" company-active-map)
   (define-key company-active-map (kbd "C-/") 'company-search-candidates)
 
-  (setq company-tooltip-align-annotations 't)
-  (global-company-mode))
+  (global-company-mode +1))
+
+(use-package company-quickhelp
+  :ensure t
+  :after company
+  :config
+  (company-quickhelp-mode))
 
 (use-package company-box
   :ensure t
   :disabled
   :if (display-graphic-p)
-  :after company
+  ;; :after company
   :hook (company-mode . company-box-mode)
   :config
   (setq company-box-enable-icon nil))
 
 (use-package! yasnippet
   :ensure t
-  :defer 1
+  :defer .5
   :config
   (setq yas-verbosity 2)
   (yas-global-mode)
-  (evil-define-minor-mode-key 'insert yas-minor-mode (kbd "C-c y") 'yas-insert-snippet)
+  ;; (evil-define-minor-mode-key 'insert yas-minor-mode (kbd "C-c y") 'yas-expand)
+  (evil-define-minor-mode-key 'insert yas-minor-mode (kbd "C-c y") 'company-yasnippet)
   (ex! "yas-new" 'yas-new-snippet))
 
 (use-package yasnippet-snippets
   :ensure t
+  :disabled
   :after yasnippet
   :config (yasnippet-snippets-initialize))
 
-(use-package! yasnippet
-  :ensure t
-  :disabled t
-  :config
-  (use-package! yasnippet-snippets
-    :ensure t))
 (use-package evil-expat
-  :load-path "~/dev/evil-expat"
+  ;; :load-path "~/dev/evil-expat"
+  :ensure t
   :defer .5)
 
 (use-package evil-goggles
@@ -1164,8 +1254,8 @@
 
 (use-package! dired-single
   :ensure t
-  :after dired
-  :config
+  :commands dired-single-buffer
+  :init
   (evil-define-key 'normal dired-mode-map (kbd "RET") 'dired-single-buffer)
   (evil-define-key 'normal dired-mode-map "-" (lambda nil (interactive) (dired-single-buffer ".."))))
 
@@ -1200,11 +1290,22 @@
 
 (use-package flycheck
   :ensure t
-  :bind (:map evil-normal-state-map
-              ( "C-c o f" . flycheck-mode))
+  :defer t
   :config
-  (setq flycheck-check-syntax-automatically '(mode-enabled save))
-  (setq-default flycheck-disabled-checkers '(perl-perlcritic)))
+  (setq flycheck-check-syntax-automatically '(mode-enabled save)))
+
+(use-package flycheck-inline
+  :ensure t
+  :after flycheck)
+
+(use-package! flymake
+  :ensure t
+  :defer t
+  :config
+  (setq flymake-start-syntax-check-on-newline nil)
+  (evil-define-minor-mode-key 'normal 'flymake-mode
+    (kbd "] q") 'flymake-goto-next-error
+    (kbd "[ q") 'flymake-goto-prev-error))
 
 (use-package abbrev
   :defer t
@@ -1278,7 +1379,7 @@
           ("*grep*"                    :align below :size 10)
           ("*Occur*"                   :align below :size 10)
           ("*Go Test*"                 :align below :size 15)
-          ("*Gofmt Errors*"            :align below :size 10)
+          ("*Gofmt Errors*"            :align below :size 6)
           ("*shell-1*"                 :same t :align below)
           (ivy-occur-grep-mode         :align below :size 10))))
 
@@ -1314,18 +1415,20 @@
   :ensure t
   :commands intero-mode)
 
-(use-package whitespace
-  :defer t
-  :init
+(use-package! whitespace
+  :config
   (ex! "clean-whitespace" 'whitespace-cleanup)
   :init
-  (defun evgeni-show-trailing-whitespace () (setq show-trailing-whitespace t))
   (add-hook 'prog-mode-hook 'evgeni-show-trailing-whitespace)
   :config
   (setq whitespace-style '(face tabs trailing))
   (set-face-attribute 'trailing-whitespace nil
                       :background
-                      (face-attribute 'mode-line-inactive :background)))
+                      (face-attribute 'mode-line-inactive :background))
+  (defun evgeni-show-trailing-whitespace ()
+    (set (make-local-variable 'show-trailing-whitespace) t))
+  (add-hook 'evil-insert-state-entry-hook (lambda () (setq-local show-trailing-whitespace nil)))
+  (add-hook 'evil-insert-state-exit-hook  (lambda () (setq-local show-trailing-whitespace t))))
 
 (use-package undo-tree
   :ensure t
@@ -1556,7 +1659,7 @@
 
 (use-package docker-tramp
   :ensure t
-  :after tramp
+  :defer 3
   :config
   (setq docker-tramp-use-names t))
 
@@ -1606,6 +1709,8 @@
   :defer .5
   :ensure t
   :config
+  (setq exec-path-from-shell-check-startup-files nil)
+  (add-to-list 'exec-path-from-shell-variables "GOPATH" t)
   (exec-path-from-shell-initialize))
 
 (use-package lua-mode
@@ -1885,9 +1990,24 @@
 
 (use-package! eshell
   :defer t
-  :init
+  :config
+  (setq eshell-banner-message "\n")
+  (defun evgeni-eshell-kill-to-bol ()
+    (interactive)
+    (kill-region (point) (progn (eshell-bol) (point))))
 
-  (evil-define-key 'insert eshell-mode-map (kbd "C-a") 'eshell-bol)
+  (defun evgeni-eshell-delete-char-or-hide ()
+    (interactive)
+    (if (string-empty-p (eshell-get-old-input))
+        (call-interactively 'shell-pop)
+      (delete-char 1)))
+
+  (evil-define-key 'insert eshell-mode-map
+    (kbd "C-a") 'eshell-bol
+    (kbd "C-d") 'evgeni-eshell-delete-char-or-hide
+    (kbd "C-u") 'evgeni-eshell-kill-to-bol
+    (kbd "C-p") 'eshell-previous-matching-input-from-input
+    (kbd "C-n") 'eshell-next-matching-input-from-input)
 
   (setq ;; eshell-buffer-shorthand t ...  Can't see Bug#19391
    eshell-scroll-to-bottom-on-input 'all
@@ -1897,38 +2017,50 @@
    eshell-prefer-lisp-functions nil
    eshell-destroy-buffer-when-process-dies t)
 
-  (add-hook 'eshell-mode-hook
-            (lambda ()
-              (add-to-list 'eshell-visual-commands "ssh")
-              (add-to-list 'eshell-visual-commands "tail")
-              (add-to-list 'eshell-visual-commands "top")))
+  (defun evgeni-eshell-mode-hook ()
+    (add-to-list 'eshell-visual-commands "ssh")
+    (add-to-list 'eshell-visual-commands "tail")
+    (add-to-list 'eshell-visual-commands "top")
 
-  (add-hook 'eshell-mode-hook (lambda ()
-                                (eshell/alias "e" "find-file $1")
-                                (eshell/alias "ff" "find-file $1")
-                                (eshell/alias "emacs" "find-file $1")
-                                (eshell/alias "ee" "find-file-other-window $1")
+    (eshell/alias "e" "find-file $1")
+    (eshell/alias "ff" "find-file $1")
+    (eshell/alias "emacs" "find-file $1")
+    (eshell/alias "ee" "find-file-other-window $1")
 
-                                (eshell/alias "gd" "magit-diff-unstaged")
-                                (eshell/alias "gds" "magit-diff-staged")
-                                (eshell/alias "d" "dired $1")
+    (eshell/alias "gd" "magit-diff-unstaged")
+    (eshell/alias "gds" "magit-diff-staged")
+    (eshell/alias "d" "dired $1")
 
-                                ;; The 'ls' executable requires the Gnu version on the Mac
-                                (let ((ls (if (file-exists-p "/usr/local/bin/gls")
-                                              "/usr/local/bin/gls"
-                                            "/bin/ls")))
-                                  (eshell/alias "ll" (concat ls " -AlohG --color=always")))))
+    ;; The 'ls' executable requires the Gnu version on the Mac
+    (let ((ls (if (file-exists-p "/usr/local/bin/gls")
+                  "/usr/local/bin/gls"
+                "/bin/ls")))
+      (eshell/alias "ll" (concat ls " -AlohG --color=always")))
+
+    (set (make-local-variable 'company-backends) '(company-capf)))
+
+  (add-hook 'eshell-mode-hook 'evgeni-eshell-mode-hook)
 
   (defun eshell/clear ()
     "Clear the eshell buffer."
     (let ((inhibit-read-only t))
-      (erase-buffer)
-      (eshell-send-input))))
+      (erase-buffer)))
+
+  (defun eshell/gcd ()
+    "`cd` to the project root, if in a project"
+    (if-let ((prj (project-current)))
+        (eshell/cd (cdr prj))
+      (user-error "Not in a project"))))
+
+(use-package esh-autosuggest
+  :hook (eshell-mode . esh-autosuggest-mode)
+  :ensure t)
 
 (use-package atomic-chrome
   :ensure t
+  :disabled
   :if (display-graphic-p)
-  :defer 1
+  :defer 30
   :config
   (setq atomic-chrome-buffer-open-style 'frame)
   (setq atomic-chrome-default-major-mode 'markdown-mode)
@@ -2085,9 +2217,16 @@
 
 (use-package beacon
   :ensure t
+  :defer 3
   :config
-  (setq beacon-color
-        (face-attribute 'mode-line :background)))
+  (defun evgeni-set-beacon-color (&rest _)
+    (setq beacon-color (face-attribute 'region :background)))
+
+  (evgeni-set-beacon-color)
+
+  (advice-add 'load-theme :after 'evgeni-set-beacon-color)
+
+  (beacon-mode))
 
 (use-package dired-sidebar
   :ensure t
@@ -2100,31 +2239,49 @@
   :defer t
   :config
 
-  (with-eval-after-load 'exec-path-from-shell
-    (exec-path-from-shell-copy-env "GOPATH"))
+  ;; for some reason go-mode doesn't integrate with xref
+  ;; (evil-define-key 'normal go-mode-map
+  ;;   (kbd "C-]") 'godef-jump
+  ;;   (kbd "C-w C-]") 'godef-jump-other-window)
 
   ;; compile command
   (add-hook 'go-mode-hook (lambda ()
                             (set (make-local-variable 'compile-command)
                                  "go test")))
 
+  ;; (setq go-packages-function 'go-packages-go-list)
+  ;; (setq go-packages-function 'go-packages-native)
+
   ;; gofmt on save
   (add-hook 'go-mode-hook (lambda ()
                             (add-hook 'before-save-hook 'gofmt-before-save nil t)))
 
   ;; prefer goimports over gofmt
-  (let ((goimports (executable-find "goimports")))
-    (when goimports
-      (setq gofmt-command goimports))))
+  ;; (let ((goimports (executable-find "goimports")))
+  ;;   (when goimports
+  ;;     (setq gofmt-command goimports)))
 
-;; (use-package lsp-go
-;;   :ensure t
-;;   :functions lsp-go-enable
-;;   :init
-;;   (add-hook 'go-mode-hook #'lsp-go-enable))
+  (defun evgeni-go-dump ()
+    (interactive)
+    (let ((word (thing-at-point 'word)))
+      (save-excursion (end-of-line)
+                      (newline)
+                      (indent-according-to-mode)
+                      (insert (concat "fmt.Printf(\"" word ": %v\\n\", " word ")")))))
+
+  (with-eval-after-load 'evil
+    (evil-define-key 'normal go-mode-map (kbd "] d") 'evgeni-go-dump))
+
+  ;; temporary fix until this is addressed https://github.com/dominikh/go-mode.el/issues/135
+  (defun evgeni-go-strip-vendor-prefix (orig-fun &rest args)
+    (mapcar
+     (lambda (str) (replace-regexp-in-string "^.*/vendor/" "" str))
+     (apply orig-fun args)))
+  (advice-add 'go-packages-native :around #'evgeni-go-strip-vendor-prefix))
 
 (use-package company-go
   :ensure t
+  :disabled
   :after go-mode
   :config
   (add-hook 'go-mode-hook (lambda ()
@@ -2132,9 +2289,43 @@
 
 (use-package go-eldoc
   :ensure t
+  :disabled
   :after go-mode
   :config
   (add-hook 'go-mode-hook 'go-eldoc-setup))
+
+(use-package gorepl-mode
+  :ensure t
+  :after go-mode)
+
+(use-package go-gen-test
+  :ensure t
+  :after go-mode)
+
+(use-package eglot
+  :ensure t
+  :init
+  (add-hook 'go-mode-hook 'eglot-ensure)
+  (add-hook 'python-mode-hook 'eglot-ensure)
+  :config
+  (add-to-list 'eglot-ignored-server-capabilites ':documentHighlightProvider))
+
+(use-package lsp-mode
+  :ensure t
+  :defer t
+  :config
+  (setq lsp-eldoc-render-all nil))
+
+(use-package company-lsp
+  :ensure t
+  :after lsp-mode
+  :config
+  (push 'company-lsp company-backends))
+
+(use-package lsp-go
+  :ensure t
+  :disabled
+  :hook (go-mode . lsp-go-enable))
 
 (use-package! evil-multiedit
   :ensure t
@@ -2152,6 +2343,7 @@
 
 (use-package! outshine
   :ensure t
+  :disabled
   :defer .1
   :config
   (add-hook 'outline-minor-mode-hook 'outshine-hook-function)
@@ -2166,12 +2358,31 @@
 
 (use-package! rainbow-mode
   :ensure t
-  :commands rainbow-mode)
+  :commands rainbow-mode
+  :config
+  (setq rainbow-r-colors-alast nil))
 
 (use-package text-mode
   :defer t
   :config
   (add-hook 'text-mode-hook 'auto-fill-mode))
+
+(use-package anaconda-mode
+  :ensure t
+  :disabled t
+  :config
+  (add-hook 'python-mode-hook 'anaconda-mode)
+  (add-hook 'python-mode-hook 'anaconda-eldoc-mode)
+
+  (evil-define-minor-mode-key 'normal 'anaconda-mode
+    (kbd "C-]") 'anaconda-mode-find-definitions
+    (kbd "C-w C-]") 'anaconda-mode-find-definitions-other-window))
+
+(use-package company-anaconda
+  :ensure t
+  :after anaconda-mode
+  :config
+  (add-to-list 'company-backends 'company-anaconda))
 
 ;; (use-package! gotest
 ;;   :ensure t
@@ -2184,3 +2395,28 @@
 ;;                                  go-test-compilation-error-regexp-alist-alist)
 ;;                             (set (make-local-variable 'compilation-error-regexp-alist)
 ;;                                  go-test-compilation-error-regexp-alist))))
+
+(use-package with-editor
+  :ensure t
+  :config
+  ;; (add-hook 'shell-mode-hook  'with-editor-export-editor)
+  ;; (add-hook 'term-exec-hook   'with-editor-export-editor)
+  (add-hook 'eshell-mode-hook 'with-editor-export-editor))
+
+(use-package python
+  :defer t
+  :config
+  (defun evgeni-python-dump ()
+    (interactive)
+    (let ((word (thing-at-point 'word)))
+      (save-excursion (end-of-line)
+                      (newline-and-indent)
+                      (insert "import pprint")
+                      (newline-and-indent)
+                      (insert "print \"" word ": \" + pprint.pformat(" word ")"))))
+  (with-eval-after-load 'evil
+    (evil-define-key 'normal python-mode-map (kbd "] d") 'evgeni-python-dump)))
+
+(use-package thrift
+  :ensure t
+  :defer t)
