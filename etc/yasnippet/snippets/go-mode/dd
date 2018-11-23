@@ -1,0 +1,6 @@
+# -*- mode: snippet -*-
+# name: dd
+# key: dd
+# --
+
+fmt.Printf("$1: %+v\n", ${1:var})
