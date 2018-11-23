@@ -2420,3 +2420,43 @@ With prefix arg, find the previous file."
 (use-package thrift
   :ensure t
   :defer t)
+
+(use-package json-mode
+  :ensure t
+  :defer t)
+
+(use-package deadgrep
+  :ensure t
+  :defer t
+  :init
+  (ex! "deadgrep" 'deadgrep))
+
+(use-package replace
+  :defer
+  :init
+  (ex! "occur" 'evgeni-occur)
+  (defun evgeni-occur ()
+    (interactive)
+    (occur (evil-ex-pattern-regex evil-ex-search-pattern))
+    (select-window (display-buffer "*Occur*"))))
+
+(use-package direnv
+  :ensure t
+  :defer 3
+  :config
+  (direnv-mode))
+
+(use-package autoinsert
+  :init
+  (add-hook 'find-file-hook 'auto-insert)
+  :config
+
+  (setq auto-insert-query nil)
+
+  (require 'yasnippet)
+  (defun evgeni-autoinsert-yas-expand ()
+    (yas-expand-snippet (buffer-string) (point-min) (point-max)))
+
+  (setq auto-insert-alist
+        '((sh-mode . [ "template.sh" evgeni-autoinsert-yas-expand])
+          (go-mode . [ "template.go" evgeni-autoinsert-yas-expand ]))))
