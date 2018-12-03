@@ -2,6 +2,6 @@
 # name: test
 # id: test
 # --
-func Test${1:Name}(${2:t *testing.T}) {
+func Test${1:Name}(t *testing.T) {
 	$0
 }

@@ -1,0 +1,8 @@
+# -*- mode: snippet -*-
+# name: subtest
+# key: subtest
+# --
+
+t.Run("${1:name}", func(t *testing.T) {
+	$0
+})
