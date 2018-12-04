@@ -33,14 +33,19 @@
 
 ;; settings
 (when (display-graphic-p)
-  (set-default-font "Source Code Pro 13" nil t)
+  (set-frame-font (font-spec :family "Noto Mono" :size 13) nil t)
+  (setq-default line-spacing 3)
   ;; smooth scroll
   (setq mouse-wheel-scroll-amount '(1 ((shift) . 1)))
   (setq mouse-wheel-progressive-speed nil)
   (setq mouse-wheel-follow-mouse 't)
   (setq scroll-step 1))
 (setq custom-file (expand-file-name "custom-file.el" user-emacs-directory))
-(setq inhibit-startup-screen t)
+
+;; splash
+(setq fancy-startup-text '(((lambda() (format "Started in %s" (emacs-init-time))))))
+(setq fancy-splash-image "~/Desktop/emacs-icon.png")
+
 (setq backup-inhibited t)
 (setq auto-save-default nil)
 (setq make-backup-files nil)
@@ -56,6 +61,7 @@
 (setq enable-local-variables :all)
 (setq require-final-newline t)
 (setq ring-bell-function 'ignore)
+(setq visual-line-fringe-indicators '(left-arrow right-arrow))
 
 ;; (setq initial-buffer-choice (lambda ()
 ;;                               (interactive)
@@ -135,7 +141,11 @@
   (package-install 'use-package))
 (eval-when-compile
   (require 'use-package))
-(setq use-package-verbose nil)
+(setq use-package-verbose t)
+
+(use-package no-littering
+  :ensure t
+  :demand t)
 
 ;; upgrade installed packages
 (defun evgeni-upgrade-packages ()
@@ -195,9 +205,6 @@
   (when (string-equal system-type "darwin")
     (define-key global-map (kbd "M-s-˙") 'ns-do-hide-others)))
 
-(use-package no-littering
-  :ensure t
-  :demand t)
 
 (use-package desktop
   :disabled
