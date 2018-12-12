@@ -417,15 +417,18 @@ With prefix arg, find the previous file."
 
   (define-key evil-motion-state-map "*" 'evgeni-star)
   (define-key evil-motion-state-map "g*" 'evgeni-g-star)
-  ;; run `occur' with the evil's search pattern
   (define-key evil-normal-state-map (kbd ", *" )
     (lambda ()
       (interactive)
-      ;; (occur (evil-ex-pattern-regex evil-ex-search-pattern))
-      ;; (pop-to-buffer-same-window "*Occur*")
       (swiper (substring-no-properties (thing-at-point 'word)))))
 
   (defvar evgeni-conflict-marker-regex "^[<=>|]\\{7\\}")
+
+  ;; ex aliases/shortcuts
+  (evil-ex-define-cmd "Q" 'delete-frame)
+  (evil-ex-define-cmd "Qa" "qa")
+  (evil-ex-define-cmd "On" "on")
+  (evil-ex-define-cmd "o" "on")
 
   ;; :source
   (evil-ex-define-cmd "so[urce]" 'evgeni-source)
@@ -654,6 +657,41 @@ With prefix arg, find the previous file."
   ;; (advice-add 'evil-ex-substitute :around #'evgeni-save-excursion-advice)
   (advice-add 'evil-ex-global :around #'evgeni-save-excursion-advice)
 
+
+  ;; `narrow' ex command
+  (ex! "nar[row]" 'evgeni-narrow-or-widen)
+  (evil-define-command evgeni-narrow-or-widen (bang begin end)
+    "Narrow ex command. With BANG, clone the buffer, then narrow"
+    (interactive "<!><r>")
+    (cond
+     (bang
+      ;; TODO narrow to defun missing
+      (if (region-active-p)
+          (evgeni-narrow-to-region-indirect beg end)
+        (switch-to-buffer (clone-indirect-buffer nil nil))
+        (funcall-interactively 'evgeni-narrow-or-widen nil begin end)))
+     ((region-active-p)
+      (narrow-to-region begin end))
+     ((buffer-narrowed-p)
+      (if (buffer-base-buffer)
+          (let ((cloned-buf (current-buffer)))
+            (switch-to-buffer (buffer-base-buffer)) ;; return to previous buffer
+            (evil-delete-buffer cloned-buf)) ;; wipe out indirect buffer
+        (widen)))
+     (t
+      (if (eq major-mode 'org-mode)
+          (org-narrow-to-subtree)
+        (narrow-to-defun)))))
+
+  (defun evgeni-narrow-to-region-indirect (start end)
+    "Restrict editing in this buffer to the current region, indirectly."
+    (interactive "r")
+    (deactivate-mark)
+    (let ((buf (clone-indirect-buffer nil nil)))
+      (with-current-buffer buf
+        (narrow-to-region start end))
+      (switch-to-buffer buf)))
+
   (require 'evil-development)
 
   ;; other packages which integrate with evil
@@ -692,9 +730,30 @@ With prefix arg, find the previous file."
 
   (use-package evil-exchange
     :ensure t
-    :bind (:map evil-normal-state-map
-                ("gx" . evil-exchange)
-                ("gX" . evil-exchange-cancel)))
+    :commands (evil-exchange evil-exchange-cancel)
+    :init
+    (defmacro evgeni-inhibit-operator (command)
+      "Return a command that inhibits evil operator code."
+      `(lambda ()
+         (interactive)
+         (setq evil-inhibit-operator t)
+         (call-interactively ,command)))
+
+    (evil-define-key 'operator global-map
+      "x" '(menu-item
+            ""
+            nil
+            :filter (lambda (&optional _)
+                      (when (eq evil-this-operator 'evil-change)
+                        (evgeni-inhibit-operator #'evil-exchange)))))
+
+    (evil-define-key 'operator global-map
+      "X" '(menu-item
+            ""
+            nil
+            :filter (lambda (&optional _)
+                      (when (eq evil-this-operator 'evil-change)
+                        (evgeni-inhibit-operator #'evil-exchange-cancel))))))
 
   (use-package evil-replace-with-register
     :ensure t
@@ -850,6 +909,9 @@ With prefix arg, find the previous file."
   (evil-define-key 'normal magit-status-mode-map
     "q" 'magit-mode-bury-buffer)
 
+  ;; `gx' should work in magit revision mode map
+  (evil-define-key 'normal magit-revision-mode-map (kbd "gx") 'browse-url-at-point)
+
   ;; lower untracked
   (magit-add-section-hook 'magit-status-sections-hook
                           'magit-insert-untracked-files 'magit-insert-staged-changes 1)
@@ -995,7 +1057,8 @@ With prefix arg, find the previous file."
   :defer t
   :pin melpa-stable
   :bind (:map evil-normal-state-map
-              ("SPC" . ivy-switch-buffer))
+              ("SPC" . ivy-switch-buffer)
+              ("C-c C-r" . ivy-resume))
   :init
   (evil-define-key 'normal evgeni-intercept-mode-map
     (kbd "SPC") 'ivy-switch-buffer)
@@ -1007,6 +1070,12 @@ With prefix arg, find the previous file."
   (define-key ivy-minibuffer-map (kbd "C-u") (lambda () (interactive) (kill-region (point) (point-at-bol))))
   (define-key ivy-minibuffer-map [escape] 'minibuffer-keyboard-quit)
   (define-key ivy-minibuffer-map (kbd "C-c o") 'ivy-occur)
+
+  ;; `C-6' mp
+  (define-key ivy-switch-buffer-map (kbd "C-6") (lambda (&rest _)
+                                                  (interactive)
+                                                  (ivy-exit-with-action
+                                                   (lambda (_) (projectile-switch-project)))))
 
   (evil-define-key 'normal ivy-occur-mode-map (kbd "RET") 'ivy-occur-press) ;; default is 'ivy-occur-press-and-switch
 
@@ -1048,8 +1117,7 @@ With prefix arg, find the previous file."
   :pin melpa-stable
   :init
   (ex! "faces" 'counsel-faces)
-  ;; (ex! "find-lib" 'counsel-find-library)
-  (ex! "find-lib" 'find-library)
+  (ex! "find-lib" 'counsel-find-library)
   (ex! "set[-variable]" 'counsel-set-variable)
 
   (evil-define-key '(normal visual) evgeni-intercept-mode-map
@@ -1123,18 +1191,20 @@ With prefix arg, find the previous file."
 (use-package! projectile
   :ensure t
   :defer 3
-  :bind (:map evil-motion-state-map
-              ("g SPC"   . evgeni-projectile-find-file))
+  :commands evgeni-projectile-find-file
   :init
+  (evil-define-key 'normal evgeni-intercept-mode-map
+    (kbd "g SPC") 'evgeni-projectile-find-file)
   (ex! "proj[ectile]" 'projectile-switch-project)
+  (ex! "prj" 'projectile-switch-project)
   :config
   (require 'counsel)
-  (defun evgeni-projectile-find-file ()
-    (interactive)
-    (if (projectile-project-p)
+  (defun evgeni-projectile-find-file (&optional switch-project)
+    (interactive "P")
+    (if (and (projectile-project-p) (not switch-project))
         (if (eq (projectile-project-vcs) 'git)
             (counsel-git)
-          (find-file-in-project))
+          (counsel-find-file))
       (projectile-switch-project)))
 
   (setq projectile-switch-project-action
