@@ -776,6 +776,7 @@ With prefix arg, find the previous file."
     :init
     (define-key evil-inner-text-objects-map "i" 'evil-indent-plus-i-indent)
     (define-key evil-outer-text-objects-map "i" 'evil-indent-plus-a-indent)
+    (define-key evil-inner-text-objects-map "I" 'evil-indent-plus-i-indent-up)
     :config
     ;; temprorary fix until this is addressed https://github.com/TheBB/evil-indent-plus/pull/4
     (defun evil-indent-plus--linify (range)
@@ -861,11 +862,30 @@ With prefix arg, find the previous file."
         dired-auto-revert-buffer t
         dired-dwim-target t
         dired-use-ls-dired nil)
+  (evil-define-key 'normal dired-mode-map "-" 'dired-up-directory)
   (add-hook 'dired-mode-hook 'dired-hide-details-mode)
 
   (defun evgeni-dired-current-dir ()
     (interactive)
-    (dired ".")))
+    (let ((file buffer-file-name))
+      (dired ".")
+      (when file
+        (dired-goto-file file)))))
+
+(use-package! dired-subtree
+  :ensure t
+  :commands dired-subtree-toggle
+  :init
+  (with-eval-after-load 'dired
+    (define-key dired-mode-map [tab] 'dired-subtree-toggle))
+
+  (custom-set-faces
+   '(dired-subtree-depth-1-face ((t (:background unspecified))))
+   '(dired-subtree-depth-2-face ((t (:background unspecified))))
+   '(dired-subtree-depth-3-face ((t (:background unspecified))))
+   '(dired-subtree-depth-4-face ((t (:background unspecified))))
+   '(dired-subtree-depth-5-face ((t (:background unspecified))))
+   '(dired-subtree-depth-6-face ((t (:background unspecified))))))
 
 (use-package! magit
   :ensure t
@@ -922,6 +942,7 @@ With prefix arg, find the previous file."
 
   (define-key magit-dispatch-popup-map "/" 'isearch-forward)
   (define-key magit-dispatch-popup-map "?" 'isearch-backward)
+  (define-key magit-diff-mode-map "e" nil) ;; no ediff
 
   (add-hook 'git-commit-mode-hook 'flyspell-mode))
 
@@ -941,17 +962,58 @@ With prefix arg, find the previous file."
   :ensure t
   :defer t
   :init
-  (ex! "diff-visible-buffers" (lambda ()
-                                (interactive)
-                                (let ((bufs (mapcar 'window-buffer (window-list)))
-                                      (vdiff-2way-layout-function (lambda (&rest _args) nil)))
-                                  (cond
-                                   ((eq (length bufs) 2)
-                                    (apply 'vdiff-buffers bufs))
-                                   ((eq (length bufs) 3)
-                                    (apply 'vdiff-buffers3 bufs))
-                                   (t
-                                    (user-error "Expected 2 or 3 buffers, got %s" (length bufs)))))))
+  (ex! "vdiff" 'evgeni-vdiff-visible-buffers)
+  (defun evgeni-vdiff-visible-buffers ()
+    "Execute vdiff on the 2 or 3 visible buffers. Error if there are less/more visible windows."
+    (interactive)
+    (let ((bufs (mapcar 'window-buffer (window-list)))
+          (vdiff-2way-layout-function (lambda (&rest _args) nil)))
+      (cond
+       ((eq (length bufs) 2)
+        (apply 'vdiff-buffers bufs))
+       ((eq (length bufs) 3)
+        (apply 'vdiff-buffers3 bufs))
+       (t
+        (user-error "Expected 2 or 3 buffers, got %s" (length bufs))))))
+
+  ;; line diffing below
+  (ex! "linediff" 'evgeni-line-diff)
+  (ex! "linediff-reset" 'evgeni-line-diff-reset)
+
+  (defvar evgeni-line-diff-buf-1 nil)
+  (defvar evgeni-line-diff-buf-2 nil)
+
+  (defun evgeni-line-diff-reset ()
+    (interactive)
+
+    (when evgeni-line-diff-buf-1
+      (kill-buffer evgeni-line-diff-buf-1)
+      (setq evgeni-line-diff-buf-1 nil))
+
+    (when evgeni-line-diff-buf-2
+      (kill-buffer evgeni-line-diff-buf-2)
+      (setq evgeni-line-diff-buf-2 nil)))
+
+  (evil-define-command evgeni-line-diff (begin end)
+    (interactive "<r>")
+    :keep-visual nil
+    (when (and evgeni-line-diff-buf-1 evgeni-line-diff-buf-2)
+      (evgeni-line-diff-reset))
+
+    (let ((text (buffer-substring-no-properties beg end)))
+
+      (cond
+       ((null evgeni-line-diff-buf-1)
+        (setq evgeni-line-diff-buf-1 (get-buffer-create "*line-diff-1*"))
+        (with-current-buffer evgeni-line-diff-buf-1
+          (insert text)))
+       ((null evgeni-line-diff-buf-2)
+        (setq evgeni-line-diff-buf-2 (get-buffer-create "*line-diff-2*"))
+        (with-current-buffer evgeni-line-diff-buf-2
+          (insert text)))))
+
+    (when (and evgeni-line-diff-buf-1 evgeni-line-diff-buf-2)
+      (vdiff-buffers evgeni-line-diff-buf-1 evgeni-line-diff-buf-2)))
 
   :config
 
@@ -1074,8 +1136,7 @@ With prefix arg, find the previous file."
   ;; `C-6' mp
   (define-key ivy-switch-buffer-map (kbd "C-6") (lambda (&rest _)
                                                   (interactive)
-                                                  (ivy-exit-with-action
-                                                   (lambda (_) (projectile-switch-project)))))
+                                                  (ivy-quit-and-run (projectile-switch-project))))
 
   (evil-define-key 'normal ivy-occur-mode-map (kbd "RET") 'ivy-occur-press) ;; default is 'ivy-occur-press-and-switch
 
@@ -1333,8 +1394,7 @@ With prefix arg, find the previous file."
   :ensure t
   :commands dired-single-buffer
   :init
-  (evil-define-key 'normal dired-mode-map (kbd "RET") 'dired-single-buffer)
-  (evil-define-key 'normal dired-mode-map "-" (lambda nil (interactive) (dired-single-buffer ".."))))
+  (evil-define-key 'normal dired-mode-map (kbd "RET") 'dired-single-buffer))
 
 (use-package wdired
   :commands wdired-change-to-wdired-mode
@@ -1353,7 +1413,6 @@ With prefix arg, find the previous file."
   :defer t
   :init
   (ex! "timemachine" 'git-timemachine)
-  (ex! "timemachine-switch-branch" 'git-timemachine-switch-branch)
   :config
 
   (evil-define-minor-mode-key 'normal 'git-timemachine-mode
@@ -1448,17 +1507,19 @@ With prefix arg, find the previous file."
   (shackle-mode 1)
   (setq shackle-rules
         '(
-          ("*xref*"                    :align below :size 10  :noselect t)
-          ("*Help*"                    :align below :size 16  :select t)
-          ("*Backtrace*"               :align below :size 25  :noselect t)
-          ("*Flycheck error messages*" :align below :size 0.25)
-          ("*compilation*"             :align below :size 10)
-          ("*grep*"                    :align below :size 10)
-          ("*Occur*"                   :align below :size 10)
-          ("*Go Test*"                 :align below :size 15)
-          ("*Gofmt Errors*"            :align below :size 6)
-          ("*shell-1*"                 :same t :align below)
-          (ivy-occur-grep-mode         :align below :size 10))))
+          ("*xref*"                        :align below :size 10 :noselect t)
+          ("*Help*"                        :align below :size 16 :select t)
+          ("*Backtrace*"                   :align below :size 25 :noselect t)
+          ("*Flycheck error messages*"     :align below :size 0.25)
+          ("*Flycheck errors*"             :align below :size 0.20)
+          (flymake-diagnostics-buffer-mode :align below :size 0.20)
+          ("*compilation*"                 :align below :size 10)
+          ("*grep*"                        :align below :size 10)
+          ("*Occur*"                       :align below :size 10)
+          ("*Go Test*"                     :align below :size 15)
+          ("*Gofmt Errors*"                :align below :size 6)
+          ("*shell-1*"                     :same t      :align below)
+          (ivy-occur-grep-mode             :align below :size 10))))
 
 (use-package smex
   :ensure t
@@ -1516,6 +1577,7 @@ With prefix arg, find the previous file."
   (setq undo-tree-visualizer-diff t)
   (ex! "undo-tree" 'undo-tree-visualize)
   (setq undo-tree-auto-save-history t)
+  (setq undo-tree-enable-undo-in-region nil)
 
   (define-key evil-visual-state-map "u" 'undo)
   (define-key evil-visual-state-map "\C-r" 'redo)
@@ -1717,7 +1779,9 @@ With prefix arg, find the previous file."
 (use-package json
   :commands json-pretty-print-buffer
   :init
-  (ex! "json-pretty" 'json-pretty-print-buffer))
+  (ex! "json-pretty" 'json-pretty-print-buffer)
+  :config
+  (setq json-encoding-object-sort-predicate 'string<))
 
 (use-package rjsx-mode
   :ensure t
@@ -1740,6 +1804,12 @@ With prefix arg, find the previous file."
   :config
   (setq docker-tramp-use-names t))
 
+(use-package dockerfile-mode
+  :ensure t
+  :mode (".*Dockerfile.*" . dockerfile-mode)
+  :config
+  (modify-syntax-entry ?$ "." dockerfile-mode-syntax-table))
+
 (use-package restclient
   :ensure t
   :mode ("\\.restclient\\'" . restclient-mode))
@@ -1747,12 +1817,6 @@ With prefix arg, find the previous file."
 (use-package company-restclient
   :ensure t
   :after (company restclient))
-
-(use-package dockerfile-mode
-  :ensure t
-  :mode (".*Dockerfile.*" . dockerfile-mode)
-  :config
-  (modify-syntax-entry ?$ "." dockerfile-mode-syntax-table))
 
 (use-package suggest
   :ensure t
@@ -1817,16 +1881,6 @@ With prefix arg, find the previous file."
   :ensure t
   :commands try)
 
-(use-package zygospore
-  :ensure t
-  :commands zygospore-toggle-delete-other-windows
-  :init
-  (ex! "only" 'zygospore-toggle-delete-other-windows)
-
-  ;; alias :On and :o with :on
-  (ex! "On" "on")
-  (ex! "o" "on"))
-
 (use-package hl-todo
   :ensure t
   :defer 1
@@ -1877,6 +1931,7 @@ With prefix arg, find the previous file."
   :init
   (ex! "ls" 'ibuffer)
   :config
+  (setq ibuffer-expert t) ;; don't prompt for confirmation
   (define-key ibuffer-mode-map "j" 'ibuffer-forward-line)
   (define-key ibuffer-mode-map "k" 'ibuffer-backward-line))
 
@@ -1897,13 +1952,6 @@ With prefix arg, find the previous file."
   (ex! "gitlink-commit" 'git-link-commit)
   :config
   (setq git-link-open-in-browser (display-graphic-p)))
-
-(use-package shell-toggle
-  :ensure t
-  :disabled t
-  :bind* ("C-c C-z" . shell-toggle)
-  :init
-  (setq shell-toggle-launch-shell 'shell-toggle-eshell))
 
 (use-package! shell-pop
   :ensure t
@@ -1958,6 +2006,7 @@ With prefix arg, find the previous file."
 
 (use-package! hydra
   :ensure t
+  :defer t
   :functions defhydra
   :init
   (ex! "font-size" 'evgeni-hydra-zoom/body)
@@ -1990,14 +2039,26 @@ With prefix arg, find the previous file."
       :config
       (setq linum-format "%d ")))
 
+  (defun evgeni-toggle-flycheck-flymake-mode ()
+    (interactive)
+    (cond
+     ((bound-and-true-p flymake-mode) (call-interactively 'flymake-mode))
+     ((bound-and-true-p flycheck-mode) (call-interactively 'flycheck-mode))
+     ((bound-and-true-p eglot--managed-mode) (call-interactively 'flymake-mode))
+     ((bound-and-true-p lsp-mode) (call-interactively (if lsp-prefer-flymake 'flymake-mode 'flycheck-mode)))
+     (t (call-interactively 'flymake-mode))))
+
   (defhydra evgeni-toggles-hydra (:exit t)
     "toggles"
     ("c" global-hl-line-mode "global-hl-line-mode")
     ("w" visual-line-mode "visual-line-mode")
     ("k" toggle-input-method "toggle-input-method")
     ("n" display-line-numbers-mode "display-line-numbers-mode")
-    ("s" flyspell-mode "flyspell-mode")
-    ;; TODO the relative toggles isn't working well
+    ("s" (progn
+           (call-interactively 'flyspell-mode)
+           (when flyspell-mode
+             (flyspell-buffer))) "flyspell-mode")
+    ("m" evgeni-toggle-flycheck-flymake-mode "flycheck/flymake")
     ("r" linum-relative-toggle "display-line-numbers-mode")
     ("h" auto-fill-mode "auto-fill-mode")))
 
@@ -2055,7 +2116,7 @@ With prefix arg, find the previous file."
 
 (use-package ox-hugo
   :ensure t
-  :after ox)
+  :defer t)
 
 (use-package! comint
   :defer t
@@ -2066,7 +2127,7 @@ With prefix arg, find the previous file."
     (kbd "C-n") #'comint-next-matching-input-from-input))
 
 (use-package! eshell
-  :defer t
+  :defer 30
   :config
   (setq eshell-banner-message "\n")
   (defun evgeni-eshell-kill-to-bol ()
@@ -2475,9 +2536,8 @@ With prefix arg, find the previous file."
 
 (use-package with-editor
   :ensure t
+  :defer t
   :config
-  ;; (add-hook 'shell-mode-hook  'with-editor-export-editor)
-  ;; (add-hook 'term-exec-hook   'with-editor-export-editor)
   (add-hook 'eshell-mode-hook 'with-editor-export-editor))
 
 (use-package python
@@ -2512,10 +2572,34 @@ With prefix arg, find the previous file."
   :defer
   :init
   (ex! "occur" 'evgeni-occur)
-  (defun evgeni-occur ()
-    (interactive)
+  (evil-define-command evgeni-occur (count)
+    (interactive "<c>")
+    (message "--- %s" count)
+    (setq list-matching-lines-default-context-lines (or count 0))
     (occur (evil-ex-pattern-regex evil-ex-search-pattern))
-    (select-window (display-buffer "*Occur*"))))
+    (select-window (display-buffer "*Occur*")))
+
+  (defun evgeni-occur-increase-context()
+    (interactive)
+    (unless (eq major-mode 'occur-mode)
+      (user-error "Buffer is not in be occur-mode"))
+    (setq list-matching-lines-default-context-lines
+          (1+ (or list-matching-lines-default-context-lines 0)))
+    (revert-buffer))
+
+  (defun evgeni-occur-decrease-context()
+    (interactive)
+    (unless (eq major-mode 'occur-mode)
+      (user-error "Buffer is not in be occur-mode"))
+    (when (<= list-matching-lines-default-context-lines 0)
+      (user-error "Can't go below 0"))
+    (setq list-matching-lines-default-context-lines
+          (1- (or list-matching-lines-default-context-lines 0)))
+    (revert-buffer))
+
+  (evil-define-key 'normal occur-mode-map
+    "+" 'evgeni-occur-increase-context
+    "-" 'evgeni-occur-decrease-context))
 
 (use-package direnv
   :ensure t
@@ -2524,6 +2608,7 @@ With prefix arg, find the previous file."
   (direnv-mode))
 
 (use-package autoinsert
+  :defer 3
   :init
   (add-hook 'find-file-hook 'auto-insert)
   :config
@@ -2537,3 +2622,64 @@ With prefix arg, find the previous file."
   (setq auto-insert-alist
         '((sh-mode . [ "template.sh" evgeni-autoinsert-yas-expand])
           (go-mode . [ "template.go" evgeni-autoinsert-yas-expand ]))))
+
+(use-package make-mode
+  :defer t
+  :config
+  (modify-syntax-entry ?- "w" makefile-mode-syntax-table))
+
+(use-package prodigy
+  :ensure t
+  :defer t
+  :init
+  (ex! "prodigy" 'prodigy)
+  (ex! "services" 'prodigy)
+  :config
+  (setq prodigy-kill-process-buffer-on-stop t
+        prodigy-completion-system 'default)
+
+  (evil-define-key 'normal prodigy-mode-map
+    "$" 'prodigy-display-process
+    "gr" 'prodigy-refresh))
+
+(use-package! hideshow
+  :defer t
+  :config
+
+  (evil-define-minor-mode-key 'normal 'hs-minor-mode [tab] 'evil-toggle-fold)
+
+  (defun evgeni-hs-fold-on-first-occurance (regex)
+    (hs-life-goes-on
+    (save-excursion
+      (message "1")
+      (goto-char (point-min))
+      (when (ignore-errors (re-search-forward regex))
+        (message "2")
+        (hs-hide-block))))))
+
+(use-package disable-mouse
+  :ensure t
+  :defer 3
+  :config
+  ;; no mouse in evil insert state
+  (disable-mouse-in-keymap evil-insert-state-map))
+
+(use-package protobuf-mode
+  :ensure t
+  :defer t
+  :config
+  (add-hook 'protobuf-mode-hook 'electric-pair-local-mode))
+
+(use-package reformatter
+  :ensure t
+  :defer t)
+
+(use-package focus
+  :ensure t
+  :defer t
+  :init
+  (ex! "focus" 'focus-mode))
+
+(use-package fancy-narrow
+  :ensure t
+  :defer t)
