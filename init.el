@@ -1,3 +1,5 @@
+;; -*- lexical-binding: t; -*-
+
 (defconst emacs-start-time (current-time))
 
 (add-hook 'after-init-hook
@@ -43,7 +45,9 @@
 (setq custom-file (expand-file-name "custom-file.el" user-emacs-directory))
 
 ;; splash
-(setq fancy-startup-text '(((lambda() (format "Started in %s" (emacs-init-time))))))
+(setq fancy-startup-text '(((lambda()
+                              (run-with-idle-timer .2 nil 'evgeni-known-projects-load)
+                              (format "Started in %s" (emacs-init-time))))))
 (setq fancy-splash-image "~/Desktop/emacs-icon.png")
 
 (setq backup-inhibited t)
@@ -261,6 +265,50 @@
     (add-hook 'kill-emacs-hook 'restore-frame-position-save))
 
   (restore-frame-position))
+
+;; add a list of known projects to the splash screen
+(setq evgeni-known-projects-file (expand-file-name "evgeni-known-projects.el" no-littering-var-directory))
+
+(defun evgeni-known-projects-save ()
+  (require 'projectile)
+  (with-temp-buffer
+    (insert
+     (format "(setq evgeni-known-projects '%S)\n" (projectile-relevant-known-projects)))
+    (when (file-writable-p evgeni-known-projects-file)
+      (write-file evgeni-known-projects-file))))
+
+(defun evgeni-known-projects-load ()
+  (when (file-readable-p evgeni-known-projects-file)
+    (load-file evgeni-known-projects-file)
+    (with-current-buffer "*GNU Emacs*"
+      (save-excursion
+        (let ((inhibit-read-only t))
+          (goto-char (point-min))
+          (search-forward "Started")
+          (forward-line)
+          ;; (insert "HELLO WORLD")
+
+          (newline)
+          (insert (propertize "Projects:" :face 'highlight))
+          (newline)
+          (dolist (prj (sort (seq-take evgeni-known-projects 10)
+                             (lambda (a b)
+                               (string-lessp (file-name-nondirectory (directory-file-name a)) (file-name-nondirectory (directory-file-name b))))))
+            (newline)
+            (widget-create 'push-button
+                           :action `(lambda (w &rest _)
+                                      (projectile-switch-project-by-name
+                                       (widget-get w :value)))
+                           :mouse-face 'highlight
+                           :follow-link "\C-m"
+                           :button-prefix ""
+                           :button-suffix ""
+                           :format "%[ ◉ %t%]"
+                           (abbreviate-file-name prj)))
+          (newline))))))
+
+(add-hook 'kill-emacs-hook 'evgeni-known-projects-save)
+;; (add-hook 'emacs-startup-hook 'evgeni-known-projects-load)
 
 ;; load mail.el if any
 (when (file-readable-p (concat user-emacs-directory "mail.el"))
