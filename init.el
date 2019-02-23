@@ -371,6 +371,10 @@
                     self-insert-command
                     evil-normal-state
                     evil-repeat
+                    evil-scroll-line-down
+                    evil-scroll-line-up
+                    evil-scroll-down
+                    evil-scroll-up
                     evil-ex))
       (remove-hook 'pre-command-hook 'evgeni-nohighlight-hook 'local)
       (evil-ex-nohighlight)))
@@ -387,13 +391,40 @@
     (advice-add f :after #'evgeni-add-nohighlight-hook))
 
   (evil-define-command evgeni-save-file ()
+    "Save file, unless there's a widget/button at point. Press it if there's one."
     :motion nil
     :move-point nil
     :repeat nil
     (interactive)
-    (if (or buffer-file-name (buffer-base-buffer))
-        (call-interactively 'save-buffer)
-      (user-error "No file")))
+    (let* ((field  (get-char-property (point) 'field))
+           (button (get-char-property (point) 'button))
+           (doc    (get-char-property (point) 'widget-doc))
+           (widget (or field button doc)))
+      (cond
+       ;; widget
+       ((and widget
+             (fboundp 'widget-type)
+             (fboundp 'widget-button-press)
+             (or (and (symbolp widget)
+                      (get widget 'widget-type))
+                 (and (consp widget)
+                      (get (widget-type widget) 'widget-type))))
+        (when (evil-operator-state-p)
+          (setq evil-inhibit-operator t))
+        (when (fboundp 'widget-button-press)
+          (widget-button-press (point))))
+       ;; button
+       ((and (fboundp 'button-at)
+             (fboundp 'push-button)
+             (button-at (point)))
+        (when (evil-operator-state-p)
+          (setq evil-inhibit-operator t))
+        (push-button))
+       ;; save-file
+       (t
+        (if (or buffer-file-name (buffer-base-buffer))
+            (call-interactively 'save-buffer)
+          (user-error "No file"))))))
 
   (defun evgeni-window-vsplit ()
     (interactive)
@@ -436,15 +467,34 @@ With prefix arg, find the previous file."
   (define-key evil-normal-state-map (kbd "] SPC")(lambda (count) (interactive "p") (dotimes (_ count) (save-excursion (evil-insert-newline-below)))))
   (define-key evil-normal-state-map (kbd "[ SPC")(lambda (count) (interactive "p") (dotimes (_ count) (save-excursion (evil-insert-newline-above)))))
 
-  (define-key evil-normal-state-map (kbd "[ m")'beginning-of-defun)
-  (define-key evil-normal-state-map (kbd "] m")'end-of-defun)
+  (define-key evil-normal-state-map (kbd "[ m") 'beginning-of-defun)
+  (define-key evil-normal-state-map (kbd "] m") 'end-of-defun)
   (evil-set-command-properties 'beginning-of-defun :jump t)
   (evil-set-command-properties 'end-of-defun :jump t)
-  (define-key evil-normal-state-map (kbd "] M")'end-of-defun)
+  (define-key evil-normal-state-map (kbd "] M") 'end-of-defun)
   (define-key evil-motion-state-map (kbd "0") 'evil-first-non-blank)
   (define-key evil-normal-state-map (kbd "g n") (lambda () (interactive) (evil-ex "%normal ")))
   (define-key evil-visual-state-map (kbd "g n") (lambda () (interactive) (evil-ex "'<,'>normal ")))
   (define-key evil-ex-search-keymap "\C-w" #'evil-delete-backward-word)
+
+  (evil-add-command-properties 'beginning-of-defun :jump t :repeat 'motion)
+  (evil-add-command-properties 'end-of-defun :jump t :repeat 'motion)
+
+  ;; `zT' to scroll beginning of defun to top
+  (define-key evil-motion-state-map "zT" 'evgeni-scroll-beginning-of-defun-to-top)
+  (defun evgeni-scroll-beginning-of-defun-to-top()
+    (interactive)
+    (save-excursion
+      (beginning-of-defun)
+      (evil-scroll-line-to-top nil)))
+
+  ;; `gV' should select last pasted pasted
+  (define-key evil-motion-state-map "gV" 'evgeni-evil-select-pasted)
+  (defun evgeni-evil-select-pasted ()
+    (interactive)
+    (let ((start-marker (evil-get-marker ?\[))
+          (end-marker (evil-get-marker ?\])))
+      (evil-visual-select start-marker end-marker)))
 
   ;; '*' should not move point
   (evil-define-motion evgeni-star (count &optional symbol)
@@ -614,6 +664,12 @@ With prefix arg, find the previous file."
       (call-interactively 'previous-complete-history-element))
     (call-interactively 'move-end-of-line))
 
+  (defun evgeni-prev-or-move-beginning-of-line ()
+    (interactive)
+    (when (not (thing-at-point 'line t))
+      (call-interactively 'previous-complete-history-element))
+    (call-interactively 'move-beginning-of-line))
+
   (defun evgeni-prev-or-prev-and-backspace ()
     (interactive)
     (when (not (thing-at-point 'line t))
@@ -630,8 +686,8 @@ With prefix arg, find the previous file."
   ;; tweak search and ex maps
   (define-key evil-ex-search-keymap "\C-e"  'evgeni-prev-or-move-end-of-line)
   (define-key evil-ex-completion-map "\C-e" 'evgeni-prev-or-move-end-of-line)
+  (define-key evil-ex-completion-map "\C-a" 'evgeni-prev-or-move-beginning-of-line)
   (define-key evil-ex-completion-map (kbd "DEL" ) 'evgeni-prev-or-prev-and-backspace)
-  (define-key evil-ex-completion-map "\C-a" 'move-beginning-of-line)
   (define-key evil-ex-completion-map "\C-b" 'backward-char)
   (define-key evil-ex-completion-map "\C-d" 'evgeni-ex-delete-or-complete)
 
@@ -879,7 +935,7 @@ With prefix arg, find the previous file."
                       ?j ?k
                       ?l ?\;
                       ?1 ?2 ?3 ?4 ?5 ?6))
-  (setq avy-style 'de-bruijn) ;; at-full
+  (setq avy-style 'at-full)
 
   ;; TODO
   (evil-define-text-object evgeni--avy-line (count &optional beg end type)
@@ -957,7 +1013,7 @@ With prefix arg, find the previous file."
               ("U B" . magit-checkout))
   :commands (magit-find-file)
   :init
-  (ex! "magit" 'magit-status)
+  (ex! "ma[git]" 'magit-status)
   (ex! "gedit" 'magit-find-file)
   :config
 
@@ -1103,16 +1159,71 @@ With prefix arg, find the previous file."
                                    paragraph-separate "[ 	]*$")))
 
   (org-babel-do-load-languages
-   'org-babel-load-languages '((shell . t)))
+   'org-babel-load-languages
+   '((shell . t) (dot . t) (python . t)))
 
   (evil-ex-define-cmd "cap[ture]" 'org-capture)
 
-  (setq org-startup-indented t)
-  (setq org-startup-folded "showall")
-  (setq org-confirm-babel-evaluate nil)
+  (setq org-startup-indented t
+        org-imenu-depth 3
+        org-startup-folded "showall"
+        org-confirm-babel-evaluate nil)
 
   (evil-define-key '(normal insert) org-mode-map
-    (kbd "TAB") 'org-cycle))
+    (kbd "TAB") 'org-cycle)
+  (evil-define-key 'normal org-mode-map
+    "o" (kbd "A RET")
+    (kbd ", f") 'counsel-org-goto
+    (kbd "gx") 'org-open-at-point
+    (kbd "] m") 'org-next-visible-heading
+    (kbd "[ m") 'org-previous-visible-heading)
+
+  ;; better org RETURN https://github.com/howardabrams/dot-files/blob/master/emacs-org.org#better-org-return
+  (defun evgeni-org-return (&optional ignore)
+    "Add new list item, heading or table row with RET.
+A double return on an empty element deletes it.
+Use a prefix arg to get regular RET. "
+    (interactive "P")
+    (if ignore
+        (org-return)
+      (cond
+       ;; lists end with two blank lines, so we need to make sure we are also not
+       ;; at the beginning of a line to avoid a loop where a new entry gets
+       ;; created with only one blank line.
+       ((and (org-in-item-p) (not (bolp)))
+        (if (save-excursion
+              (goto-char (line-beginning-position))
+              (org-element-property :contents-begin (org-element-context)))
+            (org-insert-item (org-at-item-checkbox-p))
+          (beginning-of-line)
+          (setf (buffer-substring
+                 (line-beginning-position) (line-end-position)) "")))
+       ((org-at-heading-p)
+        (if (not (string= "" (org-element-property :title (org-element-context))))
+            (org-meta-return)
+          (beginning-of-line)
+          (setf (buffer-substring
+                 (line-beginning-position) (line-end-position)) "")))
+       ((org-at-table-p)
+        (if (-any?
+             (lambda (x) (not (string= "" x)))
+             (nth
+              (- (org-table-current-dline) 1)
+              (org-table-to-lisp)))
+            (org-return)
+          ;; empty row
+          (beginning-of-line)
+          (setf (buffer-substring
+                 (line-beginning-position) (line-end-position)) "")
+          (org-return)))
+       (t
+        (org-return)))))
+
+  (define-key org-mode-map (kbd "RET")  'evgeni-org-return))
+
+(use-package org-make-toc
+  :ensure t
+  :defer t)
 
 (use-package org-bullets
   :ensure t
@@ -1828,6 +1939,7 @@ With prefix arg, find the previous file."
   :commands json-pretty-print-buffer
   :init
   (ex! "json-pretty" 'json-pretty-print-buffer)
+  (ex! "json" (lambda () (interactive) (json-mode) (json-pretty-print-buffer)))
   :config
   (setq json-encoding-object-sort-predicate 'string<))
 
@@ -1931,10 +2043,9 @@ With prefix arg, find the previous file."
 
 (use-package hl-todo
   :ensure t
-  :defer 1
+  :defer 3
   :config
-  (add-hook 'prog-mode-hook 'hl-todo-mode)
-  (add-hook 'text-mode-hook 'hl-todo-mode))
+  (global-hl-todo-mode))
 
 (use-package rust-mode
   :ensure t
@@ -2177,7 +2288,25 @@ With prefix arg, find the previous file."
 (use-package! eshell
   :defer 30
   :config
+  (use-package shell-pop)
+
   (setq eshell-banner-message "\n")
+
+  (defun evgeni-eshell-setup-keys ()
+    (evil-define-key 'insert eshell-mode-map
+      (kbd "C-a") 'eshell-bol
+      (kbd "C-d") 'evgeni-eshell-delete-char-or-hide
+      (kbd "C-u") 'evgeni-eshell-kill-to-bol
+      (kbd "C-p") 'eshell-previous-matching-input-from-input
+      (kbd "C-n") 'eshell-next-matching-input-from-input)
+
+    (evil-define-key 'normal eshell-mode-map
+      (kbd "q") 'shell-pop
+      (kbd "<return>") 'evgeni-eshell-normal-return
+      [return] 'evgeni-eshell-normal-return))
+
+  (add-hook 'eshell-mode-hook 'evgeni-eshell-setup-keys)
+
   (defun evgeni-eshell-kill-to-bol ()
     (interactive)
     (kill-region (point) (progn (eshell-bol) (point))))
@@ -2348,58 +2477,45 @@ With prefix arg, find the previous file."
   (minions-mode))
 
 (use-package moody
-  :disabled t
   :ensure t
   :if (display-graphic-p)
   :config
   (when (string-equal system-type "darwin")
     (setq moody-slant-function #'moody-slant-apple-rgb))
-  (setq moody-mode-line-height 20)
+
   (setq x-underline-at-descent-line t)
   (moody-replace-mode-line-buffer-identification)
-  (moody-replace-vc-mode)
 
-  (defun evgeni-moody-setup (&rest args)
-    (let* ((line-active (face-attribute 'mode-line :foreground))
-           (line-inactive (face-attribute 'mode-line-inactive :foreground)))
+  (setq-default moody-mode-line-buffer-identification
+    '(:eval (moody-tab (format-mode-line (or (evgeni-buffer-path nil 'shadow) (propertized-buffer-identification "%b"))) 20 'up)))
 
-      (message "line-active: %S" line-active)
+  (defun evgeni-moody-setup (&rest _)
+    (let ((box (plist-get (face-attribute 'mode-line :box) :color))
+          (overline (plist-get (face-attribute 'mode-line :overline) :color))
+          (underline (plist-get (face-attribute 'mode-line :underline) :color))
 
-      ;; active
-      (set-face-attribute 'mode-line          nil :overline   line-active)
-      (set-face-attribute 'mode-line          nil :underline  line-active)
+          (box-inactive (plist-get (face-attribute 'mode-line :box) :color))
+          (overline-inactive (plist-get (face-attribute 'mode-line :overline) :color))
+          (underline-inactive (plist-get (face-attribute 'mode-line :underline) :color))
 
-      ;; inactive
-      (set-face-attribute 'mode-line-inactive nil :overline   line-inactive)
-      (set-face-attribute 'mode-line-inactive nil :underline  line-inactive)
+          (default-bg (face-attribute 'default :background))
+          (buffer-id-fg (face-attribute 'mode-line-buffer-id :foreground)))
 
-      ;; no :box supported
-      (set-face-attribute 'mode-line          nil :box        nil)
-      (set-face-attribute 'mode-line-inactive nil :box        nil)))
-  ;; (evgeni-moody-setup)
-  ;; (advice-add 'load-theme :after #'evgeni-moody-setup)
-  )
+      (when (and box (not overline) (not underline))
+        (set-face-attribute 'mode-line          nil :overline   box)
+        (set-face-attribute 'mode-line          nil :underline  box)
+        (set-face-attribute 'mode-line          nil :box        nil))
 
-(use-package narrow-reindent
-  :ensure t
-  :commands evgeni-narrow-or-widen
-  :init
-  (ex! "nar[row]" 'evgeni-narrow-or-widen)
-  :config
-  (evil-define-command evgeni-narrow-or-widen (bang begin end)
-    (interactive "<!><r>")
-    (cond
-     ((region-active-p)
-      (narrow-reindent-to-region begin end))
-     ((buffer-narrowed-p)
-      (if (buffer-base-buffer)
-          (evil-delete-buffer (current-buffer)) ;; wipe out indirect buffer
-        (narrow-reindent-widen)))
-     (bang
-      (switch-to-buffer (clone-indirect-buffer nil nil))
-      (evgeni-narrow-or-widen nil begin end))
-     (t
-      (narrow-reindent-to-defun)))))
+      (when (and box-inactive (not overline-inactive) (not underline-inactive))
+        (set-face-attribute 'mode-line-inactive          nil :overline   box-inactive)
+        (set-face-attribute 'mode-line-inactive          nil :underline  box-inactive)
+        (set-face-attribute 'mode-line-inactive          nil :box        nil))
+
+      (when (equal (color-values buffer-id-fg) (color-values default-bg))
+        (set-face-attribute 'mode-line-buffer-id nil :foreground (face-attribute 'mode-line :background)))))
+
+  (evgeni-moody-setup)
+  (advice-add 'load-theme :after #'evgeni-moody-setup))
 
 (use-package beacon
   :ensure t
@@ -2547,11 +2663,6 @@ With prefix arg, find the previous file."
   :commands rainbow-mode
   :config
   (setq rainbow-r-colors-alast nil))
-
-(use-package text-mode
-  :defer t
-  :config
-  (add-hook 'text-mode-hook 'auto-fill-mode))
 
 (use-package anaconda-mode
   :ensure t
@@ -2731,3 +2842,10 @@ With prefix arg, find the previous file."
 (use-package fancy-narrow
   :ensure t
   :defer t)
+
+(use-package total-lines
+  :ensure t
+  :defer 3
+  :config
+  (global-total-lines-mode)
+  (setq mode-line-position '(("L%l/" (:eval (format "%d "total-lines))))))
