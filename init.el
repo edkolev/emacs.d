@@ -910,7 +910,25 @@ With prefix arg, find the previous file."
 
 (use-package doom-modeline
   :ensure t
-  :hook (after-init . doom-modeline-init))
+  :disabled t
+  :hook (after-init . doom-modeline-init)
+  :config
+  (setq doom-modeline-buffer-file-name-style 'relative-from-project
+        doom-modeline-major-mode-icon nil
+        doom-modeline-version nil
+        doom-modeline-github nil)
+  (defun doom-modeline-update-env ())
+
+  ;; ;; rearrange the main mode line
+  ;; (doom-modeline-def-modeline 'main
+  ;;   '(bar workspace-number window-number evil-state matches " " buffer-info flycheck )
+  ;;   '(buffer-position " " global input-method major-mode process vcs ))
+
+  ;; (doom-modeline-def-modeline 'main
+  ;;   '(bar workspace-number window-number evil-state god-state ryo-modal xah-fly-keys matches " " buffer-info remote-host buffer-position " " selection-info)
+  ;;   '(misc-info persp-name lsp github debug minor-modes input-method buffer-encoding major-mode process vcs flycheck))
+
+  )
 
 (use-package! avy
   :ensure t
