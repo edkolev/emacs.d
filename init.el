@@ -33,20 +33,15 @@
                                          file-name-handler-alist evgeni--file-name-handler-alist)))))
 
 
-;; settings
+;; graphic settings
 (when (display-graphic-p)
-  (set-frame-font (font-spec :family "Noto Mono" :size 13) nil t)
-  (setq-default line-spacing 3)
-  ;; smooth scroll
-  (setq mouse-wheel-scroll-amount '(1 ((shift) . 1)))
-  (setq mouse-wheel-progressive-speed nil)
-  (setq mouse-wheel-follow-mouse 't)
-  (setq scroll-step 1))
+  (set-frame-font (font-spec :family "DejaVu Sans Mono" :size 13 :weight 'regular) nil t)
+  (setq-default line-spacing 3))
+
 (setq custom-file (expand-file-name "custom-file.el" user-emacs-directory))
 
 ;; splash
 (setq fancy-startup-text '(((lambda()
-                              (run-with-idle-timer .2 nil 'evgeni-known-projects-load)
                               (format "Started in %s" (emacs-init-time))))))
 (setq fancy-splash-image "~/Desktop/emacs-icon.png")
 
@@ -101,13 +96,29 @@
 (add-hook 'prog-mode-hook (lambda () (modify-syntax-entry ?_ "w")))
 
 ;; in modeline, show file path, relative to the project root
+(defun evgeni-maybe-propertize-with-face (text face)
+  (if face
+      (propertize text 'face face)
+    text))
+
+(require 'subr-x)
+(defun evgeni-buffer-path (&optional path prj-path-face buffer-id-face)
+  "Return current buffer path relative to project root.
+Return nil if not in a project"
+  (when-let* ((path (or path buffer-file-truename))
+              (prj (cdr-safe (project-current nil (directory-file-name path))))
+              (prj-parent (file-name-directory (directory-file-name (expand-file-name prj)))))
+    (concat (evgeni-maybe-propertize-with-face (file-relative-name
+                                                (file-name-directory path)
+                                                prj-parent)
+                                               prj-path-face)
+            (evgeni-maybe-propertize-with-face
+             (file-name-nondirectory path)
+             (or buffer-id-face 'mode-line-buffer-id)))))
+
 (with-eval-after-load 'subr-x
   (setq-default mode-line-buffer-identification
-                '(:eval (format-mode-line (or (when-let* ((buffer-file-truename buffer-file-truename)
-                                                          (prj (cdr-safe (project-current)))
-                                                          (prj-parent (file-name-directory (directory-file-name (expand-file-name prj)))))
-                                                (concat (file-relative-name (file-name-directory buffer-file-truename) prj-parent)
-                                                        (propertize (file-name-nondirectory buffer-file-truename) 'face 'mode-line-buffer-id)))
+                '(:eval (format-mode-line (or (evgeni-buffer-path)
                                               (propertized-buffer-identification "%b"))))))
 
 (setq tags-revert-without-query t)
@@ -145,7 +156,7 @@
   (package-install 'use-package))
 (eval-when-compile
   (require 'use-package))
-(setq use-package-verbose t)
+(setq use-package-verbose nil)
 
 (use-package no-littering
   :ensure t
@@ -168,6 +179,24 @@
 (ex! "refresh-packages" 'evgeni-refresh-packages)
 
 ;;; themes
+
+(defmacro theme! (thm &rest customizations)
+  (declare (indent 1))
+  `(advice-add 'load-theme :after (lambda (theme &optional no-confirm no-enable)
+                                   (when (eq theme ,thm)
+                                     (custom-theme-set-faces
+                                      ,thm
+                                      ,@customizations)))))
+
+(defmacro with-theme! (thm code)
+  (declare (indent 1))
+  `(progn
+     (when (memq ,thm custom-enabled-themes)
+       (progn ,code))
+     (advice-add 'load-theme :after (lambda (theme &optional no-confirm no-enable)
+                                      (when (eq theme ,thm)
+                                        ,code)))))
+
 (setq custom-safe-themes t)
 (use-package habamax-theme :ensure t :defer t
   :config
@@ -180,7 +209,12 @@
      `(company-tooltip ((t (:background "#f5f5f5"))))
      `(company-scrollbar-bg ((t (:background ,color-bg-highlight)))))))
 (use-package one-themes :ensure t :defer t)        ;; ok
-(use-package greymatters-theme :ensure t :defer t) ;; ok
+(use-package greymatters-theme :ensure t :defer t
+  :config
+  (let ((region "#e3e4e6"))
+    (custom-theme-set-faces
+     'greymatters
+     `(region ((t (:background ,region)))))))
 (use-package chyla-theme :ensure t :defer t)       ;; ok, green
 (use-package doom-themes :ensure t :defer t)
 (use-package eclipse-theme :ensure t :defer t)
@@ -192,23 +226,50 @@
 (use-package tango-plus-theme :ensure t :defer t)
 (use-package plan9-theme :ensure t :defer t)
 (use-package doom-themes :ensure t :defer t)
+(use-package espresso-theme :ensure t :defer t)
+(use-package tommyh-theme :ensure t :defer t)
+(use-package eziam-theme :ensure t :defer t)
+(use-package hydandata-light-theme :ensure t :defer t)
+(use-package color-theme-sanityinc-tomorrow :ensure t :defer t)
+(use-package leuven-theme :defer t
+  :init
+  (theme! 'leuven
+    '(eshell-prompt ((t (:inherit 'font-lock-keyword-face))))
+    '(dired-ignored ((t (:inherit 'shadow :strike-through t))))))
+
+(use-package white-sand-theme :ensure t :defer t)
+(use-package silkworm-theme :ensure t :defer t)
+(use-package oldlace-theme :ensure t :defer t
+  :config
+  (custom-theme-set-faces
+   'oldlace
+   `(region ((t (:foreground "#525252" :background "#d0c9bd"))))))
 
 ;; dark themes
 (use-package dracula-theme :ensure t :defer t)
-(use-package leuven-theme :ensure t :defer t)
+
 
 (use-package emacs
   :defer .1
   :config
   ;; load theme
   (load-theme (if (display-graphic-p)
-                  'doom-one-light ;; 'habamax ;; 'dichromacy ;; 'doom-one-light ;; 'twilight-bright ;; 'apropospriate-dark ;;'tango-dark ;; tango-plus flatui
+                  'leuven ;; 'doom-one-light ;; 'habamax ;; 'dichromacy ;; 'doom-one-light ;; 'twilight-bright ;; 'apropospriate-dark ;;'tango-dark ;; tango-plus flatui
                 'doom-one-light)
               t)
   ;; bind command-option-H to hide other windows, just like every other OS X app
   (when (string-equal system-type "darwin")
-    (define-key global-map (kbd "M-s-˙") 'ns-do-hide-others)))
+    (define-key global-map (kbd "M-s-˙") 'ns-do-hide-others))
 
+  (defun evgeni-make-frame ()
+    (interactive)
+    (make-frame `((top . ,(+ (cdr (frame-position)) 15))
+                  (left . ,(+ (car (frame-position)) 15))
+                  (width . ,(- (frame-width) 3))
+                  (height . ,(- (frame-height) 2))))
+    (switch-to-buffer "*scratch*"))
+
+  (define-key global-map (kbd "s-n") 'evgeni-make-frame))
 
 (use-package desktop
   :disabled
@@ -242,7 +303,6 @@
              (frame-geometry-top (restore-frame-position--number-or-zero (frame-parameter (selected-frame) 'top)))
              (frame-geometry-width (restore-frame-position--number-or-zero (frame-text-width)))
              (frame-geometry-height (restore-frame-position--number-or-zero (frame-text-height))))
-
         (with-temp-buffer
           (insert
            (format "(add-to-list 'initial-frame-alist '(top . %d))\n" (max frame-geometry-top 0))
@@ -265,50 +325,6 @@
     (add-hook 'kill-emacs-hook 'restore-frame-position-save))
 
   (restore-frame-position))
-
-;; add a list of known projects to the splash screen
-(setq evgeni-known-projects-file (expand-file-name "evgeni-known-projects.el" no-littering-var-directory))
-
-(defun evgeni-known-projects-save ()
-  (require 'projectile)
-  (with-temp-buffer
-    (insert
-     (format "(setq evgeni-known-projects '%S)\n" (projectile-relevant-known-projects)))
-    (when (file-writable-p evgeni-known-projects-file)
-      (write-file evgeni-known-projects-file))))
-
-(defun evgeni-known-projects-load ()
-  (when (file-readable-p evgeni-known-projects-file)
-    (load-file evgeni-known-projects-file)
-    (with-current-buffer "*GNU Emacs*"
-      (save-excursion
-        (let ((inhibit-read-only t))
-          (goto-char (point-min))
-          (search-forward "Started")
-          (forward-line)
-          ;; (insert "HELLO WORLD")
-
-          (newline)
-          (insert (propertize "Projects:" :face 'highlight))
-          (newline)
-          (dolist (prj (sort (seq-take evgeni-known-projects 10)
-                             (lambda (a b)
-                               (string-lessp (file-name-nondirectory (directory-file-name a)) (file-name-nondirectory (directory-file-name b))))))
-            (newline)
-            (widget-create 'push-button
-                           :action `(lambda (w &rest _)
-                                      (projectile-switch-project-by-name
-                                       (widget-get w :value)))
-                           :mouse-face 'highlight
-                           :follow-link "\C-m"
-                           :button-prefix ""
-                           :button-suffix ""
-                           :format "%[ ◉ %t%]"
-                           (abbreviate-file-name prj)))
-          (newline))))))
-
-(add-hook 'kill-emacs-hook 'evgeni-known-projects-save)
-;; (add-hook 'emacs-startup-hook 'evgeni-known-projects-load)
 
 ;; load mail.el if any
 (when (file-readable-p (concat user-emacs-directory "mail.el"))
@@ -451,11 +467,32 @@ With prefix arg, find the previous file."
     (interactive)
     (evgeni-find-next-file t))
 
+  (defun evgeni-first-error ()
+    (interactive)
+    (cond
+     ((bound-and-true-p flycheck-mode) (flycheck-first-error) (flycheck-list-errors))
+     ((bound-and-true-p flymake-mode) (goto-char (point-min)) (call-interactively 'flymake-goto-next-error) (flymake-show-diagnostics-buffer))
+     (t (first-error))))
+
+  (defun evgeni-next-error ()
+    (interactive)
+    (cond
+     ((bound-and-true-p flycheck-mode) (flycheck-next-error) (flycheck-list-errors))
+     ((bound-and-true-p flymake-mode) (call-interactively 'flymake-goto-next-error) (flymake-show-diagnostics-buffer))
+     (t (next-error))))
+
+  (defun evgeni-previous-error ()
+    (interactive)
+    (cond
+     ((bound-and-true-p flycheck-mode) (flycheck-previous-error) (flycheck-list-errors))
+     ((bound-and-true-p flymake-mode) (call-interactively 'flymake-goto-prev-error) (flymake-show-diagnostics-buffer))
+     (t (previous-error))))
+
   (define-key evil-normal-state-map (kbd "RET") 'evgeni-save-file)
-  (define-key evil-normal-state-map (kbd "[ Q") 'first-error)
-  (define-key evil-normal-state-map (kbd "] Q") (lambda () (interactive) (goto-char (point-max)) (previous-error)))
-  (define-key evil-normal-state-map (kbd "] q") 'next-error)
-  (define-key evil-normal-state-map (kbd "[ q") 'previous-error)
+  (define-key evil-normal-state-map (kbd "[ Q") 'evgeni-first-error)
+  (define-key evil-normal-state-map (kbd "] Q") (lambda () (interactive) (goto-char (point-max)) (evgeni-previous-error)))
+  (define-key evil-normal-state-map (kbd "] q") 'evgeni-next-error)
+  (define-key evil-normal-state-map (kbd "[ q") 'evgeni-previous-error)
   (define-key evil-normal-state-map (kbd ", w") 'evgeni-window-vsplit)
   (define-key evil-normal-state-map (kbd "g C-g") 'count-words)
 
@@ -518,7 +555,7 @@ With prefix arg, find the previous file."
   (define-key evil-normal-state-map (kbd ", *" )
     (lambda ()
       (interactive)
-      (swiper (substring-no-properties (thing-at-point 'word)))))
+      (counsel-grep-or-swiper (substring-no-properties (thing-at-point 'word)))))
 
   (defvar evgeni-conflict-marker-regex "^[<=>|]\\{7\\}")
 
@@ -753,7 +790,9 @@ With prefix arg, find the previous file."
   (when (display-graphic-p)
     (setq x-select-enable-clipboard nil)
     (define-key global-map [remap ns-copy-including-secondary] 'clipboard-kill-ring-save)
-    (define-key global-map [remap yank] 'clipboard-yank))
+    (define-key global-map [remap yank] 'clipboard-yank)
+    (with-eval-after-load 'org
+      (define-key org-mode-map (kbd "s-v") 'clipboard-yank)))
 
   ;; don't move point on :s// and :g//
   (defun evgeni-save-excursion-advice (orig-fun &rest args)
@@ -801,8 +840,8 @@ With prefix arg, find the previous file."
   ;; other packages which integrate with evil
   (use-package evil-collection
     :ensure t
-    ;; :load-path "~/dev/evil-collection"
     :init
+    (setq evil-collection-outline-bind-tab-p nil)
     (evil-collection-init))
 
   (use-package evil-surround
@@ -999,13 +1038,13 @@ With prefix arg, find the previous file."
               ("U l" . magit-log-buffer-file)
               ("U r" . magit-file-checkout)
               ("U r" . evgeni-magit-file-checkout)
-              ("U c" . magit-commit-popup)
-              ("U b" . magit-branch-popup)
-              ("U z" . magit-stash-popup)
-              ("U m" . magit-merge-popup)
-              ("U p" . magit-push-popup)
-              ("U f" . magit-fetch-popup)
-              ("U F" . magit-pull-popup)
+              ("U c" . magit-commit)
+              ("U b" . magit-branch)
+              ("U z" . magit-stash)
+              ("U m" . magit-merge)
+              ("U p" . magit-push)
+              ("U f" . magit-fetch)
+              ("U F" . magit-pull)
               ("U B" . magit-checkout))
   :commands (magit-find-file)
   :init
@@ -1139,11 +1178,7 @@ With prefix arg, find the previous file."
   :config
   (setq vdiff-magit-stage-is-2way t) ;; Only use two buffers (working file and index) for vdiff-magit-stage
   (define-key magit-mode-map "e" 'vdiff-magit-dwim)
-  (define-key magit-mode-map "E" 'vdiff-magit-popup)
-  (setcdr (assoc ?e (plist-get magit-dispatch-popup :actions))
-          '("vdiff dwim" 'vdiff-magit-dwim))
-  (setcdr (assoc ?E (plist-get magit-dispatch-popup :actions))
-          '("vdiff popup" 'vdiff-magit-popup)))
+  (define-key magit-mode-map "E" 'vdiff-magit-popup))
 
 (use-package! org
   :defer 30
@@ -1261,7 +1296,11 @@ Use a prefix arg to get regular RET. "
                  (call-interactively 'xref-find-definitions))))
   (evil-define-key 'normal xref--xref-buffer-mode-map "q" 'delete-window)
   ;; don't use swiper in this buffer - swiper clears the highlighting in the xref buffer
-  (evil-define-key 'normal xref--xref-buffer-mode-map "/" 'evil-ex-search-forward))
+  (evil-define-key 'normal xref--xref-buffer-mode-map "/" 'evil-ex-search-forward)
+
+  ;; don't pulse, beacon already does this
+  (setq xref-after-jump-hook (delete 'xref-pulse-momentarily xref-after-jump-hook))
+  (setq xref-after-return-hook (delete 'xref-pulse-momentarily xref-after-return-hook)))
 
 (use-package ivy-xref
   :ensure t
@@ -1274,11 +1313,8 @@ Use a prefix arg to get regular RET. "
   :defer t
   :pin melpa-stable
   :bind (:map evil-normal-state-map
-              ("SPC" . ivy-switch-buffer)
               ("C-c C-r" . ivy-resume))
   :init
-  (evil-define-key 'normal evgeni-intercept-mode-map
-    (kbd "SPC") 'ivy-switch-buffer)
   :config
   (ivy-mode 1)
   (setq ivy-use-virtual-buffers t)
@@ -1287,11 +1323,6 @@ Use a prefix arg to get regular RET. "
   (define-key ivy-minibuffer-map (kbd "C-u") (lambda () (interactive) (kill-region (point) (point-at-bol))))
   (define-key ivy-minibuffer-map [escape] 'minibuffer-keyboard-quit)
   (define-key ivy-minibuffer-map (kbd "C-c o") 'ivy-occur)
-
-  ;; `C-6' mp
-  (define-key ivy-switch-buffer-map (kbd "C-6") (lambda (&rest _)
-                                                  (interactive)
-                                                  (ivy-quit-and-run (projectile-switch-project))))
 
   (evil-define-key 'normal ivy-occur-mode-map (kbd "RET") 'ivy-occur-press) ;; default is 'ivy-occur-press-and-switch
 
@@ -1317,10 +1348,16 @@ Use a prefix arg to get regular RET. "
   (evil-global-set-key 'normal (kbd "C-c v") 'ivy-push-view)
   (evil-global-set-key 'normal (kbd "C-c V") 'ivy-pop-view))
 
+(use-package ivy-rich
+  :ensure t
+  :after ivy
+  :config
+  (ivy-rich-mode))
+
 (use-package! swiper
   :ensure t
+  :pin melpa-stable
   :bind (:map evil-motion-state-map
-              ("C-c C-r" . ivy-resume)
               ("/" . swiper)
               :map evil-normal-state-map
               (", /" . swiper-all))
@@ -1345,13 +1382,17 @@ Use a prefix arg to get regular RET. "
          ([remap describe-key] . describe-key)
          ([remap describe-variable] . counsel-describe-variable)
          :map evil-normal-state-map
+         ("/" . counsel-grep-or-swiper)
          (", f"   . counsel-imenu)
          ("g P" . counsel-yank-pop)
          ("g p" . counsel-evil-registers))
   :config
+  (evil-set-command-properties 'counsel-grep-or-swiper :jump t)
+  (setq counsel-grep-base-command "rg --smart-case %s %s") ;; use rg --smart-case to mimic swiper's `auto' case search
 
   (setq counsel-git-cmd "git ls-files --cached --others --exclude-standard")
-  (setq counsel-rg-base-command "rg -i -M 120 --no-heading --line-number --color never %s .")
+  (setq counsel-rg-base-command "rg --no-ignore-messages -i -M 120 --no-heading --line-number --color never %s .")
+  (setq counsel-org-goto-face-style 'org)
 
   (setq counsel-git-grep-skip-counting-lines t)
   (setq counsel-yank-pop-after-point t)
@@ -1364,7 +1405,7 @@ Use a prefix arg to get regular RET. "
   (setq evgeni-counsel-git-grep-rigpreg-found (executable-find "rg"))
 
   (when evgeni-counsel-git-grep-rigpreg-found
-    (setq counsel-rg-base-command "rg -S -M 500 --no-heading --hidden -g '!.git' --line-number --color never %s ."))
+    (setq counsel-rg-base-command "rg --no-ignore-messages -S -M 500 --no-heading --hidden -g '!.git' --line-number --color never %s ."))
 
   (evil-define-key 'normal evgeni-intercept-mode-map
     (kbd "g /") (if evgeni-counsel-git-grep-rigpreg-found
@@ -1384,7 +1425,24 @@ Use a prefix arg to get regular RET. "
   (evil-set-command-properties 'counsel-imenu :jump t)
   (evil-set-command-properties 'counsel-find-file :jump t)
   (evil-set-command-properties 'counsel-git-grep :jump t)
-  (evil-set-command-properties 'evgeni-counsel-git-grep :jump t))
+  (evil-set-command-properties 'evgeni-counsel-git-grep :jump t)
+
+  ;; copy of `counsel-faces' using standard faces only
+  (ex! "standard-faces" 'evgeni-standard-faces)
+  (defun evgeni-standard-faces ()
+    (interactive)
+    (let* ((face-list '(default bold italic bold-italic underline fixed-pitch fixed-pitch-serif variable-pitch shadow highlight isearch query-replace lazy-highlight region secondary-selection trailing-whitespace escape-glyph homoglyph nobreak-space nobreak-hyphen mode-line mode-line-inactive mode-line-highlight mode-line-buffer-id header-line header-line-highlight vertical-border minibuffer-prompt fringe cursor tooltip mouse scroll-bar tool-bar menu tty-menu-enabled-face tty-menu-disabled-face tty-menu-selected-face))
+           (names (mapcar #'symbol-name face-list))
+           (ivy-format-function
+            (counsel--faces-format-function
+             (format "%%-%ds %%s"
+                     (apply #'max 0 (mapcar #'string-width names))))))
+      (ivy-read "Standard face: " names
+                :require-match t
+                :history 'face-name-history
+                :preselect (counsel--face-at-point)
+                :action counsel-describe-face-function
+                :caller 'counsel-faces))))
 
 (use-package! imenu-anywhere
   :ensure t
@@ -1407,28 +1465,37 @@ Use a prefix arg to get regular RET. "
 (use-package! projectile
   :ensure t
   :defer 3
-  :commands evgeni-projectile-find-file
+  :commands projectile-switch-project-by-name projectile-project-p projectile-relevant-known-projects evgeni-project-files
   :init
   (evil-define-key 'normal evgeni-intercept-mode-map
-    (kbd "g SPC") 'evgeni-projectile-find-file)
+    (kbd "g SPC") 'ivy-switch-buffer
+    (kbd ", SPC") 'projectile-switch-project
+    (kbd "SPC") 'evgeni-project-files)
   (ex! "proj[ectile]" 'projectile-switch-project)
   (ex! "prj" 'projectile-switch-project)
   :config
   (require 'counsel)
-  (defun evgeni-projectile-find-file (&optional switch-project)
-    (interactive "P")
-    (if (and (projectile-project-p) (not switch-project))
-        (if (eq (projectile-project-vcs) 'git)
-            (counsel-git)
-          (counsel-find-file))
-      (projectile-switch-project)))
+
+  ;; TODO use projectile-project-buffers, or something else to make recent-files also include the project buffers
+  (defun evgeni-project-files()
+    (interactive)
+    (if (projectile-project-p)
+        (let* ((prj-p (projectile-project-p))
+               (recent-files (projectile-recently-active-files))
+               (prj-files (projectile-current-project-files))
+               (rest-prj-files (projectile-difference prj-files recent-files))
+               (shadowed-rest-prj-files (mapcar (lambda (f) (propertize f 'face 'ivy-virtual)) rest-prj-files))
+               (candidates (funcall (if buffer-file-name 'cdr 'identity) (append recent-files shadowed-rest-prj-files))))
+          (find-file
+           (projectile-expand-root
+            (ivy-read "Project files: " candidates))))
+      (ivy-read "No project " nil)))
 
   (setq projectile-switch-project-action
         (lambda ()
-          (dired (projectile-project-root))
-          (magit-status)))
-  (setq projectile-mode-line (format " [%s]" (projectile-project-name)))
-  (setq projectile-completion-system 'default)
+          (dired (projectile-project-root))))
+  (setq projectile-completion-system 'ivy)
+  (setq projectile-git-submodule-command nil)
   (projectile-global-mode))
 
 (use-package! company
@@ -1510,19 +1577,14 @@ Use a prefix arg to get regular RET. "
   ;;       evil-goggles-enable-delete nil)
   (evil-goggles-mode))
 
-(use-package! evil-regression
-  :load-path "~/dev/evil-regression"
-  :disabled t
-  :bind (:map evil-insert-state-map
-              ( "C-r" . evil-regression-paste-from-register)))
-
 (use-package recentf
   :defer .5
   :init
   (setq recentf-max-saved-items 500)
   (setq recentf-exclude '("/tmp/" ;; "/ssh:"
+                          "\.pyc$"
                           (expand-file-name "~/Maildir/")))
-  (setq recentf-auto-cleanup 'never)
+  (setq recentf-auto-cleanup 3600) ;; cleanup after an hour of idleness
   :config
   (recentf-mode))
 
@@ -1593,10 +1655,13 @@ Use a prefix arg to get regular RET. "
   :ensure t
   :defer t
   :config
-  (setq flymake-start-syntax-check-on-newline nil)
-  (evil-define-minor-mode-key 'normal 'flymake-mode
-    (kbd "] q") 'flymake-goto-next-error
-    (kbd "[ q") 'flymake-goto-prev-error))
+  (setq flymake-start-syntax-check-on-newline nil))
+
+(use-package! flyspell-correct-ivy
+  :ensure t
+  :defer t
+  :init
+  (setq flyspell-correct-interface #'flyspell-correct-ivy))
 
 (use-package abbrev
   :defer t
@@ -2058,17 +2123,13 @@ Use a prefix arg to get regular RET. "
 
 (use-package! diff-hl
   :ensure t
-  :load-path "~/dev/diff-hl"
-  :defer .5
-  :init
-  ;; (setq diff-hl-margin-symbols-alist '((insert . " ") (delete . " ") (change . " ") (unknown . "?") (ignored . "i")))
-  (setq diff-hl-margin-symbols-alist '((insert . "+") (delete . "-") (change . "|") (unknown . "?") (ignored . "i")))
+  :defer 3
   :config
   (global-diff-hl-mode)
-  ;; (add-hook 'prog-mode-hook 'turn-on-diff-hl-mode)
-  ;; (add-hook 'text-mode-hook 'turn-on-diff-hl-mode)
   (unless (window-system)
     (diff-hl-margin-mode))
+
+  (setq diff-hl-margin-symbols-alist '((insert . "+") (delete . "-") (change . "|") (unknown . "?") (ignored . "i")))
 
   (add-hook 'diff-hl-mode-hook 'diff-hl-flydiff-mode)
   (add-hook 'magit-post-refresh-hook 'diff-hl-magit-post-refresh)
@@ -2079,7 +2140,13 @@ Use a prefix arg to get regular RET. "
   (evil-define-minor-mode-key 'normal 'diff-hl-mode
     "]c" 'diff-hl-next-hunk
     "[c" 'diff-hl-previous-hunk
-    "Ux" 'diff-hl-revert-hunk))
+    "Ux" 'diff-hl-revert-hunk)
+
+  (setq diff-hl-highlight-revert-hunk-function 'evgeni-diff-hl-highlight-revert-hunk-function)
+
+  ;; display only the hunk to be reverted
+  (defun evgeni-diff-hl-highlight-revert-hunk-function (_end)
+    (diff-restrict-view)))
 
 (use-package ibuffer
   :defer t
@@ -2313,12 +2380,12 @@ Use a prefix arg to get regular RET. "
         (call-interactively 'shell-pop)
       (delete-char 1)))
 
-  (evil-define-key 'insert eshell-mode-map
-    (kbd "C-a") 'eshell-bol
-    (kbd "C-d") 'evgeni-eshell-delete-char-or-hide
-    (kbd "C-u") 'evgeni-eshell-kill-to-bol
-    (kbd "C-p") 'eshell-previous-matching-input-from-input
-    (kbd "C-n") 'eshell-next-matching-input-from-input)
+  (defun evgeni-eshell-normal-return ()
+    (interactive)
+    (goto-char (point-max))
+    (evil-insert 1))
+
+  (add-hook 'shell-pop-in-after-hook 'evgeni-eshell-normal-return)
 
   (setq ;; eshell-buffer-shorthand t ...  Can't see Bug#19391
    eshell-scroll-to-bottom-on-input 'all
@@ -2470,6 +2537,7 @@ Use a prefix arg to get regular RET. "
   :ensure t
   :config
   (setq minions-mode-line-lighter "-")
+  (setq minions-direct '(flycheck-mode flymake-mode))
   (minions-mode))
 
 (use-package moody
@@ -2517,6 +2585,7 @@ Use a prefix arg to get regular RET. "
   :ensure t
   :defer 3
   :config
+  (setq beacon-size 80)
   (defun evgeni-set-beacon-color (&rest _)
     (setq beacon-color (face-attribute 'region :background)))
 
@@ -2530,34 +2599,37 @@ Use a prefix arg to get regular RET. "
   :ensure t
   :commands dired-sidebar-toggle-sidebar
   :init
-  (ex! "sidebar" 'dired-sidebar-toggle-sidebar))
+  (ex! "sidebar" 'dired-sidebar-toggle-sidebar)
+  (ex! "tree" 'dired-sidebar-toggle-sidebar))
 
 (use-package go-mode
-  :ensure t
   :defer t
   :config
 
-  ;; for some reason go-mode doesn't integrate with xref
-  ;; (evil-define-key 'normal go-mode-map
-  ;;   (kbd "C-]") 'godef-jump
-  ;;   (kbd "C-w C-]") 'godef-jump-other-window)
+  (setq gofmt-command "goimports")
 
-  ;; compile command
-  (add-hook 'go-mode-hook (lambda ()
-                            (set (make-local-variable 'compile-command)
-                                 "go test")))
+  (reformatter-define evgeni-gofmt
+    :program "goimports")
 
-  ;; (setq go-packages-function 'go-packages-go-list)
-  ;; (setq go-packages-function 'go-packages-native)
+  (add-hook 'go-mode-hook 'evgeni-go-mode-hook)
+  (defun evgeni-go-mode-hook ()
+    (evgeni-gofmt-on-save-mode)
+    (hs-minor-mode)
+    (evgeni-hs-fold-on-first-occurance "^import (")
+    ;; compile command
+    (set (make-local-variable 'compile-command)
+         "go build -o /dev/null"))
 
-  ;; gofmt on save
-  (add-hook 'go-mode-hook (lambda ()
-                            (add-hook 'before-save-hook 'gofmt-before-save nil t)))
+  (evil-define-key 'normal go-mode-map
+    (kbd "gm") (lambda () (interactive) (compile "go build -o /dev/null"))
+    (kbd "gM") (lambda () (interactive) (compile "go test")))
 
-  ;; prefer goimports over gofmt
-  ;; (let ((goimports (executable-find "goimports")))
-  ;;   (when goimports
-  ;;     (setq gofmt-command goimports)))
+  ;; TODO will this become unnecessary with go modules?
+  (defun evgeni-go-strip-vendor-prefix (orig-fun &rest args)
+    (mapcar
+     (lambda (str) (replace-regexp-in-string "^.*/vendor/" "" str))
+     (apply orig-fun args)))
+  (advice-add 'go-packages-native :around #'evgeni-go-strip-vendor-prefix)
 
   (defun evgeni-go-dump ()
     (interactive)
@@ -2570,60 +2642,45 @@ Use a prefix arg to get regular RET. "
   (with-eval-after-load 'evil
     (evil-define-key 'normal go-mode-map (kbd "] d") 'evgeni-go-dump))
 
-  ;; temporary fix until this is addressed https://github.com/dominikh/go-mode.el/issues/135
-  (defun evgeni-go-strip-vendor-prefix (orig-fun &rest args)
-    (mapcar
-     (lambda (str) (replace-regexp-in-string "^.*/vendor/" "" str))
-     (apply orig-fun args)))
-  (advice-add 'go-packages-native :around #'evgeni-go-strip-vendor-prefix))
-
-(use-package company-go
-  :ensure t
-  :disabled
-  :after go-mode
-  :config
-  (add-hook 'go-mode-hook (lambda ()
-                            (set (make-local-variable 'company-backends) '(company-go)))))
-
-(use-package go-eldoc
-  :ensure t
-  :disabled
-  :after go-mode
-  :config
-  (add-hook 'go-mode-hook 'go-eldoc-setup))
-
-(use-package gorepl-mode
-  :ensure t
-  :after go-mode)
-
-(use-package go-gen-test
-  :ensure t
-  :after go-mode)
+  (set (make-local-variable 'outline-regexp) "func\\|import\\|type\\|const"))
 
 (use-package eglot
   :ensure t
+  :defer t
   :init
   (add-hook 'go-mode-hook 'eglot-ensure)
-  (add-hook 'python-mode-hook 'eglot-ensure)
   :config
+  (add-to-list 'eglot-server-programs '(go-mode . ("bingo")))
   (add-to-list 'eglot-ignored-server-capabilites ':documentHighlightProvider))
 
 (use-package lsp-mode
   :ensure t
   :defer t
+  :hook ((python-mode . lsp))
+  :init
+  (setq lsp-auto-guess-root t
+        lsp-prefer-flymake nil)
   :config
-  (setq lsp-eldoc-render-all nil))
+
+  (setq lsp-eldoc-hook '(lsp-hover)) ;; remove documentHighlightProvider (lsp-document-highlight)
+  (setq lsp-eldoc-prefer-signature-help nil)
+
+  (use-package lsp-ui
+    :ensure t
+    :init
+    (setq lsp-ui-peek-enable nil
+          lsp-ui-sideline-enable nil
+          lsp-ui-doc-enable nil
+          lsp-ui-imenu-enable nil))
+
+  (add-hook 'lsp-after-open-hook 'evgeni-lsp-after-open-hook)
+  (defun evgeni-lsp-after-open-hook ()
+    (flycheck-mode -1) ;; TODO this isn't working
+    (setq company-backends '(company-lsp))))
 
 (use-package company-lsp
   :ensure t
-  :after lsp-mode
-  :config
-  (push 'company-lsp company-backends))
-
-(use-package lsp-go
-  :ensure t
-  :disabled
-  :hook (go-mode . lsp-go-enable))
+  :after lsp-mode)
 
 (use-package! evil-multiedit
   :ensure t
@@ -2698,6 +2755,7 @@ Use a prefix arg to get regular RET. "
 (use-package python
   :defer t
   :config
+  (setq python-indent-guess-indent-offset-verbose nil)
   (defun evgeni-python-dump ()
     (interactive)
     (let ((word (thing-at-point 'word)))
@@ -2818,6 +2876,16 @@ Use a prefix arg to get regular RET. "
   :config
   ;; no mouse in evil insert state
   (disable-mouse-in-keymap evil-insert-state-map))
+
+(use-package outline
+  :defer t
+  :config
+  (define-key outline-minor-mode-map (kbd "TAB")
+    '(menu-item "" nil :filter
+                (lambda
+                  (&optional _)
+                  (when (outline-on-heading-p)
+                    'outline-cycle)))))
 
 (use-package protobuf-mode
   :ensure t
