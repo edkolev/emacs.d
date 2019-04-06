@@ -162,6 +162,22 @@ Return nil if not in a project"
   :ensure t
   :demand t)
 
+(use-package dashboard
+  :ensure t
+  :if (display-graphic-p)
+  :preface
+  (defun evgeni-dashboard-banner ()
+    (setq dashboard-banner-logo-title
+          (format "Started in %.2f seconds"
+                  (float-time (time-subtract after-init-time before-init-time)))))
+  :init
+  (add-hook 'after-init-hook 'dashboard-refresh-buffer)
+  (add-hook 'dashboard-mode-hook 'evgeni-dashboard-banner)
+  :config
+  (setq dashboard-items '((projects  . 20)))
+  (setq dashboard-startup-banner 'logo)
+  (dashboard-setup-startup-hook))
+
 ;; upgrade installed packages
 (defun evgeni-upgrade-packages ()
   (interactive)
@@ -345,16 +361,6 @@ Return nil if not in a project"
 (define-key universal-argument-map (kbd "C-u") nil)
 (define-key universal-argument-map (kbd "M-u") 'universal-argument-more)
 
-(use-package dashboard
-  :ensure t
-  :config
-  (setq dashboard-items nil)
-  (setq dashboard-startup-banner 'logo)
-  (setq dashboard-startup-banner "~/Desktop/emacs-icon.png")
-  (setq dashboard-banner-logo-title "")
-  (setq dashboard-page-separator "\n")
-  (dashboard-setup-startup-hook))
-
 ;; load evil early
 (use-package evil
   :ensure t
@@ -516,6 +522,10 @@ With prefix arg, find the previous file."
 
   (evil-add-command-properties 'beginning-of-defun :jump t :repeat 'motion)
   (evil-add-command-properties 'end-of-defun :jump t :repeat 'motion)
+
+  ;; RET should do nothing in operator pending state map
+  (define-key evil-operator-state-map (kbd "RET") 'evil-force-normal-state)
+  (define-key evil-operator-state-map [return] 'evil-force-normal-state)
 
   ;; `zT' to scroll beginning of defun to top
   (define-key evil-motion-state-map "zT" 'evgeni-scroll-beginning-of-defun-to-top)
@@ -1056,6 +1066,12 @@ With prefix arg, find the previous file."
     (interactive)
     (magit-diff-unstaged nil (list (magit-file-relative-name))))
 
+  (use-package transient
+    :defer
+    :config
+    (setq transient-save-history nil
+          transient-show-popup 1))
+
   (defun evgeni-magit-file-checkout ()
     (interactive)
     (magit-file-checkout "HEAD" (magit-file-relative-name)))
@@ -1266,8 +1282,13 @@ Use a prefix arg to get regular RET. "
 
   (add-hook 'org-mode-hook (lambda () (org-bullets-mode 1))))
 
+(use-package org-download
+  :ensure t
+  :after org)
+
 (use-package evil-org
   :ensure t
+  :disabled t
   :after org
   :config
   (add-hook 'org-mode-hook 'evil-org-mode)
