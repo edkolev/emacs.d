@@ -2,4 +2,4 @@
 # name: newe
 # key: newe
 # --
-errors.New("$0")
+errors.Errorf("$0")
