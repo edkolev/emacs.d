@@ -2,6 +2,6 @@
 # name: for
 # key: for
 # --
-for $1 {
+for ${3:key}, ${2:value} := range ${1:target} {
 	$0
 }
