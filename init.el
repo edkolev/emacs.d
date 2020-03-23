@@ -35,8 +35,18 @@
 
 ;; graphic settings
 (when (display-graphic-p)
-  (set-frame-font (font-spec :family "DejaVu Sans Mono" :size 13 :weight 'regular) nil t)
+  ;; (set-frame-font (font-spec :family "DejaVu Sans Mono" :size 13 :weight 'regular) nil t)
+  (set-frame-font (font-spec :family "Fira Code" :size 13 :weight 'regular) nil t)
   (setq-default line-spacing 3))
+
+ ;; emacs mac https://github.com/railwaycat/homebrew-emacsmacport
+(when (eq window-system 'mac)
+  (setq mac-option-modifier 'meta)
+  (setq mac-command-modifier 'hyper)
+  (global-set-key [(hyper a)] 'mark-whole-buffer)
+  (global-set-key [(hyper v)] 'clipboard-yank)
+  (global-set-key [(hyper c)] 'clipboard-kill-ring-save)
+  (global-set-key [(hyper n)] 'new-frame))
 
 (setq custom-file (expand-file-name "custom-file.el" user-emacs-directory))
 
@@ -176,6 +186,7 @@ Return nil if not in a project"
   :config
   (setq dashboard-items '((projects  . 20)))
   (setq dashboard-startup-banner 'logo)
+  (setq dashboard-footer-messages nil)
   (dashboard-setup-startup-hook))
 
 ;; upgrade installed packages
@@ -245,6 +256,7 @@ Return nil if not in a project"
 (use-package espresso-theme :ensure t :defer t)
 (use-package tommyh-theme :ensure t :defer t)
 (use-package eziam-theme :ensure t :defer t)
+(use-package modus-operandi-theme :ensure t :defer t)
 (use-package hydandata-light-theme :ensure t :defer t)
 (use-package color-theme-sanityinc-tomorrow :ensure t :defer t)
 (use-package leuven-theme :defer t
@@ -270,7 +282,7 @@ Return nil if not in a project"
   :config
   ;; load theme
   (load-theme (if (display-graphic-p)
-                  'leuven ;; 'doom-one-light ;; 'habamax ;; 'dichromacy ;; 'doom-one-light ;; 'twilight-bright ;; 'apropospriate-dark ;;'tango-dark ;; tango-plus flatui
+                  'modus-operandi ;; 'leuven ;; 'doom-one-light ;; 'habamax ;; 'dichromacy ;; 'doom-one-light ;; 'twilight-bright ;; 'apropospriate-dark ;;'tango-dark ;; tango-plus flatui
                 'doom-one-light)
               t)
   ;; bind command-option-H to hide other windows, just like every other OS X app
@@ -1079,8 +1091,6 @@ With prefix arg, find the previous file."
   (magit-add-section-hook 'magit-status-sections-hook
                           'magit-insert-stashes 'magit-insert-unpushed-to-pushremote 1)
 
-  (define-key magit-dispatch-popup-map "/" 'isearch-forward)
-  (define-key magit-dispatch-popup-map "?" 'isearch-backward)
   (define-key magit-diff-mode-map "e" nil) ;; no ediff
 
   (add-hook 'git-commit-mode-hook 'flyspell-mode))
@@ -1208,6 +1218,14 @@ With prefix arg, find the previous file."
     (kbd "gx") 'org-open-at-point
     (kbd "] m") 'org-next-visible-heading
     (kbd "[ m") 'org-previous-visible-heading)
+
+  ;; daily journal file, `:journal'
+  (ex! "journal" 'evgeni-journal-file-today)
+  (defun evgeni-journal-file-today ()
+    "Return filename for today's journal entry."
+    (interactive)
+    (let ((daily-name (format-time-string "%Y_%r_%d.org")))
+      (find-file (expand-file-name (concat org-directory "/journal/"  daily-name)))))
 
   ;; better org RETURN https://github.com/howardabrams/dot-files/blob/master/emacs-org.org#better-org-return
   (defun evgeni-org-return (&optional ignore)
@@ -2037,7 +2055,7 @@ Use a prefix arg to get regular RET. "
   (add-hook 'edebug-mode-hook 'evil-normalize-keymaps))
 
 (use-package exec-path-from-shell
-  :if (memq window-system '(mac ns))
+  :if (display-graphic-p)
   :defer .5
   :ensure t
   :config
@@ -2495,7 +2513,7 @@ Use a prefix arg to get regular RET. "
   :ensure t
   :if (display-graphic-p)
   :config
-  (when (string-equal system-type "darwin")
+  (when (eq window-system 'ns)
     (setq moody-slant-function #'moody-slant-apple-rgb))
 
   (setq x-underline-at-descent-line t)
