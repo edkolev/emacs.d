@@ -287,21 +287,6 @@ Return nil if not in a project"
 
   (define-key global-map (kbd "s-n") 'evgeni-make-frame))
 
-(use-package desktop
-  :disabled
-  :if (display-graphic-p)
-  :config
-  (add-to-list 'frameset-filter-alist '(background-color . :never))
-  (add-to-list 'frameset-filter-alist '(foreground-color . :never))
-  (add-to-list 'frameset-filter-alist '(font . :never))
-  (add-to-list 'frameset-filter-alist '(cursor-color . :never))
-  (setq desktop-globals-to-save '()
-        desktop-locals-to-save '()
-        desktop-files-not-to-save ".*"
-        desktop-buffers-not-to-save ".*"
-        desktop-save t)
-  (desktop-save-mode))
-
 ;; restore frame position - https://github.com/aaronjensen/restore-frame-position
 (when (display-graphic-p)
   (setq restore-frame-position-file (expand-file-name "frame-position.el" no-littering-var-directory))
@@ -1039,7 +1024,6 @@ With prefix arg, find the previous file."
 (use-package! magit
   :ensure t
   :defer 30
-  :pin melpa-stable
   :bind (:map evil-normal-state-map
               ("U U" . magit-status)
               ("U w" . magit-stage-file)
@@ -1286,16 +1270,6 @@ Use a prefix arg to get regular RET. "
   :ensure t
   :after org)
 
-(use-package evil-org
-  :ensure t
-  :disabled t
-  :after org
-  :config
-  (add-hook 'org-mode-hook 'evil-org-mode)
-  (add-hook 'org-mode-hook (lambda ()
-                             (evil-org-mode)
-                             (evil-org-set-key-theme '(operators)))))
-
 (use-package ob-restclient
   :ensure t
   :after org
@@ -1332,7 +1306,6 @@ Use a prefix arg to get regular RET. "
 (use-package! ivy
   :ensure t
   :defer t
-  :pin melpa-stable
   :bind (:map evil-normal-state-map
               ("C-c C-r" . ivy-resume))
   :init
@@ -1377,7 +1350,6 @@ Use a prefix arg to get regular RET. "
 
 (use-package! swiper
   :ensure t
-  :pin melpa-stable
   :bind (:map evil-motion-state-map
               ("/" . swiper)
               :map evil-normal-state-map
@@ -1388,7 +1360,6 @@ Use a prefix arg to get regular RET. "
 
 (use-package! counsel
   :ensure t
-  :pin melpa-stable
   :init
   (ex! "faces" 'counsel-faces)
   (ex! "find-lib" 'counsel-find-library)
@@ -1555,15 +1526,6 @@ Use a prefix arg to get regular RET. "
   :config
   (company-quickhelp-mode))
 
-(use-package company-box
-  :ensure t
-  :disabled
-  :if (display-graphic-p)
-  ;; :after company
-  :hook (company-mode . company-box-mode)
-  :config
-  (setq company-box-enable-icon nil))
-
 (use-package! yasnippet
   :ensure t
   :defer .5
@@ -1573,12 +1535,6 @@ Use a prefix arg to get regular RET. "
   ;; (evil-define-minor-mode-key 'insert yas-minor-mode (kbd "C-c y") 'yas-expand)
   (evil-define-minor-mode-key 'insert yas-minor-mode (kbd "C-c y") 'company-yasnippet)
   (ex! "yas-new" 'yas-new-snippet))
-
-(use-package yasnippet-snippets
-  :ensure t
-  :disabled
-  :after yasnippet
-  :config (yasnippet-snippets-initialize))
 
 (use-package evil-expat
   ;; :load-path "~/dev/evil-expat"
@@ -1733,13 +1689,6 @@ Use a prefix arg to get regular RET. "
         (scroll-up-line 4))))
 
   (add-hook 'compilation-finish-functions 'evgeni-close-compile-win-if-successful))
-
-(use-package aggressive-indent
-  :ensure t
-  :disabled t
-  :commands aggressive-indent-mode
-  :init
-  (add-hook 'emacs-lisp-mode-hook 'aggressive-indent-mode))
 
 (use-package shackle
   :ensure t
@@ -2327,15 +2276,6 @@ Use a prefix arg to get regular RET. "
 
   (modify-syntax-entry ?> "w" clojure-mode-syntax-table)
 
-  (use-package monroe
-    :ensure t
-    :disabled t
-    :init
-    (ex! "monroe" 'monroe)
-    :config
-    (evil-define-minor-mode-key 'normal 'monroe-interaction-mode (kbd "C-]") 'monroe-jump)
-    (add-hook 'clojure-mode-hook 'clojure-enable-monroe))
-
   (use-package cider
     :ensure t
     :config
@@ -2454,16 +2394,6 @@ Use a prefix arg to get regular RET. "
 (use-package esh-autosuggest
   :hook (eshell-mode . esh-autosuggest-mode)
   :ensure t)
-
-(use-package atomic-chrome
-  :ensure t
-  :disabled
-  :if (display-graphic-p)
-  :defer 30
-  :config
-  (setq atomic-chrome-buffer-open-style 'frame)
-  (setq atomic-chrome-default-major-mode 'markdown-mode)
-  (atomic-chrome-start-server))
 
 (use-package! evil-numbers
   :ensure t
@@ -2717,37 +2647,11 @@ Use a prefix arg to get regular RET. "
     (evil-multiedit-abort)
     (evil-multiedit--start-regexp (or regexp (evil-ex-pattern-regex evil-ex-search-pattern)) beg end)))
 
-(use-package! outshine
-  :ensure t
-  :disabled
-  :defer .1
-  :config
-  (add-hook 'outline-minor-mode-hook 'outshine-hook-function)
-  (add-hook 'prog-mode-hook 'outline-minor-mode)
-
-  ;; make narrowing work within the headline rather than require point to be on it
-  (advice-add 'outshine-narrow-to-subtree :before
-              (lambda (&rest args) (unless (outline-on-heading-p t)
-                                     (outline-previous-visible-heading 1))))
-
-  (evil-define-minor-mode-key 'normal 'outline-minor-mode (kbd "<backtab>") 'outshine-cycle-buffer))
-
 (use-package! rainbow-mode
   :ensure t
   :commands rainbow-mode
   :config
   (setq rainbow-r-colors-alast nil))
-
-(use-package anaconda-mode
-  :ensure t
-  :disabled t
-  :config
-  (add-hook 'python-mode-hook 'anaconda-mode)
-  (add-hook 'python-mode-hook 'anaconda-eldoc-mode)
-
-  (evil-define-minor-mode-key 'normal 'anaconda-mode
-    (kbd "C-]") 'anaconda-mode-find-definitions
-    (kbd "C-w C-]") 'anaconda-mode-find-definitions-other-window))
 
 (use-package company-anaconda
   :ensure t
