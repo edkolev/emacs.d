@@ -1360,12 +1360,6 @@ Use a prefix arg to get regular RET. "
   (evil-global-set-key 'normal (kbd "C-c v") 'ivy-push-view)
   (evil-global-set-key 'normal (kbd "C-c V") 'ivy-pop-view))
 
-(use-package ivy-rich
-  :ensure t
-  :after ivy
-  :config
-  (ivy-rich-mode))
-
 (use-package! swiper
   :ensure t
   :bind (:map evil-motion-state-map
@@ -1985,10 +1979,15 @@ Use a prefix arg to get regular RET. "
   (modify-syntax-entry ?_ "w" js-mode-syntax-table))
 
 (use-package json
-  :commands json-pretty-print-buffer
+  :commands json-pretty-print
   :init
-  (ex! "json-pretty" 'json-pretty-print-buffer)
-  (ex! "json" (lambda () (interactive) (json-mode) (json-pretty-print-buffer)))
+  (ex! "json" 'evgeni-json-pretty-print-dwim)
+  (defun evgeni-json-pretty-print-dwim ()
+    (interactive)
+    (if (region-active-p)
+        (call-interactively 'json-pretty-print)
+      (json-pretty-print-buffer)
+      (json-mode)))
   :config
   (setq json-encoding-object-sort-predicate 'string<))
 
@@ -2606,7 +2605,7 @@ Use a prefix arg to get regular RET. "
       (save-excursion (end-of-line)
                       (newline)
                       (indent-according-to-mode)
-                      (insert (concat "fmt.Printf(\"" word ": %v\\n\", " word ")")))))
+                      (insert (concat "fmt.Fprintf(os.Stderr, \"" word ": %v\\n\", litter.Options{HidePrivateFields: true}.Sdump(" word "))")))))
 
   (with-eval-after-load 'evil
     (evil-define-key 'normal go-mode-map (kbd "] d") 'evgeni-go-dump))
@@ -2619,7 +2618,6 @@ Use a prefix arg to get regular RET. "
   :init
   (add-hook 'go-mode-hook 'eglot-ensure)
   :config
-  (add-to-list 'eglot-server-programs '(go-mode . ("bingo")))
   (add-to-list 'eglot-ignored-server-capabilites ':documentHighlightProvider))
 
 (use-package lsp-mode
