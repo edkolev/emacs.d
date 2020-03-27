@@ -46,7 +46,7 @@
   (global-set-key [(hyper a)] 'mark-whole-buffer)
   (global-set-key [(hyper v)] 'clipboard-yank)
   (global-set-key [(hyper c)] 'clipboard-kill-ring-save)
-  (global-set-key [(hyper n)] 'new-frame))
+  (global-set-key [(hyper n)] 'make-frame))
 
 (setq custom-file (expand-file-name "custom-file.el" user-emacs-directory))
 
@@ -849,6 +849,8 @@ With prefix arg, find the previous file."
     :ensure t
     :init
     (setq evil-collection-outline-bind-tab-p nil)
+    :config
+    (delete 'outline evil-collection-mode-list)
     (evil-collection-init))
 
   (use-package evil-surround
@@ -1193,6 +1195,9 @@ With prefix arg, find the previous file."
 (use-package! org
   :defer 30
   :ensure t
+  :commands evgeni-journal-file-today
+  :init
+  (ex! "journal" 'evgeni-journal-file-today)
   :config
   ;; text-mode-like parapgraph separation
   (add-hook 'org-mode-hook (lambda ()
@@ -1220,12 +1225,17 @@ With prefix arg, find the previous file."
     (kbd "[ m") 'org-previous-visible-heading)
 
   ;; daily journal file, `:journal'
-  (ex! "journal" 'evgeni-journal-file-today)
   (defun evgeni-journal-file-today ()
     "Return filename for today's journal entry."
     (interactive)
-    (let ((daily-name (format-time-string "%Y_%r_%d.org")))
+    (let ((daily-name (format-time-string "%Y_%b_%d.org")))
       (find-file (expand-file-name (concat org-directory "/journal/"  daily-name)))))
+
+  ;; `:babellib' ex command to ingest my library of babel
+  (ex! "babellib" 'evgeni-babellib)
+  (defun evgeni-babellib ()
+    (interactive)
+    (org-babel-lob-ingest "~/org/snippets.org"))
 
   ;; better org RETURN https://github.com/howardabrams/dot-files/blob/master/emacs-org.org#better-org-return
   (defun evgeni-org-return (&optional ignore)
@@ -2160,7 +2170,20 @@ Use a prefix arg to get regular RET. "
   (ex! "gitlink" 'git-link)
   (ex! "gitlink-commit" 'git-link-commit)
   :config
-  (setq git-link-open-in-browser (display-graphic-p)))
+  (setq git-link-open-in-browser (display-graphic-p))
+
+  (add-to-list 'git-link-remote-alist '("uber.internal" git-link-code-uber-com))
+  (defun git-link-code-uber-com (hostname dirname filename branch commit start end)
+    (format "https://sourcegraph.uberinternal.com/%s/%s@%s/-/blob/%s"
+            (replace-regexp-in-string "config.uber.internal" "code.uber.internal" hostname)
+            (replace-regexp-in-string "@" "-" dirname) ;; replace "@" with "-"
+            (or branch commit)
+            (concat filename
+                    (when start
+                      (concat "#"
+                              (if end
+                                  (format "L%s-%s" start end)
+                                (format "L%s" start))))))))
 
 (use-package! shell-pop
   :ensure t
@@ -2605,7 +2628,7 @@ Use a prefix arg to get regular RET. "
       (save-excursion (end-of-line)
                       (newline)
                       (indent-according-to-mode)
-                      (insert (concat "fmt.Fprintf(os.Stderr, \"" word ": %v\\n\", litter.Options{HidePrivateFields: true}.Sdump(" word "))")))))
+                      (insert (concat "fmt.Fprintf(os.Stderr, \"" word ": %v\\n\", litter.Options{HidePrivateFields: false}.Sdump(" word "))")))))
 
   (with-eval-after-load 'evil
     (evil-define-key 'normal go-mode-map (kbd "] d") 'evgeni-go-dump))
@@ -2617,13 +2640,15 @@ Use a prefix arg to get regular RET. "
   :defer t
   :init
   (add-hook 'go-mode-hook 'eglot-ensure)
+  (add-hook 'python-mode-hook 'eglot-ensure)
   :config
   (add-to-list 'eglot-ignored-server-capabilites ':documentHighlightProvider))
 
 (use-package lsp-mode
   :ensure t
+  :disabled t
   :defer t
-  :hook ((python-mode . lsp))
+  ;; :hook ((python-mode . lsp))
   :init
   (setq lsp-auto-guess-root t
         lsp-prefer-flymake nil)
@@ -2854,3 +2879,11 @@ Use a prefix arg to get regular RET. "
   :config
   (global-total-lines-mode)
   (setq mode-line-position '(("L%l/" (:eval (format "%d "total-lines))))))
+
+(use-package so-long
+  :load-path "~/dev/so-long"
+  :defer 3
+  :config
+  (add-to-list 'so-long-target-modes 'yaml-mode)
+  (add-to-list 'so-long-target-modes 'json-mode)
+  (global-so-long-mode 1))
