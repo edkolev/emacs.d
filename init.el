@@ -1010,8 +1010,20 @@ With prefix arg, find the previous file."
         dired-auto-revert-buffer t
         dired-dwim-target t
         dired-use-ls-dired nil)
-  (evil-define-key 'normal dired-mode-map "-" 'dired-up-directory)
+  (evil-define-key 'normal dired-mode-map
+    "-" 'dired-up-directory
+    "U" 'evgeni-dired-unmark-all-marks)
+
   (add-hook 'dired-mode-hook 'dired-hide-details-mode)
+
+  (defun evgeni-dired-unmark-all-marks()
+    "call `magit-status' on double-U press `U U'"
+    (interactive)
+    (if (eq this-command last-command)
+        (progn
+
+          (magit-status))
+      (dired-unmark-all-marks)))
 
   (defun evgeni-dired-current-dir ()
     (interactive)
