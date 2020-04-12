@@ -168,6 +168,10 @@ Return nil if not in a project"
   (require 'use-package))
 (setq use-package-verbose nil)
 
+(use-package esup
+  :ensure t
+  :defer t)
+
 (use-package no-littering
   :ensure t
   :demand t)
@@ -491,6 +495,9 @@ With prefix arg, find the previous file."
      ((bound-and-true-p flymake-mode) (call-interactively 'flymake-goto-prev-error) (flymake-show-diagnostics-buffer))
      (t (previous-error))))
 
+  (evil-add-command-properties 'evgeni-next-error :jump t :repeat 'motion)
+  (evil-add-command-properties 'evgeni-previous-error :jump t :repeat 'motion)
+
   (define-key evil-normal-state-map (kbd "RET") 'evgeni-save-file)
   (define-key evil-normal-state-map (kbd "[ Q") 'evgeni-first-error)
   (define-key evil-normal-state-map (kbd "] Q") (lambda () (interactive) (goto-char (point-max)) (evgeni-previous-error)))
@@ -501,6 +508,8 @@ With prefix arg, find the previous file."
 
   (define-key evil-normal-state-map (kbd "] f") 'evgeni-find-next-file)
   (define-key evil-normal-state-map (kbd "[ f") 'evgeni-find-prev-file)
+  (define-key evil-normal-state-map (kbd "] F") 'find-file)
+  (define-key evil-normal-state-map (kbd "[ F") 'find-file)
 
   (define-key evil-normal-state-map (kbd "C-c C-b")'ido-switch-buffer)
 
@@ -1052,6 +1061,7 @@ With prefix arg, find the previous file."
   :defer 30
   :bind (:map evil-normal-state-map
               ("U U" . magit-status)
+              ("U u" . magit-file-dispatch)
               ("U w" . magit-stage-file)
               ("U d" . evgeni-magit-diff-unstaged-buffer-file)
               ("U L" . magit-log-head)
@@ -1198,11 +1208,11 @@ With prefix arg, find the previous file."
   :init
   :commands vdiff-magit-show-unstaged
   :bind (:map evil-normal-state-map
-              ("U D" . vdiff-magit-popup))
+              ("U D" . vdiff-magit))
   :config
   (setq vdiff-magit-stage-is-2way t) ;; Only use two buffers (working file and index) for vdiff-magit-stage
   (define-key magit-mode-map "e" 'vdiff-magit-dwim)
-  (define-key magit-mode-map "E" 'vdiff-magit-popup))
+  (define-key magit-mode-map "E" 'vdiff-magit))
 
 (use-package! org
   :defer 30
@@ -1435,8 +1445,14 @@ Use a prefix arg to get regular RET. "
 
   (evil-define-key 'normal evgeni-intercept-mode-map
     (kbd "g /") (if evgeni-counsel-git-grep-rigpreg-found
-                    'counsel-rg
+                    'evgeni-counsel-rg
                   'counsel-git-grep))
+
+  (defun evgeni-counsel-rg ()
+    (interactive)
+    (if (eq major-mode 'dired-mode)
+        (counsel-rg nil default-directory nil "rg <dir>: ")
+      (call-interactively 'counsel-rg)))
 
   (defun evgeni-counsel-git-grep ()
     (interactive)
@@ -2362,10 +2378,10 @@ Use a prefix arg to get regular RET. "
     (kbd "C-n") #'comint-next-matching-input-from-input))
 
 (use-package! eshell
-  :defer 30
+  :after shell-pop
+  :init
+  (add-hook 'eshell-mode-hook 'evgeni-eshell-setup-keys)
   :config
-  (use-package shell-pop)
-
   (setq eshell-banner-message "\n")
 
   (defun evgeni-eshell-setup-keys ()
@@ -2380,8 +2396,6 @@ Use a prefix arg to get regular RET. "
       (kbd "q") 'shell-pop
       (kbd "<return>") 'evgeni-eshell-normal-return
       [return] 'evgeni-eshell-normal-return))
-
-  (add-hook 'eshell-mode-hook 'evgeni-eshell-setup-keys)
 
   (defun evgeni-eshell-kill-to-bol ()
     (interactive)
@@ -2653,6 +2667,8 @@ Use a prefix arg to get regular RET. "
   :init
   (add-hook 'go-mode-hook 'eglot-ensure)
   (add-hook 'python-mode-hook 'eglot-ensure)
+  :custom
+  (eglot-sync-connect nil)
   :config
   (add-to-list 'eglot-ignored-server-capabilites ':documentHighlightProvider))
 
@@ -2842,10 +2858,8 @@ Use a prefix arg to get regular RET. "
   (defun evgeni-hs-fold-on-first-occurance (regex)
     (hs-life-goes-on
     (save-excursion
-      (message "1")
       (goto-char (point-min))
       (when (ignore-errors (re-search-forward regex))
-        (message "2")
         (hs-hide-block))))))
 
 (use-package disable-mouse
@@ -2899,3 +2913,27 @@ Use a prefix arg to get regular RET. "
   (add-to-list 'so-long-target-modes 'yaml-mode)
   (add-to-list 'so-long-target-modes 'json-mode)
   (global-so-long-mode 1))
+
+(use-package vterm
+  :ensure t
+  :defer t)
+
+(use-package undo-fu
+  :ensure t
+  :defer .5
+  :config
+  (global-undo-tree-mode -1)
+  (define-key evil-normal-state-map "u" 'undo-fu-only-undo)
+  (define-key evil-normal-state-map "\C-r" 'undo-fu-only-redo)
+
+  (use-package undo-fu-session
+    :ensure t
+    :config
+    (setq undo-fu-session-incompatible-files '("/COMMIT_EDITMSG\\'" "/git-rebase-todo\\'"))
+    (global-undo-fu-session-mode)))
+
+(use-package gcmh
+  :ensure t
+  :defer .5
+  :config
+  (gcmh-mode))
