@@ -188,7 +188,7 @@ Return nil if not in a project"
   (add-hook 'after-init-hook 'dashboard-refresh-buffer)
   (add-hook 'dashboard-mode-hook 'evgeni-dashboard-banner)
   :config
-  (setq dashboard-items '((projects  . 20)))
+  (setq dashboard-items '((recents  . 20)))
   (setq dashboard-startup-banner 'logo)
   (setq dashboard-footer-messages nil)
   (dashboard-setup-startup-hook))
@@ -302,6 +302,21 @@ Return nil if not in a project"
     (switch-to-buffer "*scratch*"))
 
   (define-key global-map (kbd "s-n") 'evgeni-make-frame))
+
+(use-package emacs ;; helpers / tools
+  :after evil
+  :config
+  (ex! "today" 'evgeni-insert-date)
+  (ex! "date" 'evgeni-insert-date)
+  (evil-define-command evgeni-insert-date (&optional when)
+    "Call `date -d today' cmd and insert the response.
+If WHEN is specified, pass it like so `date -d WHEN'"
+    (interactive "<a>")
+    (insert
+     (s-trim (shell-command-to-string
+              (concat "gdate -d'"
+                      (or when "today")
+                      "' '+%Y-%m-%dT00:00:00'"))))))
 
 ;; restore frame position - https://github.com/aaronjensen/restore-frame-position
 (when (display-graphic-p)
@@ -742,6 +757,7 @@ With prefix arg, find the previous file."
   (define-key evil-ex-completion-map "\C-a" 'evgeni-prev-or-move-beginning-of-line)
   (define-key evil-ex-completion-map (kbd "DEL" ) 'evgeni-prev-or-prev-and-backspace)
   (define-key evil-ex-completion-map "\C-b" 'backward-char)
+  (define-key evil-ex-completion-map "\C-f" 'forward-char)
   (define-key evil-ex-completion-map "\C-d" 'evgeni-ex-delete-or-complete)
 
   (define-key evil-normal-state-map "zz" 'recenter-top-bottom)
@@ -1302,6 +1318,10 @@ Use a prefix arg to get regular RET. "
 
   (define-key org-mode-map (kbd "RET")  'evgeni-org-return))
 
+(use-package ob-async
+  :ensure t
+  :after org)
+
 (use-package org-make-toc
   :ensure t
   :defer t)
@@ -1319,14 +1339,6 @@ Use a prefix arg to get regular RET. "
 (use-package org-download
   :ensure t
   :after org)
-
-(use-package ob-restclient
-  :ensure t
-  :after org
-  :config
-  (org-babel-do-load-languages
-   'org-babel-load-languages
-   '((restclient . t))))
 
 (use-package! xref
   :bind (:map evil-normal-state-map
@@ -1584,6 +1596,7 @@ Use a prefix arg to get regular RET. "
   (yas-global-mode)
   ;; (evil-define-minor-mode-key 'insert yas-minor-mode (kbd "C-c y") 'yas-expand)
   (evil-define-minor-mode-key 'insert yas-minor-mode (kbd "C-c y") 'company-yasnippet)
+  (define-key yas-keymap (kbd "RET") 'yas-next-field-or-maybe-expand)
   (ex! "yas-new" 'yas-new-snippet))
 
 (use-package evil-expat
