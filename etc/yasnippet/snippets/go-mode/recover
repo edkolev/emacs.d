@@ -1,0 +1,9 @@
+# key: recover
+# name: recover# key: recover
+# name: recover
+# --
+defer func() {
+	if r := recover(); r != nil {
+		$0
+	}
+}()

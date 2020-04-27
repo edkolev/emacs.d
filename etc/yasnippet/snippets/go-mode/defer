@@ -1,0 +1,6 @@
+# key: defer
+# name: defer
+# --
+defer func() {
+	$0
+}()
