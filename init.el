@@ -1135,6 +1135,10 @@ With prefix arg, find the previous file."
 
   (add-hook 'git-commit-mode-hook 'flyspell-mode))
 
+(use-package magit-libgit
+  :ensure
+  :after magit)
+
 (use-package! smerge-mode
   :defer t
   :config
@@ -1266,7 +1270,7 @@ With prefix arg, find the previous file."
   (defun evgeni-journal-file-today ()
     "Return filename for today's journal entry."
     (interactive)
-    (let ((daily-name (format-time-string "%Y_%b_%d.org")))
+    (let ((daily-name (format-time-string "%Y_%m_%d.org")))
       (find-file (expand-file-name (concat org-directory "/journal/"  daily-name)))))
 
   ;; `:babellib' ex command to ingest my library of babel
@@ -1550,7 +1554,15 @@ Use a prefix arg to get regular RET. "
           (dired (projectile-project-root))))
   (setq projectile-completion-system 'ivy)
   (setq projectile-git-submodule-command nil)
-  (projectile-global-mode))
+  (projectile-global-mode)
+
+  ;; bridge projectile and project together
+  (defun evgeni-projectile-project-find-function (dir)
+    (let ((root (projectile-project-root dir)))
+      (and root (cons 'transient root))))
+
+  (with-eval-after-load 'project
+    (add-to-list 'project-find-functions 'evgeni-projectile-project-find-function)))
 
 (use-package! company
   :ensure t
