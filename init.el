@@ -807,16 +807,24 @@ With prefix arg, find the previous file."
               (setq ln (1+ ln)))))
         (back-to-indentation))))
 
-  ;; start %s/.../... with the last search pattern
   (defun evgeni-start-ex-substitute ()
+    "start %s/.../... with the last search pattern"
     (interactive)
     (let ((pattern (or (evil-ex-pattern-regex evil-ex-search-pattern) "")))
       (let ((replace-with (replace-regexp-in-string "\\\\[<>]" "" pattern))
             (ex-prefix (if (evil-visual-state-p) "'<,'>" "%")))
         (evil-ex (format "%ss//%s" ex-prefix replace-with)))))
 
+  (defun evgeni-start-ex-substitute-in-defun ()
+    "Mark defun and call `evgeni-start-ex-substitute'"
+    (interactive)
+    (mark-defun)
+    (evgeni-start-ex-substitute))
+
   (define-key evil-normal-state-map (kbd ",m") 'evgeni-start-ex-substitute)
   (define-key evil-visual-state-map (kbd ",m") 'evgeni-start-ex-substitute)
+  (define-key evil-normal-state-map (kbd ",M") 'evgeni-start-ex-substitute-in-defun)
+  (define-key evil-visual-state-map (kbd ",M") 'evgeni-start-ex-substitute-in-defun)
 
   ;; system clipboard integration
   (when (display-graphic-p)
