@@ -1103,6 +1103,8 @@ With prefix arg, find the previous file."
   :commands (magit-find-file)
   :init
   (ex! "ma[git]" 'magit-status)
+  (ex! "magit-dispatch" 'magit-dispatch)
+  (ex! "magit-file-dispatch" 'magit-file-dispatch)
   (ex! "gedit" 'magit-find-file)
   :config
 
@@ -1145,6 +1147,7 @@ With prefix arg, find the previous file."
 
 (use-package magit-libgit
   :ensure
+  :disabled t
   :after magit)
 
 (use-package! smerge-mode
@@ -1264,6 +1267,12 @@ With prefix arg, find the previous file."
         org-imenu-depth 3
         org-startup-folded "showall"
         org-confirm-babel-evaluate nil)
+
+  (evil-ex-define-cmd "tangle" 'evgeni-org-tangle)
+  (evil-define-command evgeni-org-tangle (bang)
+    (interactive "<!>")
+    (let ((current-prefix-arg (if bang nil '(4)) ))
+      (call-interactively 'org-babel-tangle)))
 
   (evil-define-key '(normal insert) org-mode-map
     (kbd "TAB") 'org-cycle)
@@ -2653,6 +2662,7 @@ Use a prefix arg to get regular RET. "
   (ex! "tree" 'dired-sidebar-toggle-sidebar))
 
 (use-package go-mode
+  :ensure t
   :defer t
   :config
 
@@ -2761,17 +2771,17 @@ Use a prefix arg to get regular RET. "
   :config
   (add-to-list 'company-backends 'company-anaconda))
 
-;; (use-package! gotest
-;;   :ensure t
-;;   :after go-mode
-;;   :config
-;;   (evil-define-key 'normal go-mode-map (kbd "g m") 'go-test-current-file)
+(use-package! gotest
+  :ensure t
+  :after go-mode
+  :config
+  ;; (evil-define-key 'normal go-mode-map (kbd "g m") 'go-test-current-file)
 
-;;   (add-hook 'go-mode-hook (lambda ()
-;;                             (set (make-local-variable 'compilation-error-regexp-alist-alist)
-;;                                  go-test-compilation-error-regexp-alist-alist)
-;;                             (set (make-local-variable 'compilation-error-regexp-alist)
-;;                                  go-test-compilation-error-regexp-alist))))
+  (add-hook 'go-mode-hook (lambda ()
+                            (set (make-local-variable 'compilation-error-regexp-alist-alist)
+                                 go-test-compilation-error-regexp-alist-alist)
+                            (set (make-local-variable 'compilation-error-regexp-alist)
+                                 go-test-compilation-error-regexp-alist))))
 
 (use-package with-editor
   :ensure t
@@ -2895,12 +2905,15 @@ Use a prefix arg to get regular RET. "
       (when (ignore-errors (re-search-forward regex))
         (hs-hide-block))))))
 
-(use-package disable-mouse
+(use-package! disable-mouse
   :ensure t
-  :defer 3
   :config
-  ;; no mouse in evil insert state
-  (disable-mouse-in-keymap evil-insert-state-map))
+  (global-disable-mouse-mode)
+  (mapc #'disable-mouse-in-keymap
+        (list evil-motion-state-map
+              evil-normal-state-map
+              evil-visual-state-map
+              evil-insert-state-map)))
 
 (use-package outline
   :defer t
