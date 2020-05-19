@@ -20,7 +20,7 @@
 
 ;; tweak GC during startup
 (defvar evgeni--file-name-handler-alist file-name-handler-alist)
-(setq gc-cons-threshold 402653184
+(setq gc-cons-threshold most-positive-fixnum
       gc-cons-percentage 0.6
       file-name-handler-alist nil)
 
@@ -1287,8 +1287,16 @@ With prefix arg, find the previous file."
   (defun evgeni-journal-file-today ()
     "Return filename for today's journal entry."
     (interactive)
-    (let ((daily-name (format-time-string "%Y_%m_%d.org")))
-      (find-file (expand-file-name (concat org-directory "/journal/"  daily-name)))))
+    (let ((daily-name (format-time-string "%Y_%m_%d.org"))
+          (has-header (save-excursion
+                        (goto-char (point-min))
+                        (search-forward "#+TITLE" nil t))))
+      (find-file (expand-file-name (concat org-directory "/journal/"  daily-name)))
+      (unless has-header
+        (save-excursion
+          (goto-char (point-min))
+          (insert "#+TITLE: Journal for " (format-time-string "%A, %b %d %Y") "\n")
+          (insert "#+TODO: WIP | DONE" "\n\n")))))
 
   ;; `:babellib' ex command to ingest my library of babel
   (ex! "babellib" 'evgeni-babellib)
@@ -1647,7 +1655,7 @@ Use a prefix arg to get regular RET. "
   (evil-goggles-mode))
 
 (use-package recentf
-  :defer .5
+  :defer .1
   :init
   (setq recentf-max-saved-items 500)
   (setq recentf-exclude '("/tmp/" ;; "/ssh:"
@@ -2702,7 +2710,11 @@ Use a prefix arg to get regular RET. "
   (with-eval-after-load 'evil
     (evil-define-key 'normal go-mode-map (kbd "] d") 'evgeni-go-dump))
 
-  (set (make-local-variable 'outline-regexp) "func\\|import\\|type\\|const"))
+  (set (make-local-variable 'outline-regexp) "func\\|import\\|type\\|const")
+
+  (use-package go-gen-test
+    :ensure t
+    :defer t))
 
 (use-package eglot
   :ensure t
@@ -2855,7 +2867,9 @@ Use a prefix arg to get regular RET. "
   :ensure t
   :defer 3
   :config
-  (direnv-mode))
+  (direnv-mode)
+  (with-eval-after-load 'eshell
+    (add-hook 'eshell-directory-change-hook 'direnv-update-directory-environment)))
 
 (use-package autoinsert
   :defer 3
