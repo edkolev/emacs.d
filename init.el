@@ -990,52 +990,6 @@ With prefix arg, find the previous file."
 
   (message "Loading evil-mode...done (%.3fs)" (float-time (time-subtract (current-time) emacs-start-time))))
 
-(use-package! avy
-  :ensure t
-  :defer .5
-  :bind (:map evil-normal-state-map
-              ;; ("gj" . avy-goto-word-1-below)
-              ;; ("gk" . avy-goto-word-1-above)
-              ("gj" . avy-goto-char-timer)
-              ("gk" . avy-goto-char-timer)
-              :map evil-motion-state-map
-              ;; ("gh" . avy-goto-char-timer)
-              )
-  :config
-  (setq avy-timeout-seconds .5)
-  (custom-set-faces
-   '(avy-lead-face-0 ((t (:inherit 'highlight))))
-   '(avy-lead-face ((t (:inherit 'highlight)))))
-
-  (setq avy-background t)
-  (setq avy-keys '(?a ?s ?d ;; ?f
-                      ?g ;; ?h
-                      ?j ?k
-                      ?l ?\;
-                      ?1 ?2 ?3 ?4 ?5 ?6))
-  (setq avy-style 'at-full)
-
-  ;; TODO
-  (evil-define-text-object evgeni--avy-line (count &optional beg end type)
-    (save-excursion
-      (let* ((avy-all-windows nil)
-             (beg (avy--line))
-             (end (save-excursion
-                    (goto-char beg)
-                    (move-end-of-line count)
-                    (point))))
-        (evil-range beg end 'line :expanded t))))
-
-  (evil-define-text-object evgeni--avy-region (count &optional beg end type)
-    (save-excursion
-      (let* ((beg (save-selected-window
-                    (avy--line count)))
-             (end (avy--line count)))
-        (evil-range beg end 'line :expanded t))))
-
-  (define-key evil-inner-text-objects-map "l" 'evgeni--avy-line)
-  (define-key evil-outer-text-objects-map "l" 'evgeni--avy-region))
-
 (use-package! dired
   :bind (:map evil-normal-state-map
               ("-" . evgeni-dired-current-dir))
