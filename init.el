@@ -302,7 +302,20 @@ Return nil if not in a project"
                   (height . ,(- (frame-height) 2))))
     (switch-to-buffer "*scratch*"))
 
-  (define-key global-map (kbd "s-n") 'evgeni-make-frame))
+  (define-key global-map (kbd "s-n") 'evgeni-make-frame)
+
+  ;; display flymake buffer at the bottom
+  (setq display-buffer-alist nil)
+  (add-to-list 'display-buffer-alist
+               `(,(lambda (buf act)
+                    (member (with-current-buffer buf major-mode) '(flymake-diagnostics-buffer-mode)))
+                 (display-buffer--maybe-same-window
+                  display-buffer-reuse-window
+                  display-buffer-reuse-mode-window
+                  display-buffer-at-bottom)
+                 (side . bottom)
+                 (window-height . 0.20)
+                 (quit-restore ('window 'window nil nil)))))
 
 (use-package emacs ;; helpers / tools
   :after evil
