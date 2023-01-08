@@ -2652,73 +2652,11 @@ Use a prefix arg to get regular RET. "
   :config
   (add-to-list 'eglot-ignored-server-capabilites ':documentHighlightProvider))
 
-(use-package lsp-mode
-  :ensure t
-  :disabled t
-  :defer t
-  ;; :hook ((python-mode . lsp))
-  :init
-  (setq lsp-auto-guess-root t
-        lsp-prefer-flymake nil)
-  :config
-
-  (setq lsp-eldoc-hook '(lsp-hover)) ;; remove documentHighlightProvider (lsp-document-highlight)
-  (setq lsp-eldoc-prefer-signature-help nil)
-
-  (use-package lsp-ui
-    :ensure t
-    :init
-    (setq lsp-ui-peek-enable nil
-          lsp-ui-sideline-enable nil
-          lsp-ui-doc-enable nil
-          lsp-ui-imenu-enable nil))
-
-  (add-hook 'lsp-after-open-hook 'evgeni-lsp-after-open-hook)
-  (defun evgeni-lsp-after-open-hook ()
-    (flycheck-mode -1) ;; TODO this isn't working
-    (setq company-backends '(company-lsp))))
-
-(use-package company-lsp
-  :ensure t
-  :after lsp-mode)
-
-(use-package! evil-multiedit
-  :ensure t
-  :commands evgeni-evil-multiedit
-  :init
-  (ex! "iedit" 'evgeni-evil-multiedit)
-  :config
-  (evil-define-command evgeni-evil-multiedit (&optional beg end regexp)
-    :motion nil
-    :move-point nil
-    :repeat nil
-    (interactive "<r><a>")
-    (evil-multiedit-abort)
-    (evil-multiedit--start-regexp (or regexp (evil-ex-pattern-regex evil-ex-search-pattern)) beg end)))
-
 (use-package! rainbow-mode
   :ensure t
   :commands rainbow-mode
   :config
   (setq rainbow-r-colors-alast nil))
-
-(use-package company-anaconda
-  :ensure t
-  :after anaconda-mode
-  :config
-  (add-to-list 'company-backends 'company-anaconda))
-
-(use-package! gotest
-  :ensure t
-  :after go-mode
-  :config
-  ;; (evil-define-key 'normal go-mode-map (kbd "g m") 'go-test-current-file)
-
-  (add-hook 'go-mode-hook (lambda ()
-                            (set (make-local-variable 'compilation-error-regexp-alist-alist)
-                                 go-test-compilation-error-regexp-alist-alist)
-                            (set (make-local-variable 'compilation-error-regexp-alist)
-                                 go-test-compilation-error-regexp-alist))))
 
 (use-package with-editor
   :ensure t
@@ -2747,7 +2685,15 @@ Use a prefix arg to get regular RET. "
 
 (use-package json-mode
   :ensure t
-  :defer t)
+  :defer t
+  :config
+  (setq jsons-path-printer 'jsons-print-path-jq))
+
+(use-package jq-mode
+  :ensure t
+  :defer t
+  :config
+  (ex! "jq" 'jq-interactively))
 
 (use-package deadgrep
   :ensure t
@@ -2755,49 +2701,17 @@ Use a prefix arg to get regular RET. "
   :init
   (ex! "deadgrep" 'deadgrep))
 
-(use-package replace
-  :defer
-  :init
-  (ex! "occur" 'evgeni-occur)
-  (evil-define-command evgeni-occur (count)
-    (interactive "<c>")
-    (message "--- %s" count)
-    (setq list-matching-lines-default-context-lines (or count 0))
-    (occur (evil-ex-pattern-regex evil-ex-search-pattern))
-    (select-window (display-buffer "*Occur*")))
-
-  (defun evgeni-occur-increase-context()
-    (interactive)
-    (unless (eq major-mode 'occur-mode)
-      (user-error "Buffer is not in be occur-mode"))
-    (setq list-matching-lines-default-context-lines
-          (1+ (or list-matching-lines-default-context-lines 0)))
-    (revert-buffer))
-
-  (defun evgeni-occur-decrease-context()
-    (interactive)
-    (unless (eq major-mode 'occur-mode)
-      (user-error "Buffer is not in be occur-mode"))
-    (when (<= list-matching-lines-default-context-lines 0)
-      (user-error "Can't go below 0"))
-    (setq list-matching-lines-default-context-lines
-          (1- (or list-matching-lines-default-context-lines 0)))
-    (revert-buffer))
-
-  (evil-define-key 'normal occur-mode-map
-    "+" 'evgeni-occur-increase-context
-    "-" 'evgeni-occur-decrease-context))
-
 (use-package direnv
   :ensure t
-  :defer 3
+  :custom
+  (direnv-show-paths-in-summary nil)
   :config
   (direnv-mode)
   (with-eval-after-load 'eshell
     (add-hook 'eshell-directory-change-hook 'direnv-update-directory-environment)))
 
 (use-package autoinsert
-  :defer 3
+  :defer 1.5
   :init
   (add-hook 'find-file-hook 'auto-insert)
   :config
@@ -2854,25 +2768,11 @@ Use a prefix arg to get regular RET. "
               evil-visual-state-map
               evil-insert-state-map)))
 
-(use-package outline
-  :defer t
-  :config
-  (define-key outline-minor-mode-map (kbd "TAB")
-    '(menu-item "" nil :filter
-                (lambda
-                  (&optional _)
-                  (when (outline-on-heading-p)
-                    'outline-cycle)))))
-
 (use-package protobuf-mode
   :ensure t
   :defer t
   :config
   (add-hook 'protobuf-mode-hook 'electric-pair-local-mode))
-
-(use-package reformatter
-  :ensure t
-  :defer t)
 
 (use-package focus
   :ensure t
@@ -2880,28 +2780,18 @@ Use a prefix arg to get regular RET. "
   :init
   (ex! "focus" 'focus-mode))
 
-(use-package fancy-narrow
-  :ensure t
-  :defer t)
-
 (use-package total-lines
   :ensure t
-  :defer 3
+  :defer 1.5
   :config
   (global-total-lines-mode)
   (setq mode-line-position '(("L%l/" (:eval (format "%d "total-lines))))))
 
 (use-package so-long
-  :load-path "~/dev/so-long"
-  :defer 3
   :config
-  (add-to-list 'so-long-target-modes 'yaml-mode)
-  (add-to-list 'so-long-target-modes 'json-mode)
+  (setq so-long-target-modes '(yaml-mode json-mode css-mode))
+  (setq so-long-max-lines nil)
   (global-so-long-mode 1))
-
-(use-package vterm
-  :ensure t
-  :defer t)
 
 (use-package undo-fu
   :ensure t
