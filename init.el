@@ -1575,12 +1575,6 @@ Use a prefix arg to get regular RET. "
 
   (global-company-mode +1))
 
-(use-package company-quickhelp
-  :ensure t
-  :after company
-  :config
-  (company-quickhelp-mode))
-
 (use-package! yasnippet
   :ensure t
   :defer .5
@@ -1652,12 +1646,6 @@ Use a prefix arg to get regular RET. "
   (evil-set-initial-state 'wdired-mode 'normal)
   (ex! "wdired" 'wdired-change-to-wdired-mode))
 
-(use-package evil-magit
-  :ensure t
-  :after magit
-  :init
-  (setq evil-magit-want-horizontal-movement t))
-
 (use-package git-timemachine
   :ensure t
   :defer t
@@ -1685,10 +1673,16 @@ Use a prefix arg to get regular RET. "
   :after flycheck)
 
 (use-package! flymake
-  :ensure t
   :defer t
   :config
-  (setq flymake-start-syntax-check-on-newline nil))
+  (setq flymake-start-syntax-check-on-newline nil)
+
+  (defun evgeni-flymake-show-buffer-diagnostics (&rest _)
+    (call-interactively 'flymake-show-buffer-diagnostics))
+
+  (advice-add 'evil-collection-unimpaired-next-error :after 'evgeni-flymake-show-buffer-diagnostics)
+  (advice-add 'evil-collection-unimpaired-first-error :after 'evgeni-flymake-show-buffer-diagnostics)
+  (advice-add 'evil-collection-unimpaired-previous-error :after 'evgeni-flymake-show-buffer-diagnostics))
 
 (use-package! flyspell-correct-ivy
   :ensure t
@@ -1745,10 +1739,6 @@ Use a prefix arg to get regular RET. "
         (scroll-up-line 4))))
 
   (add-hook 'compilation-finish-functions 'evgeni-close-compile-win-if-successful))
-
-(use-package smex
-  :ensure t
-  :after counsel)
 
 (use-package imenu
   :defer t
@@ -1992,8 +1982,7 @@ Use a prefix arg to get regular RET. "
   :commands package-lint-current-buffer)
 
 (use-package js
-  :ensure t
-  :mode ("\\.js\\'" . js-mode)
+  :defer t
   :config
   (modify-syntax-entry ?_ "w" js-mode-syntax-table))
 
@@ -2015,8 +2004,7 @@ Use a prefix arg to get regular RET. "
   :mode ("\\.jsx\\'" . rjsx-mode))
 
 (use-package css-mode
-  :ensure t
-  :mode ("\\.css\\'" . css-mode)
+  :defer t
   :config
   (modify-syntax-entry ?- "w" css-mode-syntax-table))
 
@@ -2104,7 +2092,7 @@ Use a prefix arg to get regular RET. "
 
 (use-package hl-todo
   :ensure t
-  :defer 3
+  :defer 1.5
   :config
   (global-hl-todo-mode))
 
@@ -2123,13 +2111,12 @@ Use a prefix arg to get regular RET. "
 
 (use-package! diff-hl
   :ensure t
-  :defer 3
+  :custom
+  (diff-hl-margin-symbols-alist '((insert . "+") (delete . "-") (change . "|") (unknown . "?") (ignored . "i")))
   :config
   (global-diff-hl-mode)
   (unless (window-system)
     (diff-hl-margin-mode))
-
-  (setq diff-hl-margin-symbols-alist '((insert . "+") (delete . "-") (change . "|") (unknown . "?") (ignored . "i")))
 
   (add-hook 'diff-hl-mode-hook 'diff-hl-flydiff-mode)
   (add-hook 'magit-post-refresh-hook 'diff-hl-magit-post-refresh)
@@ -2246,13 +2233,13 @@ Use a prefix arg to get regular RET. "
   :init
   (ex! "font-size" 'evgeni-hydra-zoom/body)
 
-  ;; "c o" for toggles
+  ;; "c o" / "y o" for toggles
   (evil-define-key 'operator global-map
     "o" '(menu-item
           ""
           nil
           :filter (lambda (&optional _)
-                    (when (eq evil-this-operator 'evil-change)
+                    (when (member evil-this-operator '(evil-change evil-yank))
                       #'evgeni-toggles))))
 
   :config
@@ -2575,7 +2562,8 @@ Use a prefix arg to get regular RET. "
 
 (use-package beacon
   :ensure t
-  :defer 3
+  :disabled t
+  :defer 1.5
   :config
   (setq beacon-size 80)
   (defun evgeni-set-beacon-color (&rest _)
@@ -2812,3 +2800,35 @@ Use a prefix arg to get regular RET. "
   :defer .5
   :config
   (gcmh-mode))
+
+(use-package esup
+  :ensure t
+  :defer)
+
+(use-package! emamux
+  :ensure t
+  :if (getenv "TMUX") ;; run only in tmux
+  :init
+  (evil-define-key '(normal insert) evgeni-intercept-mode-map
+    (kbd "C-c C-z") 'emamux:split-window)
+
+  (evil-define-key 'normal evgeni-intercept-mode-map
+    (kbd "!!") (lambda () (interactive) (progn
+                                          (emamux:send-command "Escape")
+                                          (emamux:send-command "!!"))))
+
+  (evil-define-key 'normal evgeni-intercept-mode-map
+    (kbd "g!") 'emamux:run-command)
+
+  (ex! "emamux" 'evgeni-emamux-send-region)
+  (evil-define-command evgeni-emamux-send-region (beg end)
+    (interactive "<r>")
+    (emamux:send-region beg end)))
+
+(use-package dtrt-indent
+  :ensure t
+  :defer 1.5
+  :custom
+  (dtrt-indent-verbosity 0)
+  :config
+  (dtrt-indent-global-mode))
