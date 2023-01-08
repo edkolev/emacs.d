@@ -427,7 +427,10 @@ If WHEN is specified, pass it like so `date -d WHEN'"
                     evil-scroll-line-up
                     evil-scroll-down
                     evil-scroll-up
-                    evil-ex))
+                    evil-scroll-line-to-top
+                    evil-scroll-line-to-bottom
+                    evil-ex
+                    recenter-top-bottom))
       (remove-hook 'pre-command-hook 'evgeni-nohighlight-hook 'local)
       (evil-ex-nohighlight)))
 
