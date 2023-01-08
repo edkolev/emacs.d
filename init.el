@@ -257,10 +257,11 @@ Return nil if not in a project"
 (use-package tango-plus-theme :ensure t :defer t)
 (use-package plan9-theme :ensure t :defer t)
 (use-package doom-themes :ensure t :defer t)
-(use-package espresso-theme :ensure t :defer t)
 (use-package tommyh-theme :ensure t :defer t)
 (use-package eziam-theme :ensure t :defer t)
 (use-package modus-operandi-theme :ensure t :defer t)
+(use-package ef-themes :ensure t :defer t)
+(use-package paper-theme :ensure t :defer t)
 (use-package hydandata-light-theme :ensure t :defer t)
 (use-package color-theme-sanityinc-tomorrow :ensure t :defer t)
 (use-package leuven-theme :defer t
