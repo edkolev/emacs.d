@@ -1746,27 +1746,6 @@ Use a prefix arg to get regular RET. "
 
   (add-hook 'compilation-finish-functions 'evgeni-close-compile-win-if-successful))
 
-(use-package shackle
-  :ensure t
-  :defer .5
-  :config
-  (shackle-mode 1)
-  (setq shackle-rules
-        '(
-          ("*xref*"                        :align below :size 10 :noselect t)
-          ("*Help*"                        :align below :size 16 :select t)
-          ("*Backtrace*"                   :align below :size 25 :noselect t)
-          ("*Flycheck error messages*"     :align below :size 0.25)
-          ("*Flycheck errors*"             :align below :size 0.20)
-          (flymake-diagnostics-buffer-mode :align below :size 0.20)
-          ("*compilation*"                 :align below :size 10)
-          ("*grep*"                        :align below :size 10)
-          ("*Occur*"                       :align below :size 10)
-          ("*Go Test*"                     :align below :size 15)
-          ("*Gofmt Errors*"                :align below :size 6)
-          ("*shell-1*"                     :same t      :align below)
-          (ivy-occur-grep-mode             :align below :size 10))))
-
 (use-package smex
   :ensure t
   :after counsel)
@@ -1794,10 +1773,6 @@ Use a prefix arg to get regular RET. "
   (modify-syntax-entry ?- "w" emacs-lisp-mode-syntax-table)
   (modify-syntax-entry ?. "w" emacs-lisp-mode-syntax-table)
   (modify-syntax-entry ?! "w" emacs-lisp-mode-syntax-table))
-
-(use-package intero
-  :ensure t
-  :commands intero-mode)
 
 (use-package! whitespace
   :config
@@ -2049,12 +2024,6 @@ Use a prefix arg to get regular RET. "
   :defer t
   :config
   (setq tramp-default-method "ssh"))
-
-(use-package docker-tramp
-  :ensure t
-  :defer 3
-  :config
-  (setq docker-tramp-use-names t))
 
 (use-package dockerfile-mode
   :ensure t
