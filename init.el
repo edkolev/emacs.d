@@ -583,12 +583,12 @@ With prefix arg, find the previous file."
 
   ;; '*' should not move point
   (evil-define-motion evgeni-star (count &optional symbol)
-   :jump t
-   :type exclusive
-   (interactive (list (prefix-numeric-value current-prefix-arg)
-                      evil-symbol-word-search))
-   (save-excursion
-     (evil-ex-search-word-forward count symbol)))
+    :jump t
+    :type exclusive
+    (interactive (list (prefix-numeric-value current-prefix-arg)
+                       evil-symbol-word-search))
+    (save-excursion
+      (evil-ex-search-word-forward count symbol)))
 
   (evil-define-motion evgeni-g-star (count &optional symbol)
     :jump t
@@ -702,7 +702,7 @@ With prefix arg, find the previous file."
   (evil-define-text-object evgeni-entire-text-object (count &optional beg end type)
     (save-excursion
       (mark-whole-buffer)
-      (exchange-dot-and-mark)
+      (exchange-point-and-mark)
       (evil-range (region-beginning) (region-end) type :expanded t)))
 
   (define-key evil-inner-text-objects-map "e" 'evgeni-entire-text-object)
@@ -732,6 +732,9 @@ With prefix arg, find the previous file."
   (define-key minibuffer-local-completion-map (kbd "<escape>") 'keyboard-escape-quit)
   (define-key minibuffer-local-must-match-map (kbd "<escape>") 'keyboard-escape-quit)
   (define-key minibuffer-local-isearch-map (kbd "<escape>") 'keyboard-escape-quit)
+
+  ;; C-r in minibuffer
+  (define-key minibuffer-local-map (kbd "C-r") 'evil-paste-from-register)
 
   ;; move by visual lines with j/k
   (define-key evil-normal-state-map "j"  'evil-next-visual-line)
@@ -985,24 +988,6 @@ With prefix arg, find the previous file."
       (let ((nbeg (save-excursion (goto-char (cl-first range)) (point-at-bol)))
             (nend (save-excursion (goto-char (cl-second range)) (+ (point-at-eol) (if (evil-visual-state-p) 0 1)))))
         (evil-range nbeg nend 'line))))
-
-  (use-package move-text
-    :ensure t
-    :bind (:map evil-normal-state-map
-                ("] e" . evgeni-move-text-line-up )
-                ("[ e" . evgeni-move-text-line-down ))
-    :config
-    (defun evgeni-move-text-line-up (count)
-      (interactive "p")
-      (let ((count (or count 1)))
-        (dotimes (i count)
-          (move-text-line-down))))
-
-    (defun evgeni-move-text-line-down (count)
-      (interactive "p")
-      (let ((count (or count 1)))
-        (dotimes (i count)
-          (move-text-line-up)))))
 
   (message "Loading evil-mode...done (%.3fs)" (float-time (time-subtract (current-time) emacs-start-time))))
 
