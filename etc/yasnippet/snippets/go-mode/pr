@@ -2,4 +2,4 @@
 # name: pr
 # key: pr
 # --
-fmt.Printf("$0\n")
+print("$0\n")

@@ -1,5 +1,0 @@
-# -*- mode: snippet -*-
-# name: wrape
-# key: wrape
-# --
-errors.Wrap(err, "$0")
