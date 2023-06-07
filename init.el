@@ -524,35 +524,7 @@ With prefix arg, find the previous file."
     (interactive)
     (evgeni-find-next-file t))
 
-  (defun evgeni-first-error ()
-    (interactive)
-    (cond
-     ((bound-and-true-p flycheck-mode) (flycheck-first-error) (flycheck-list-errors))
-     ((bound-and-true-p flymake-mode) (goto-char (point-min)) (call-interactively 'flymake-goto-next-error) (flymake-show-diagnostics-buffer))
-     (t (first-error))))
-
-  (defun evgeni-next-error ()
-    (interactive)
-    (cond
-     ((bound-and-true-p flycheck-mode) (flycheck-next-error) (flycheck-list-errors))
-     ((bound-and-true-p flymake-mode) (call-interactively 'flymake-goto-next-error) (flymake-show-diagnostics-buffer))
-     (t (next-error))))
-
-  (defun evgeni-previous-error ()
-    (interactive)
-    (cond
-     ((bound-and-true-p flycheck-mode) (flycheck-previous-error) (flycheck-list-errors))
-     ((bound-and-true-p flymake-mode) (call-interactively 'flymake-goto-prev-error) (flymake-show-diagnostics-buffer))
-     (t (previous-error))))
-
-  (evil-add-command-properties 'evgeni-next-error :jump t :repeat 'motion)
-  (evil-add-command-properties 'evgeni-previous-error :jump t :repeat 'motion)
-
   (define-key evil-normal-state-map (kbd "RET") 'evgeni-save-file)
-  (define-key evil-normal-state-map (kbd "[ Q") 'evgeni-first-error)
-  (define-key evil-normal-state-map (kbd "] Q") (lambda () (interactive) (goto-char (point-max)) (evgeni-previous-error)))
-  (define-key evil-normal-state-map (kbd "] q") 'evgeni-next-error)
-  (define-key evil-normal-state-map (kbd "[ q") 'evgeni-previous-error)
   (define-key evil-normal-state-map (kbd ", w") 'evgeni-window-vsplit)
   (define-key evil-normal-state-map (kbd "g C-g") 'count-words)
 
