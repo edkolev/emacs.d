@@ -10,14 +10,6 @@
                         ,load-file-name elapsed)))
           t)
 
-(require 'package)
-(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
-(add-to-list 'package-archives '("melpa-stable" . "https://stable.melpa.org/packages/") t)
-(add-to-list 'package-archives '("org" . "https://orgmode.org/elpa/") t)
-
-(unless (boundp 'package-quickstart)
-  (package-initialize))
-
 ;; tweak GC during startup
 (defvar evgeni--file-name-handler-alist file-name-handler-alist)
 (setq gc-cons-threshold most-positive-fixnum
@@ -32,6 +24,19 @@
                                          gc-cons-percentage 0.1
                                          file-name-handler-alist evgeni--file-name-handler-alist)))))
 
+;; bootstrap straight
+(defvar bootstrap-version)
+(let ((bootstrap-file
+       (expand-file-name "straight/repos/straight.el/bootstrap.el" user-emacs-directory))
+      (bootstrap-version 6))
+  (unless (file-exists-p bootstrap-file)
+    (with-current-buffer
+        (url-retrieve-synchronously
+         "https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el"
+         'silent 'inhibit-cookies)
+      (goto-char (point-max))
+      (eval-print-last-sexp)))
+  (load bootstrap-file nil 'nomessage))
 
 ;; graphic settings
 (when (display-graphic-p)
@@ -106,19 +111,26 @@
 (modify-syntax-entry ?' "." text-mode-syntax-table)
 (add-hook 'prog-mode-hook (lambda () (modify-syntax-entry ?_ "w")))
 
-;; in modeline, show file path, relative to the project root
 (defun evgeni-maybe-propertize-with-face (text face)
   (if face
       (propertize text 'face face)
     text))
 
+(defun evgeni-word-at-point-or-region ()
+  "Return region's text if active, otherwise the word at point."
+  (substring-no-properties
+   (if (region-active-p)
+       (buffer-substring (region-beginning) (region-end))
+     (thing-at-point 'word))))
+
+;; in modeline, show file path, relative to the project root
 (require 'subr-x)
 (defun evgeni-buffer-path (&optional path prj-path-face buffer-id-face)
   "Return current buffer path relative to project root.
 Return nil if not in a project"
-  (when-let* ((path (or path buffer-file-truename))
-              (prj (cdr-safe (project-current)))
-              (prj-parent (file-name-directory (directory-file-name (expand-file-name prj)))))
+  (when-let* ((prj (project-current nil))
+              (path (or path buffer-file-truename))
+              (prj-parent (file-name-directory (directory-file-name (expand-file-name (project-root prj))))))
     (concat (evgeni-maybe-propertize-with-face (file-relative-name
                                                 (file-name-directory path)
                                                 prj-parent)
@@ -127,10 +139,9 @@ Return nil if not in a project"
              (file-name-nondirectory path)
              (or buffer-id-face 'mode-line-buffer-id)))))
 
-(with-eval-after-load 'subr-x
-  (setq-default mode-line-buffer-identification
-                '(:eval (format-mode-line (or (evgeni-buffer-path)
-                                              (propertized-buffer-identification "%b"))))))
+(setq-default mode-line-buffer-identification
+              '(:eval (format-mode-line (or (evgeni-buffer-path)
+                                            (propertized-buffer-identification "%b")))))
 
 (setq tags-revert-without-query t)
 
@@ -167,18 +178,20 @@ Return nil if not in a project"
   (package-install 'use-package))
 (eval-when-compile
   (require 'use-package))
-(setq use-package-verbose nil)
 
-(use-package esup
-  :ensure t
-  :defer t)
+(if debug-on-error
+    (setq use-package-verbose t
+          use-package-expand-minimally nil
+          use-package-compute-statistics t)
+  (setq use-package-verbose nil
+        use-package-expand-minimally t))
 
 (use-package no-littering
-  :ensure t
+  :straight t
   :demand t)
 
 (use-package dashboard
-  :ensure t
+  :straight t
   :if (display-graphic-p)
   :preface
   (defun evgeni-dashboard-banner ()
@@ -189,9 +202,11 @@ Return nil if not in a project"
   (add-hook 'after-init-hook 'dashboard-refresh-buffer)
   (add-hook 'dashboard-mode-hook 'evgeni-dashboard-banner)
   :config
-  (setq dashboard-items '((recents  . 20)))
+  (setq dashboard-items '((projects . 5) (recents  . 5)))
   (setq dashboard-startup-banner 'logo)
-  (setq dashboard-footer-messages nil)
+  (setq dashboard-footer-messages '(""))
+  (setq dashboard-projects-backend 'project-el)
+  (setq dashboard-set-init-info nil)
   (dashboard-setup-startup-hook))
 
 ;; upgrade installed packages
@@ -235,7 +250,7 @@ Return nil if not in a project"
                                         ,code)))))
 
 (setq custom-safe-themes t)
-(use-package habamax-theme :ensure t :defer t
+(use-package habamax-theme :straight t :defer t
   :config
   (let ((color-bg-highlight "#ececef")
         (color-dim-bg "#f5f9fe"))
@@ -245,53 +260,52 @@ Return nil if not in a project"
      `(company-tooltip-selection ((t (:inherit ivy-current-match))))
      `(company-tooltip ((t (:background "#f5f5f5"))))
      `(company-scrollbar-bg ((t (:background ,color-bg-highlight)))))))
-(use-package one-themes :ensure t :defer t)        ;; ok
-(use-package greymatters-theme :ensure t :defer t
+(use-package one-themes :straight t :defer t)        ;; ok
+(use-package greymatters-theme :straight t :defer t
   :config
   (let ((region "#e3e4e6"))
     (custom-theme-set-faces
      'greymatters
      `(region ((t (:background ,region)))))))
-(use-package chyla-theme :ensure t :defer t)       ;; ok, green
-(use-package doom-themes :ensure t :defer t)
-(use-package eclipse-theme :ensure t :defer t)
-(use-package flatui-theme :ensure t :defer t)
-(use-package twilight-bright-theme :ensure t :defer t)
-(use-package espresso-theme :ensure t :defer t)
-(use-package apropospriate-theme :ensure t :defer t)
-(use-package material-theme :ensure t :defer t)
-(use-package tango-plus-theme :ensure t :defer t)
-(use-package plan9-theme :ensure t :defer t)
-(use-package doom-themes :ensure t :defer t)
-(use-package tommyh-theme :ensure t :defer t)
-(use-package modus-themes :ensure t :defer t)
-(use-package ef-themes :ensure t :defer t)
-(use-package paper-theme :ensure t :defer t)
-(use-package hydandata-light-theme :ensure t :defer t)
-(use-package color-theme-sanityinc-tomorrow :ensure t :defer t)
+(use-package chyla-theme :straight t :defer t)       ;; ok, green
+(use-package doom-themes :straight t :defer t)
+(use-package eclipse-theme :straight t :defer t)
+(use-package flatui-theme :straight t :defer t)
+(use-package twilight-bright-theme :straight t :defer t)
+(use-package espresso-theme :straight t :defer t)
+(use-package apropospriate-theme :straight t :defer t)
+(use-package material-theme :straight t :defer t)
+(use-package tango-plus-theme :straight t :defer t)
+(use-package plan9-theme :straight t :defer t)
+(use-package tommyh-theme :straight t :defer t)
+(use-package modus-themes :straight t :defer t)
+(use-package ef-themes :straight t :defer t)
+(use-package paper-theme :straight t :defer t)
+(use-package hydandata-light-theme :straight t :defer t)
+(use-package color-theme-sanityinc-tomorrow :straight t :defer t)
 (use-package leuven-theme :defer t
   :init
   (theme! 'leuven
     '(eshell-prompt ((t (:inherit 'font-lock-keyword-face))))
     '(dired-ignored ((t (:inherit 'shadow :strike-through t))))))
 
-(use-package white-sand-theme :ensure t :defer t)
-(use-package silkworm-theme :ensure t :defer t)
-(use-package oldlace-theme :ensure t :defer t
+(use-package white-sand-theme :straight t :defer t)
+(use-package silkworm-theme :straight t :defer t)
+(use-package oldlace-theme :straight t :defer t
   :config
   (custom-theme-set-faces
    'oldlace
    `(region ((t (:foreground "#525252" :background "#d0c9bd"))))))
 
 ;; dark themes
-(use-package dracula-theme :ensure t :defer t)
+(use-package dracula-theme :straight t :defer t)
 
 (use-package emacs
   :config
   ;; load theme
   (load-theme (if (display-graphic-p)
                   'leuven ;; 'modus-operandi ;; 'leuven ;; 'doom-one-light ;; 'habamax ;; 'dichromacy ;; 'doom-one-light ;; 'twilight-bright ;; 'apropospriate-dark ;;'tango-dark ;; tango-plus flatui
-                'ef-duo-light ;; 'leuven ;; 'habamax ;; 'leuven
+                'ef-summer ;; 'ef-duo-light ;; 'ef-tritanopia-light ;; 'ef-trio-light ;; 'ef-duo-light ;; 'leuven ;; 'habamax ;; 'leuven
                 )
               t)
   ;; bind command-option-H to hide other windows, just like every other OS X app
@@ -331,10 +345,10 @@ Return nil if not in a project"
 If WHEN is specified, pass it like so `date -d WHEN'"
     (interactive "<a>")
     (insert
-     (s-trim (shell-command-to-string
-              (concat "date -d'"
-                      (or when "today")
-                      "' '+%Y-%m-%dT00:00:00'")))))
+     (string-trim (shell-command-to-string
+                   (concat "date -d'"
+                           (or when "today")
+                           "' '+%Y-%m-%dT00:00:00'")))))
 
   (ex! "close-all" 'evgeni-close-all-buffers)
   (defun evgeni-close-all-buffers ()
@@ -346,6 +360,24 @@ If WHEN is specified, pass it like so `date -d WHEN'"
                            (eq x (current-buffer))
                            (string-prefix-p "*" (buffer-name x))))
                         (buffer-list)))))
+
+(use-package emacs
+  :config
+  ;; https://patorjk.com/software/taag/#p=display&f=Graffiti&t=Type%20Something%20
+  (setq-default inhibit-startup-message t)
+
+  (setq initial-scratch-message
+        "
+   █████  ███▄ ▄███▓ ▄▄▄       ▄████▄    ██████
+ ▓█   ▀ ▓██▒▀█▀ ██▒▒████▄    ▒██▀ ▀█  ▒██    ░
+ ▒███   ▓██    ▓██░▒██  ▀█▄  ▒▓█    ▄ ░ ▓██▄▄
+ ▒▓█  ▄ ▒██    ▒██ ░██▄▄▄▄██ ▒▓▓▄ ▄██▒  ▒   ██▒
+ ░▒████▒▒██▒   ░██▒ ▓█   ▓██▒▒ ▓███▀ ░▒██████▒▒
+ ░░ ▒░ ░░ ▒░   ░  ░ ▒▒   ▓▒█░░ ░▒ ▒  ░▒ ▒▓▒ ▒ ░
+  ░ ░  ░░  ░      ░  ▒   ▒▒ ░  ░  ▒   ░ ░▒  ░ ░
+    ░   ░      ░     ░   ▒   ░        ░  ░  ░
+    ░  ░       ░         ░  ░░ ░            ░
+"))
 
 ;; restore frame position - https://github.com/aaronjensen/restore-frame-position
 (when (display-graphic-p)
@@ -408,7 +440,8 @@ If WHEN is specified, pass it like so `date -d WHEN'"
 
 ;; load evil early
 (use-package evil
-  :ensure t
+  :straight t
+  :demand t
   ;; :load-path "~/dev/evil"
   :init
   (setq evil-want-integration t)
@@ -771,6 +804,7 @@ With prefix arg, find the previous file."
   (define-key evil-ex-completion-map "\C-b" 'backward-char)
   (define-key evil-ex-completion-map "\C-f" 'forward-char)
   (define-key evil-ex-completion-map "\C-d" 'evgeni-ex-delete-or-complete)
+  (define-key evil-ex-completion-map (kbd "C-u") 'backward-kill-paragraph)
 
   (define-key evil-normal-state-map "zz" 'recenter-top-bottom)
 
@@ -862,7 +896,7 @@ With prefix arg, find the previous file."
      (bang
       ;; TODO narrow to defun missing
       (if (region-active-p)
-          (evgeni-narrow-to-region-indirect beg end)
+          (evgeni-narrow-to-region-indirect begin end)
         (switch-to-buffer (clone-indirect-buffer nil nil))
         (funcall-interactively 'evgeni-narrow-or-widen nil begin end)))
      ((region-active-p)
@@ -890,17 +924,18 @@ With prefix arg, find the previous file."
   (require 'evil-development)
 
   (use-package evil-collection
-    :ensure t
+    :straight t
     :init
     (setq evil-collection-outline-bind-tab-p nil
           evil-collection-want-find-usages-bindings nil)
     :config
     (delete 'outline evil-collection-mode-list)
+    (delete 'eglot evil-collection-mode-list)
     (delete 'markdown-mode evil-collection-mode-list)
     (evil-collection-init))
 
   (use-package evil-surround
-    :ensure t
+    :straight t
     :commands
     (evil-surround-edit
      evil-Surround-edit
@@ -922,12 +957,49 @@ With prefix arg, find the previous file."
                 ("g L " . evil-lion-right)))
 
   (use-package evil-commentary
-    :ensure t
+    :straight t
     :bind (:map evil-normal-state-map
-                ("gc" . evil-commentary)))
+                ("gc" . evil-commentary))
+    :config
+    (defun evil-commentary/ensure-in-comment-block (beg end forward)
+      (save-excursion
+        (beginning-of-line)
+        (if (not (or (looking-at-p (concat "^\s*" (regexp-quote comment-start)))
+                     (looking-at-p (concat "^\s*$"))))
+            (list beg end)
+          (let ((saved-beg (point))
+                (saved-end (point-at-eol)))
+            (catch 'bound
+              (when (<= saved-beg (point-min))
+                (throw 'bound (list saved-beg end)))
+              (when (>= saved-end (point-max))
+                (throw 'bound (list beg saved-end)))
+              (if forward
+                  (next-line)
+                (previous-line))
+              (apply #'evil-commentary/ensure-in-comment-block
+                     (if forward
+                         (list beg saved-end forward)
+                       (list saved-beg end forward))))))))
+
+    (defun evgeni-commentary-uncomment-adjacent ()
+      (interactive)
+      (when (and (eq evil-this-operator 'evil-commentary))
+        (setq evil-inhibit-operator t)
+        (let ((beg (evil-commentary/ensure-in-comment-block (point) (point) nil))
+              (end (evil-commentary/ensure-in-comment-block (point) (point) t)))
+          (evil-commentary (car beg) (cadr end)))))
+
+    (evil-define-key 'operator global-map
+      "u" '(menu-item
+            ""
+            nil
+            :filter (lambda (&optional _)
+                      (when (eq evil-this-operator 'evil-commentary)
+                        (evgeni-inhibit-operator #'evgeni-commentary-uncomment-adjacent))))))
 
   (use-package evil-exchange
-    :ensure t
+    :straight t
     :commands (evil-exchange evil-exchange-cancel)
     :init
     (defmacro evgeni-inhibit-operator (command)
@@ -956,7 +1028,7 @@ With prefix arg, find the previous file."
     (evil-define-key 'visual global-map "X" 'evil-exchange))
 
   (use-package evil-replace-with-register
-    :ensure t
+    :straight t
     :bind (:map evil-normal-state-map
                 ("gr" . evil-replace-with-register)
                 :map evil-visual-state-map
@@ -1018,7 +1090,7 @@ With prefix arg, find the previous file."
         (dired-goto-file file)))))
 
 (use-package! dired-subtree
-  :ensure t
+  :straight t
   :commands dired-subtree-toggle
   :init
   (with-eval-after-load 'dired
@@ -1034,14 +1106,14 @@ With prefix arg, find the previous file."
    '(dired-subtree-depth-6-face ((t (:background unspecified))))))
 
 (use-package! magit
-  :ensure t
+  :straight t
   :defer 3
   :bind (:map evil-normal-state-map
               ("U U" . magit-status)
               (", u" . magit-file-edispatch)
               (", U" . magit-dispatch)
               ("U u" . magit-file-dispatch)
-              ("U w" . magit-stage-file)
+              ("U w" . magit-stage-buffer-file)
               ("U d" . evgeni-magit-diff-unstaged-buffer-file)
               ("U L" . magit-log-head)
               ("U l" . magit-log-buffer-file)
@@ -1123,7 +1195,7 @@ With prefix arg, find the previous file."
     (kbd "C-c C-a") 'smerge-keep-all))
 
 (use-package! vdiff
-  :ensure t
+  :straight t
   :defer t
   :init
   (ex! "vdiff" 'evgeni-vdiff-visible-buffers)
@@ -1194,7 +1266,7 @@ With prefix arg, find the previous file."
   (evil-define-minor-mode-key 'normal 'vdiff-3way-mode "q" 'vdiff-quit))
 
 (use-package! vdiff-magit
-  :ensure t
+  :straight t
   :after magit
   :init
   :commands vdiff-magit-show-unstaged
@@ -1227,7 +1299,8 @@ With prefix arg, find the previous file."
   (setq org-startup-indented t
         org-imenu-depth 3
         org-startup-folded "showall"
-        org-confirm-babel-evaluate nil)
+        org-confirm-babel-evaluate nil
+        org-src-preserve-indentation t)
 
   (evil-ex-define-cmd "tangle" 'evgeni-org-tangle)
   (evil-define-command evgeni-org-tangle (bang)
@@ -1285,22 +1358,24 @@ With prefix arg, find the previous file."
     (interactive)
     (org-babel-lob-ingest "~/org/snippets.org"))
 
+  (use-package org-tempo)
+
   (use-package org-autolist
-    :ensure t
+    :straight t
     :hook (org-mode . org-autolist-mode)
     :config
     (setq org-autolist-enable-delete nil)))
 
 (use-package ob-async
-  :ensure t
+  :straight t
   :after org)
 
 (use-package org-make-toc
-  :ensure t
+  :straight t
   :defer t)
 
 (use-package org-bullets
-  :ensure t
+  :straight t
   :after org
   :config
 
@@ -1309,21 +1384,13 @@ With prefix arg, find the previous file."
 
   (add-hook 'org-mode-hook (lambda () (org-bullets-mode 1))))
 
-(use-package org-download
-  :ensure t
-  :after org)
-
 (use-package! xref
   :bind (:map evil-normal-state-map
               ("C-]" . xref-find-definitions)
+              ("C-t" . xref-go-back)
               ("g C-]" . xref-find-references)
               ("C-w C-]" . xref-find-definitions-other-window))
   :config
-  (ex! "tag" (lambda ()
-               (interactive)
-               ;; make `xref-find-definitions prompt for a tag
-               (let ((current-prefix-arg '(4)))
-                 (call-interactively 'xref-find-definitions))))
   (evil-define-key 'normal xref--xref-buffer-mode-map "q" 'delete-window)
   ;; don't use swiper in this buffer - swiper clears the highlighting in the xref buffer
   (evil-define-key 'normal xref--xref-buffer-mode-map "/" 'evil-ex-search-forward)
@@ -1649,7 +1716,7 @@ With prefix arg, find the previous file."
   (savehist-mode t))
 
 (use-package! dired-single
-  :ensure t
+  :straight t
   :commands dired-single-buffer
   :init
   (evil-define-key 'normal dired-mode-map (kbd "RET") 'dired-single-buffer))
@@ -1676,16 +1743,6 @@ With prefix arg, find the previous file."
     "Y" 'git-timemachine-kill-revision
     "q" 'git-timemachine-quit))
 
-(use-package flycheck
-  :ensure t
-  :defer t
-  :config
-  (setq flycheck-check-syntax-automatically '(mode-enabled save)))
-
-(use-package flycheck-inline
-  :ensure t
-  :after flycheck)
-
 (use-package! flymake
   :defer t
   :config
@@ -1711,6 +1768,19 @@ With prefix arg, find the previous file."
   :config
   (unbind-key "h" grep-mode-map)
   (unbind-key "n" grep-mode-map))
+
+(use-package wgrep
+  :straight t
+  :bind (:map grep-mode-map
+              ("C-x C-q" . wgrep-change-to-wgrep-mode))
+  :commands wgrep-change-to-wgrep-mode
+  :init
+  (setq wgrep-auto-save-buffer t)
+  (ex! "wgrep" 'wgrep-change-to-wgrep-mode))
+
+(use-package replace
+  :bind (:map occur-mode-map
+              ("C-x C-q" . occur-edit-mode)))
 
 (use-package compile
   :bind (:map evil-normal-state-map
@@ -1777,7 +1847,7 @@ With prefix arg, find the previous file."
   (add-hook 'evil-insert-state-exit-hook  (lambda () (setq-local show-trailing-whitespace t))))
 
 (use-package undo-tree
-  :ensure t
+  :straight t
   :defer t
   :config
   ;; (global-undo-tree-mode)
@@ -1794,14 +1864,14 @@ With prefix arg, find the previous file."
   (define-key evil-visual-state-map "gU" 'evil-upcase))
 
 (use-package eros
-  :ensure t
+  :straight t
   :commands (eros-eval-last-sexp eros-eval-defun)
   :init
   (define-key global-map [remap eval-last-sexp] 'eros-eval-last-sexp)
   (define-key global-map [remap eval-defun] 'eros-eval-defun))
 
 (use-package markdown-mode
-  :ensure t
+  :straight t
   :commands (markdown-mode gfm-mode)
   :mode (("README\\.md\\'" . gfm-mode)
          ("\\.md\\'" . markdown-mode)
@@ -1817,13 +1887,8 @@ With prefix arg, find the previous file."
                                    paragraph-separate "[ 	]*$"))))
 
 (use-package origami
-  :ensure t
+  :straight t
   :commands origami-mode)
-
-(use-package s
-  :ensure t
-  :defer t
-  :functions s-trim)
 
 (use-package haskell-mode
   :mode "\\.hs\\'"
@@ -1917,14 +1982,14 @@ With prefix arg, find the previous file."
   (evil-define-key 'insert haskell-mode-map ":" 'evgeni-haskell-smart-colon))
 
 (use-package hindent
-  :ensure t
+  :straight t
   :after haskell-mode
   :if (executable-find "hindent")
   :init
   (add-hook 'haskell-mode-hook 'hindent-mode))
 
 (use-package smartparens
-  :ensure t
+  :straight t
   :commands sp-forward-slurp-sexp sp-forward-barf-sexp
   :init
   (define-key emacs-lisp-mode-map (kbd "C-c <") 'sp-forward-slurp-sexp)
@@ -1938,7 +2003,7 @@ With prefix arg, find the previous file."
   (show-paren-mode 1))
 
 (use-package ledger-mode
-  :ensure t
+  :straight t
   :commands ledger-mode)
 
 (use-package uniquify
@@ -1949,10 +2014,6 @@ With prefix arg, find the previous file."
   (setq uniquify-separator "/")
   (setq uniquify-after-kill-buffer-p t)     ; rename after killing uniquified
   (setq uniquify-ignore-buffers-re "^\\*")) ; don't muck with special buffers
-
-(use-package regex-tool
-  :ensure t
-  :commands regex-tool)
 
 (use-package macrostep
   :ensure t
@@ -1975,7 +2036,7 @@ With prefix arg, find the previous file."
   (modify-syntax-entry ?$ "." yaml-mode-syntax-table))
 
 (use-package package-lint
-  :ensure t
+  :straight t
   :commands package-lint-current-buffer)
 
 (use-package js
@@ -2013,40 +2074,23 @@ With prefix arg, find the previous file."
   (setq tramp-default-method "ssh"))
 
 (use-package dockerfile-mode
-  :ensure t
+  :straight t
   :mode (".*Dockerfile.*" . dockerfile-mode)
   :config
   (modify-syntax-entry ?$ "." dockerfile-mode-syntax-table))
 
 (use-package restclient
-  :ensure t
+  :straight t
   :mode ("\\.restclient\\'" . restclient-mode))
 
 (use-package company-restclient
-  :ensure t
+  :straight t
   :after (company restclient))
-
-(use-package suggest
-  :ensure t
-  :commands suggest)
 
 (use-package conf-mode
   :defer t
   :config
   (modify-syntax-entry ?_ "w" conf-mode-syntax-table))
-
-(use-package nginx-mode
-  :ensure t
-  :mode ("nginx.*\\.conf\\'" . nginx-mode)
-  :config
-  (setq nginx-indent-level 3)
-
-  ;; Auto indent on }
-  (add-hook 'nginx-mode-hook
-            (lambda ()
-              (setq-local
-               electric-indent-chars (cons ?} (and (boundp 'electric-indent-chars)
-                                                   electric-indent-chars))))))
 
 (use-package edebug
   :defer t
@@ -2055,19 +2099,14 @@ With prefix arg, find the previous file."
 
 (use-package exec-path-from-shell
   :if (display-graphic-p)
-  :defer .5
-  :ensure t
+  :straight t
   :config
   (setq exec-path-from-shell-check-startup-files nil)
   (add-to-list 'exec-path-from-shell-variables "GOPATH" t)
   (exec-path-from-shell-initialize))
 
-(use-package lua-mode
-  :ensure t
-  :mode "\\.lua\\'")
-
 (use-package edit-indirect
-  :ensure t
+  :straight t
   :defer t)
 
 (use-package sh-script
@@ -2086,22 +2125,14 @@ With prefix arg, find the previous file."
       ("fi"  "fi"    indent-according-to-mode :system t))))
 
 (use-package try
-  :ensure t
+  :straight t
   :commands try)
 
 (use-package hl-todo
-  :ensure t
+  :straight t
   :defer 1.5
   :config
   (global-hl-todo-mode))
-
-(use-package rust-mode
-  :ensure t
-  :mode "\\.rs\\'")
-
-(use-package toml-mode
-  :ensure t
-  :mode "\\.toml\\'")
 
 (use-package diff
   :defer t
@@ -2109,7 +2140,7 @@ With prefix arg, find the previous file."
   (add-hook 'diff-mode-hook 'diff-auto-refine-mode))
 
 (use-package! diff-hl
-  :ensure t
+  :straight t
   :custom
   (diff-hl-margin-symbols-alist '((insert . "+") (delete . "-") (change . "|") (unknown . "?") (ignored . "i")))
   :config
@@ -2148,10 +2179,6 @@ With prefix arg, find the previous file."
   :init
   (add-hook 'prog-mode-hook 'electric-pair-local-mode))
 
-(use-package nameless
-  :ensure t
-  :defer t)
-
 (use-package git-link
   :ensure t
   :defer t
@@ -2175,7 +2202,7 @@ With prefix arg, find the previous file."
                                 (format "L%s" start))))))))
 
 (use-package! shell-pop
-  :ensure t
+  :straight t
   :commands shell-pop
   :init
   (evil-define-key '(normal insert) evgeni-intercept-mode-map
@@ -2253,15 +2280,6 @@ With prefix arg, find the previous file."
     (setq evil-inhibit-operator t)
     (evgeni-toggles-hydra/body))
 
-  (defun evgeni-toggle-flycheck-flymake-mode ()
-    (interactive)
-    (cond
-     ((bound-and-true-p flymake-mode) (call-interactively 'flymake-mode))
-     ((bound-and-true-p flycheck-mode) (call-interactively 'flycheck-mode))
-     ((bound-and-true-p eglot--managed-mode) (call-interactively 'flymake-mode))
-     ((bound-and-true-p lsp-mode) (call-interactively (if lsp-prefer-flymake 'flymake-mode 'flycheck-mode)))
-     (t (call-interactively 'flymake-mode))))
-
   (defhydra evgeni-toggles-hydra (:exit t)
     "toggles"
     ("c" global-hl-line-mode "global-hl-line-mode")
@@ -2314,12 +2332,12 @@ With prefix arg, find the previous file."
 
 (use-package which-key
   :commands which-key-mode
-  :ensure t
+  :straight t
   :config
   (setq which-key-idle-delay 0.4))
 
 (use-package ox-hugo
-  :ensure t
+  :straight t
   :defer t)
 
 (use-package! comint
@@ -2410,18 +2428,14 @@ With prefix arg, find the previous file."
         (eshell/cd (cdr prj))
       (user-error "Not in a project"))))
 
-(use-package esh-autosuggest
-  :hook (eshell-mode . esh-autosuggest-mode)
-  :ensure t)
-
 (use-package! evil-numbers
-  :ensure t
+  :straight t
   :bind (:map evil-normal-state-map
               ("C-a" . evil-numbers/inc-at-pt)
               ("g C-a" . evil-numbers/dec-at-pt)))
 
 (use-package php-mode
-  :ensure t
+  :straight t
   :defer t)
 
 (use-package cperl-mode
@@ -2503,14 +2517,14 @@ With prefix arg, find the previous file."
       (evil-define-key 'normal cperl-mode-map (kbd "] d") 'evgeni-perl-dump)))
 
 (use-package minions
-  :ensure t
+  :straight t
   :config
   (setq minions-mode-line-lighter "-")
-  (setq minions-prominent-modes '(flycheck-mode flymake-mode))
+  (setq minions-prominent-modes '(flymake-mode))
   (minions-mode))
 
 (use-package moody
-  :ensure t
+  :straight t
   :if (display-graphic-p)
   :config
   (when (eq window-system 'ns)
@@ -2551,7 +2565,7 @@ With prefix arg, find the previous file."
   (advice-add 'load-theme :after #'evgeni-moody-setup))
 
 (use-package beacon
-  :ensure t
+  :straight t
   :disabled t
   :defer 1.5
   :config
@@ -2620,7 +2634,7 @@ With prefix arg, find the previous file."
     :defer t))
 
 (use-package eglot
-  :ensure t
+  :straight t
   :init
   (add-hook 'python-mode-hook 'eglot-ensure)
   (add-hook 'go-mode-hook 'evgeni-eglot-ensure-if-git-repo)
@@ -2635,7 +2649,7 @@ With prefix arg, find the previous file."
   :config
   (setq eglot-stay-out-of '(imenu))
 
-  (add-to-list 'eglot-ignored-server-capabilites ':documentHighlightProvider)
+  (add-to-list 'eglot-ignored-server-capabilities ':documentHighlightProvider)
 
   (with-eval-after-load 'evil
     (evil-define-minor-mode-key 'normal 'eglot--managed-mode
@@ -2674,29 +2688,23 @@ With prefix arg, find the previous file."
     (evil-define-key 'normal python-mode-map (kbd "] d") 'evgeni-python-dump)))
 
 (use-package thrift
-  :ensure t
+  :straight t
   :defer t)
 
-(use-package json-mode
-  :ensure t
-  :defer t
-  :config
-  (setq jsons-path-printer 'jsons-print-path-jq))
-
 (use-package jq-mode
-  :ensure t
+  :straight t
   :defer t
   :config
   (ex! "jq" 'jq-interactively))
 
 (use-package deadgrep
-  :ensure t
+  :straight t
   :defer t
   :init
   (ex! "deadgrep" 'deadgrep))
 
 (use-package direnv
-  :ensure t
+  :straight t
   :custom
   (direnv-show-paths-in-summary nil)
   :config
@@ -2718,6 +2726,7 @@ With prefix arg, find the previous file."
 
   (setq auto-insert-alist
         '((sh-mode . [ "template.sh" evgeni-autoinsert-yas-expand])
+          (bash-ts-mode . [ "template.sh" evgeni-autoinsert-yas-expand])
           (go-ts-mode . [ "template.go" evgeni-autoinsert-yas-expand ])
           (go-mode . [ "template.go" evgeni-autoinsert-yas-expand ]))))
 
@@ -2726,25 +2735,12 @@ With prefix arg, find the previous file."
   :config
   (modify-syntax-entry ?- "w" makefile-mode-syntax-table))
 
-(use-package prodigy
-  :ensure t
-  :defer t
-  :init
-  (ex! "prodigy" 'prodigy)
-  (ex! "services" 'prodigy)
-  :config
-  (setq prodigy-kill-process-buffer-on-stop t
-        prodigy-completion-system 'default)
-
-  (evil-define-key 'normal prodigy-mode-map
-    "$" 'prodigy-display-process
-    "gr" 'prodigy-refresh))
-
 (use-package! hideshow
   :defer t
   :config
 
   (evil-define-minor-mode-key 'normal 'hs-minor-mode [tab] 'evil-toggle-fold)
+  (evil-define-minor-mode-key 'normal 'hs-minor-mode (kbd "TAB") 'evil-toggle-fold)
 
   (defun evgeni-hs-fold-on-first-occurance (regex)
     (hs-life-goes-on
@@ -2754,7 +2750,7 @@ With prefix arg, find the previous file."
         (hs-hide-block))))))
 
 (use-package! disable-mouse
-  :ensure t
+  :straight t
   :config
   (global-disable-mouse-mode)
   (mapc #'disable-mouse-in-keymap
@@ -2764,19 +2760,19 @@ With prefix arg, find the previous file."
               evil-insert-state-map)))
 
 (use-package protobuf-mode
-  :ensure t
+  :straight t
   :defer t
   :config
   (add-hook 'protobuf-mode-hook 'electric-pair-local-mode))
 
 (use-package focus
-  :ensure t
+  :straight t
   :defer t
   :init
   (ex! "focus" 'focus-mode))
 
 (use-package total-lines
-  :ensure t
+  :straight t
   :defer 1.5
   :config
   (global-total-lines-mode)
@@ -2789,31 +2785,31 @@ With prefix arg, find the previous file."
   (global-so-long-mode 1))
 
 (use-package undo-fu
-  :ensure t
-  :defer .5
+  :straight t
+  :after evil
+  :custom
+  (evil-undo-system 'undo-fu)
   :config
   (global-undo-tree-mode -1)
-  (define-key evil-normal-state-map "u" 'undo-fu-only-undo)
-  (define-key evil-normal-state-map "\C-r" 'undo-fu-only-redo)
 
   (use-package undo-fu-session
-    :ensure t
+    :straight t
     :config
     (setq undo-fu-session-incompatible-files '("/COMMIT_EDITMSG\\'" "/git-rebase-todo\\'"))
     (global-undo-fu-session-mode)))
 
 (use-package gcmh
-  :ensure t
+  :straight t
   :defer .5
   :config
   (gcmh-mode))
 
 (use-package esup
-  :ensure t
+  :straight t
   :defer)
 
 (use-package! emamux
-  :ensure t
+  :straight t
   :if (getenv "TMUX") ;; run only in tmux
   :init
   (evil-define-key '(normal insert) evgeni-intercept-mode-map
@@ -2833,9 +2829,9 @@ With prefix arg, find the previous file."
     (emamux:send-region beg end)))
 
 (use-package dtrt-indent
-  :ensure t
-  :defer 1.5
+  :straight t
   :custom
   (dtrt-indent-verbosity 0)
+  (dtrt-indent-max-lines 100) ;; try to speed-up this mode
   :config
   (dtrt-indent-global-mode))
