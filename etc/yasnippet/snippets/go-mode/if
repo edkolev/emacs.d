@@ -3,5 +3,5 @@
 # key: if
 # --
 if err != nil {
-	return ${1:errors}.Wrap(err, "$0")
+	$0
 }

@@ -1,0 +1,7 @@
+# -*- mode: snippet -*-
+# name: ret
+# key: ret
+# type: command
+# --
+
+(yas-expand-snippet (go-ts-mode-return))

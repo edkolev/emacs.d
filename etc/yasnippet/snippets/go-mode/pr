@@ -1,5 +1,7 @@
 # -*- mode: snippet -*-
 # name: pr
 # key: pr
+# type: command
 # --
-print("$0\n")
+(evgeni-go-ts-import-add "fmt")
+(yas-expand-snippet "fmt.Printf(\"$0\\n\")")

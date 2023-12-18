@@ -1,0 +1,10 @@
+# -*- mode: snippet -*-
+# name: ife
+# key: ife
+# type: command
+# --
+
+(let ((go-ts-mede-error-zero-vanue "${1:fmt.Errorf(\"${2:format}: %w\", err)}"))
+  (yas-expand-snippet
+    (format "if err != nil {\n%s\n}"
+      (go-ts-mode-return))))
