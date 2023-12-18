@@ -1,2 +1,5 @@
 var/
 elpa/
+straight/
+tree-sitter/
+eln-cache/
