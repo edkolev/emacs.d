@@ -4,7 +4,7 @@
 # type: command
 # --
 
-(let ((go-ts-mede-error-zero-vanue "${1:fmt.Errorf(\"${2:format}: %w\", err)}"))
+(let ((go-ts-mode-error-zero-vanue "${1:fmt.Errorf(\"${2:format}: %w\", err)}"))
   (yas-expand-snippet
     (format "if err != nil {\n%s\n}"
       (go-ts-mode-return))))

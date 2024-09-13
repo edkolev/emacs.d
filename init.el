@@ -119,9 +119,11 @@
 (defun evgeni-word-at-point-or-region ()
   "Return region's text if active, otherwise the word at point."
   (substring-no-properties
-   (if (region-active-p)
-       (buffer-substring (region-beginning) (region-end))
-     (thing-at-point 'word))))
+   (or
+    (if (region-active-p)
+        (buffer-substring (region-beginning) (region-end))
+      (thing-at-point 'word))
+    "")))
 
 ;; in modeline, show file path, relative to the project root
 (require 'subr-x)
@@ -305,12 +307,14 @@ Return nil if not in a project"
   ;; load theme
   (load-theme (if (display-graphic-p)
                   'leuven ;; 'modus-operandi ;; 'leuven ;; 'doom-one-light ;; 'habamax ;; 'dichromacy ;; 'doom-one-light ;; 'twilight-bright ;; 'apropospriate-dark ;;'tango-dark ;; tango-plus flatui
-                'ef-summer ;; 'ef-duo-light ;; 'ef-tritanopia-light ;; 'ef-trio-light ;; 'ef-duo-light ;; 'leuven ;; 'habamax ;; 'leuven
+                'ef-light ;; 'ef-cyprus ;; 'ef-tritanopia-light ;; 'ef-duo-light ;; 'ef-kassio ;; 'ef-summer ;; 'ef-duo-light ;; 'ef-tritanopia-light ;; 'ef-trio-light ;; 'ef-duo-light
                 )
               t)
   ;; bind command-option-H to hide other windows, just like every other OS X app
   (when (string-equal system-type "darwin")
     (define-key global-map (kbd "M-s-˙") 'ns-do-hide-others))
+
+  (setq long-line-threshold nil)
 
   (defun evgeni-make-frame ()
     (interactive)
@@ -354,10 +358,11 @@ If WHEN is specified, pass it like so `date -d WHEN'"
   (defun evgeni-close-all-buffers ()
     "Kill all buffers except current one and buffers which start with *, for example *scratch*"
     (interactive)
+    (switch-to-buffer "*scratch*")
+    (eglot-shutdown-all)
     (mapc 'kill-buffer (cl-remove-if
                         (lambda (x)
                           (or
-                           (eq x (current-buffer))
                            (string-prefix-p "*" (buffer-name x))))
                         (buffer-list)))))
 
@@ -493,7 +498,8 @@ If WHEN is specified, pass it like so `date -d WHEN'"
                evil-ex-search-previous
                evil-ex-search-word-backward
                evil-ex-search-word-forward
-               swiper))
+               swiper
+               consult-line))
     (advice-add f :after #'evgeni-add-nohighlight-hook))
 
   (evil-define-command evgeni-save-file ()
@@ -580,6 +586,7 @@ With prefix arg, find the previous file."
   (define-key evil-normal-state-map (kbd "g n") (lambda () (interactive) (evil-ex "%normal ")))
   (define-key evil-visual-state-map (kbd "g n") (lambda () (interactive) (evil-ex "'<,'>normal ")))
   (define-key evil-ex-search-keymap "\C-w" #'evil-delete-backward-word)
+  (define-key evil-motion-state-map (kbd "C-z") 'ignore)
 
   (evil-add-command-properties 'beginning-of-defun :jump t :repeat 'motion)
   (evil-add-command-properties 'end-of-defun :jump t :repeat 'motion)
@@ -621,12 +628,9 @@ With prefix arg, find the previous file."
     (save-excursion
       (evil-ex-search-unbounded-word-forward count symbol)))
 
+  (define-key evil-motion-state-map "," nil) ;; , is used as a prefix
   (define-key evil-motion-state-map "*" 'evgeni-star)
   (define-key evil-motion-state-map "g*" 'evgeni-g-star)
-  (define-key evil-normal-state-map (kbd ", *" )
-    (lambda ()
-      (interactive)
-      (counsel-grep-or-swiper (substring-no-properties (thing-at-point 'word)))))
 
   (defvar evgeni-conflict-marker-regex "^[<=>|]\\{7\\}")
 
@@ -643,6 +647,9 @@ With prefix arg, find the previous file."
     (if file
         (load-file file)
       (load-file (concat user-emacs-directory "init.el"))))
+
+  (evil-ex-define-cmd "init.el" (lambda () (interactive) (find-file (concat user-emacs-directory "init.el"))))
+  (evil-ex-define-cmd "find-library" 'find-library)
 
   ;; my intercept map
   (defvar evgeni-intercept-mode-map (make-sparse-keymap))
@@ -948,7 +955,7 @@ With prefix arg, find the previous file."
     (evil-define-key 'visual global-map "gS" 'evil-Surround-region))
 
   (use-package evil-lion
-    :ensure t
+    :straight t
     :bind (:map evil-normal-state-map
                 ("g l " . evil-lion-left)
                 ("g L " . evil-lion-right)
@@ -1037,13 +1044,15 @@ With prefix arg, find the previous file."
     (setq evil-replace-with-register-indent t))
 
   (use-package evil-visualstar
-    :ensure t
+    :straight t
     :bind (:map evil-visual-state-map
                 ("*" . evil-visualstar/begin-search-forward)
-                ("#" . evil-visualstar/begin-search-backward)))
+                ("#" . evil-visualstar/begin-search-backward))
+    :config
+    (advice-add 'evil-visualstar/begin-search-forward :around #'evgeni-save-excursion-advice))
 
   (use-package evil-indent-plus
-    :ensure t
+    :straight t
     :defer t
     :init
     (define-key evil-inner-text-objects-map "i" 'evil-indent-plus-i-indent)
@@ -1059,8 +1068,12 @@ With prefix arg, find the previous file."
   (message "Loading evil-mode...done (%.3fs)" (float-time (time-subtract (current-time) emacs-start-time))))
 
 (use-package! dired
-  :bind (:map evil-normal-state-map
-              ("-" . evgeni-dired-current-dir))
+  :demand
+  :bind (
+         :map dired-mode-map
+         (" " . evgeni-find-file-recursively)
+         :map evil-normal-state-map
+         ("-" . evgeni-dired-current-dir))
   :config
   (setq dired-listing-switches "-alh"
         dired-auto-revert-buffer t
@@ -1069,7 +1082,8 @@ With prefix arg, find the previous file."
         dired-use-ls-dired nil)
   (evil-define-key 'normal dired-mode-map
     "-" 'dired-up-directory
-    "U" 'evgeni-dired-unmark-all-marks)
+    "U" 'evgeni-dired-unmark-all-marks
+    " " 'evgeni-find-file-recursively)
 
   (add-hook 'dired-mode-hook 'dired-hide-details-mode)
 
@@ -1077,9 +1091,7 @@ With prefix arg, find the previous file."
     "call `magit-status' on double-U press `U U'"
     (interactive)
     (if (eq this-command last-command)
-        (progn
-
-          (magit-status))
+        (magit-status)
       (dired-unmark-all-marks)))
 
   (defun evgeni-dired-current-dir ()
@@ -1087,7 +1099,16 @@ With prefix arg, find the previous file."
     (let ((file buffer-file-name))
       (dired ".")
       (when file
-        (dired-goto-file file)))))
+        (dired-goto-file file))))
+
+  (defun evgeni-find-file-recursively()
+    (interactive)
+    (find-file
+     (completing-read
+      "File: "
+      (directory-files-recursively
+       "." "." nil
+       (lambda (dir) (not (string-equal (file-name-nondirectory dir) ".git"))))))))
 
 (use-package! dired-subtree
   :straight t
@@ -1107,7 +1128,6 @@ With prefix arg, find the previous file."
 
 (use-package! magit
   :straight t
-  :defer 3
   :bind (:map evil-normal-state-map
               ("U U" . magit-status)
               (", u" . magit-file-edispatch)
@@ -1117,7 +1137,6 @@ With prefix arg, find the previous file."
               ("U d" . evgeni-magit-diff-unstaged-buffer-file)
               ("U L" . magit-log-head)
               ("U l" . magit-log-buffer-file)
-              ("U r" . magit-file-checkout)
               ("U r" . evgeni-magit-file-checkout)
               ("U c" . magit-commit)
               ("U b" . magit-branch)
@@ -1164,14 +1183,6 @@ With prefix arg, find the previous file."
   ;; no ediff mappings
   (define-key magit-status-mode-map "e" nil)
   (define-key magit-status-mode-map "E" nil)
-
-  ;; lower untracked
-  (magit-add-section-hook 'magit-status-sections-hook
-                          'magit-insert-untracked-files 'magit-insert-staged-changes 1)
-
-  ;; lower stashes
-  (magit-add-section-hook 'magit-status-sections-hook
-                          'magit-insert-stashes 'magit-insert-unpushed-to-pushremote 1)
 
   (define-key magit-diff-mode-map "e" nil) ;; no ediff
 
@@ -1230,7 +1241,7 @@ With prefix arg, find the previous file."
       (kill-buffer evgeni-line-diff-buf-2)
       (setq evgeni-line-diff-buf-2 nil)))
 
-  (evil-define-command evgeni-line-diff (begin end)
+  (evil-define-command evgeni-line-diff (beg end)
     (interactive "<r>")
     :keep-visual nil
     (when (and evgeni-line-diff-buf-1 evgeni-line-diff-buf-2)
@@ -1278,7 +1289,6 @@ With prefix arg, find the previous file."
   (define-key magit-mode-map "E" 'vdiff-magit))
 
 (use-package! org
-  :defer 3
   :commands evgeni-journal
   :init
   (ex! "journal" 'evgeni-journal)
@@ -1300,7 +1310,8 @@ With prefix arg, find the previous file."
         org-imenu-depth 3
         org-startup-folded "showall"
         org-confirm-babel-evaluate nil
-        org-src-preserve-indentation t)
+        org-src-preserve-indentation t
+        org-src-window-setup 'current-window)
 
   (evil-ex-define-cmd "tangle" 'evgeni-org-tangle)
   (evil-define-command evgeni-org-tangle (bang)
@@ -1308,11 +1319,12 @@ With prefix arg, find the previous file."
     (let ((current-prefix-arg (if bang nil '(4)) ))
       (call-interactively 'org-babel-tangle)))
 
-  (evil-define-key '(normal insert) org-mode-map
-    (kbd "TAB") 'org-cycle)
+  (evil-define-key '(insert) org-mode-map
+    (kbd "TAB") 'indent-for-tab-command)
+
   (evil-define-key 'normal org-mode-map
     "o" (kbd "A RET")
-    (kbd ", f") 'counsel-org-goto
+    (kbd "TAB") 'org-cycle
     (kbd "gx") 'org-open-at-point
     (kbd "] m") 'org-next-visible-heading
     (kbd "[ m") 'org-previous-visible-heading)
@@ -1368,6 +1380,7 @@ With prefix arg, find the previous file."
 
 (use-package ob-async
   :straight t
+  :disabled t
   :after org)
 
 (use-package org-make-toc
@@ -1389,7 +1402,8 @@ With prefix arg, find the previous file."
               ("C-]" . xref-find-definitions)
               ("C-t" . xref-go-back)
               ("g C-]" . xref-find-references)
-              ("C-w C-]" . xref-find-definitions-other-window))
+              ("C-w C-]" . xref-find-definitions-other-window)
+              ("C-w ]" . xref-find-definitions-other-window))
   :config
   (evil-define-key 'normal xref--xref-buffer-mode-map "q" 'delete-window)
   ;; don't use swiper in this buffer - swiper clears the highlighting in the xref buffer
@@ -1670,26 +1684,22 @@ With prefix arg, find the previous file."
 
 (use-package evil-expat
   ;; :load-path "~/dev/evil-expat"
-  :ensure t
+  :straight t
   :defer .5)
 
 (use-package evil-goggles
   :defer .5
-  :ensure t
-  :load-path "~/dev/evil-goggles"
+  :straight t
+  ;; :load-path "~/dev/evil-goggles"
   :config
-  ;; (setq evil-goggles-blocking-duration 0.100)
   (setq evil-goggles-pulse nil)
   (evil-goggles-use-diff-faces)
 
-  ;; (setq evil-goggles-duration 0.1
-  ;;       evil-goggles-enable-delete nil)
   (evil-goggles-mode))
 
 (use-package recentf
-  :defer .1
   :init
-  (setq recentf-max-saved-items 500)
+  (setq recentf-max-saved-items 250)
   (setq recentf-exclude '("/tmp/" ;; "/ssh:"
                           "\.pyc$"
                           (expand-file-name "~/Maildir/")))
@@ -1698,7 +1708,6 @@ With prefix arg, find the previous file."
   (recentf-mode))
 
 (use-package saveplace
-  :defer .5
   :config
   (save-place-mode))
 
@@ -1727,22 +1736,6 @@ With prefix arg, find the previous file."
   (evil-set-initial-state 'wdired-mode 'normal)
   (ex! "wdired" 'wdired-change-to-wdired-mode))
 
-(use-package git-timemachine
-  :ensure t
-  :defer t
-  :init
-  (ex! "timemachine" 'git-timemachine)
-  :config
-
-  (evil-define-minor-mode-key 'normal 'git-timemachine-mode
-    "c" 'git-timemachine-show-current-revision
-    "g" 'git-timemachine-show-nth-revision
-    "p" 'git-timemachine-show-previous-revision
-    "n" 'git-timemachine-show-next-revision
-    "N" 'git-timemachine-show-previous-revision
-    "Y" 'git-timemachine-kill-revision
-    "q" 'git-timemachine-quit))
-
 (use-package! flymake
   :defer t
   :config
@@ -1761,13 +1754,6 @@ With prefix arg, find the previous file."
   :init
   (setq-default abbrev-mode t)
   (setq save-abbrevs nil))
-
-(use-package grep
-  :commands grep-mode
-  :defer t
-  :config
-  (unbind-key "h" grep-mode-map)
-  (unbind-key "n" grep-mode-map))
 
 (use-package wgrep
   :straight t
@@ -2007,7 +1993,6 @@ With prefix arg, find the previous file."
   :commands ledger-mode)
 
 (use-package uniquify
-  :disabled t
   :defer .5
   :config
   (setq uniquify-buffer-name-style 'forward)
@@ -2016,9 +2001,10 @@ With prefix arg, find the previous file."
   (setq uniquify-ignore-buffers-re "^\\*")) ; don't muck with special buffers
 
 (use-package macrostep
-  :ensure t
-  :bind (:map emacs-lisp-mode-map
-              ("C-c e" . macrostep-expand))
+  :straight t
+  :defer t
+  :init
+  (ex! "macrostep-expand" 'macrostep-expand)
   :config
   (evil-define-minor-mode-key 'normal 'macrostep-mode
     "q" 'macrostep-collapse-all
@@ -2026,8 +2012,8 @@ With prefix arg, find the previous file."
     "c" 'macrostep-collapse))
 
 (use-package yaml-mode
-  :ensure t
-  :mode (("\\.yml$" . yaml-mode))
+  :straight t
+  :mode (("\\.yml$" . yaml-mode) ("\\.yab$" . yaml-mode) ("\\.yaml$" . yaml-mode))
   :config
   (setq yaml-imenu-generic-expression
         '((nil  "^[ ]\\{0,2\\}\\(:?[a-zA-Z_-]+\\):"          1)))
@@ -2053,12 +2039,12 @@ With prefix arg, find the previous file."
     (if (region-active-p)
         (call-interactively 'json-pretty-print)
       (json-pretty-print-buffer)
-      (json-mode)))
+      (json-ts-mode)))
   :config
   (setq json-encoding-object-sort-predicate 'string<))
 
 (use-package rjsx-mode
-  :ensure t
+  :straight t
   :mode ("\\.jsx\\'" . rjsx-mode))
 
 (use-package css-mode
@@ -2103,6 +2089,10 @@ With prefix arg, find the previous file."
   :config
   (setq exec-path-from-shell-check-startup-files nil)
   (add-to-list 'exec-path-from-shell-variables "GOPATH" t)
+  (add-to-list 'exec-path-from-shell-variables "LC_ALL" t)
+  (add-to-list 'exec-path-from-shell-variables "GOBIN" t)
+  (add-to-list 'exec-path-from-shell-variables "UBER_USER_UUID" t)
+  (add-to-list 'exec-path-from-shell-variables "SSH_AUTH_SOCK" t)
   (exec-path-from-shell-initialize))
 
 (use-package edit-indirect
@@ -2141,6 +2131,7 @@ With prefix arg, find the previous file."
 
 (use-package! diff-hl
   :straight t
+  :defer 1.5
   :custom
   (diff-hl-margin-symbols-alist '((insert . "+") (delete . "-") (change . "|") (unknown . "?") (ignored . "i")))
   :config
@@ -2148,8 +2139,9 @@ With prefix arg, find the previous file."
   (unless (window-system)
     (diff-hl-margin-mode))
 
-  (add-hook 'diff-hl-mode-hook 'diff-hl-flydiff-mode)
+  ;; (add-hook 'diff-hl-mode-hook 'diff-hl-flydiff-mode) ;; disabled because it adds lag when opening files
   (add-hook 'magit-post-refresh-hook 'diff-hl-magit-post-refresh)
+  (add-hook 'magit-pre-refresh-hook 'diff-hl-magit-pre-refresh)
 
   (evil-add-command-properties 'diff-hl-next-hunk :jump t :repeat 'motion)
   (evil-add-command-properties 'diff-hl-previous-hunk :jump t :repeat 'motion)
@@ -2180,19 +2172,24 @@ With prefix arg, find the previous file."
   (add-hook 'prog-mode-hook 'electric-pair-local-mode))
 
 (use-package git-link
-  :ensure t
+  :straight (git-link :branch "v0.8.0")
   :defer t
+  :load-path "~/dev/git-link"
   :init
   (ex! "gitlink" 'git-link)
+  (ex! "gitlnk" 'git-link)
+  (ex! "glink" 'git-link)
   (ex! "gitlink-commit" 'git-link-commit)
   :config
   (setq git-link-open-in-browser (display-graphic-p))
 
   (add-to-list 'git-link-remote-alist '("uber.internal" git-link-code-uber-com))
   (defun git-link-code-uber-com (hostname dirname filename branch commit start end)
+    ;; (message "hostname %s\ndirname %s\nfilename %s\nbranch %s\ncommit %s\nstart %s\nend %s" hostname dirname filename branch commit start end)
+    ;; (format "https://sg.uberinternal.com/%s/uber-code/%s@%s/-/blob/%s"
     (format "https://sourcegraph.uberinternal.com/%s/%s@%s/-/blob/%s"
             (replace-regexp-in-string "config.uber.internal" "code.uber.internal" hostname)
-            (replace-regexp-in-string "@" "-" dirname) ;; replace "@" with "-"
+            (replace-regexp-in-string "/$" "" (replace-regexp-in-string "@" "-" dirname)) ;; replace "@" with "-", remove trailing slash
             (or branch commit)
             (concat filename
                     (when start
@@ -2204,6 +2201,8 @@ With prefix arg, find the previous file."
 (use-package! shell-pop
   :straight t
   :commands shell-pop
+  :unless (getenv "TMUX") ;; don't run in tmux
+  :defer 1.5
   :init
   (evil-define-key '(normal insert) evgeni-intercept-mode-map
     (kbd "C-c C-z") 'shell-pop)
@@ -2212,15 +2211,17 @@ With prefix arg, find the previous file."
   (setq shell-pop-full-span t))
 
 (use-package git-commit
-  :ensure t
+  :straight t
+  :disabled t
   :defer t
   :config
+
   (use-package git-commit-insert-issue
-    :ensure t
+    :straight t
     :config
 
     (use-package gitlab
-      :ensure t
+      :straight t
       :config
       ;; load gitlab.el if any
       (when (file-readable-p (concat user-emacs-directory "gitlab.el"))
@@ -2253,7 +2254,7 @@ With prefix arg, find the previous file."
           (insert number-from-branch))))))
 
 (use-package! hydra
-  :ensure t
+  :straight t
   :defer t
   :functions defhydra
   :init
@@ -2283,6 +2284,7 @@ With prefix arg, find the previous file."
   (defhydra evgeni-toggles-hydra (:exit t)
     "toggles"
     ("c" global-hl-line-mode "global-hl-line-mode")
+    ("y" global-hl-line-mode "global-hl-line-mode")
     ("w" visual-line-mode "visual-line-mode")
     ("k" toggle-input-method "toggle-input-method")
     ("n" display-line-numbers-mode "display-line-numbers-mode")
@@ -2290,7 +2292,6 @@ With prefix arg, find the previous file."
            (call-interactively 'flyspell-mode)
            (when flyspell-mode
              (flyspell-buffer))) "flyspell-mode")
-    ("m" evgeni-toggle-flycheck-flymake-mode "flycheck/flymake")
     ("r" (progn
            (display-line-numbers-mode +1)
            (setq display-line-numbers-type (if (eq display-line-numbers-type 'relative) t 'relative))
@@ -2304,31 +2305,6 @@ With prefix arg, find the previous file."
     "Change List"
     (";" goto-last-change "undo")
     ("." goto-last-change-reverse "redo")))
-
-(use-package clojure-mode
-  :ensure t
-  :defer t
-  :config
-
-  (define-key clojure-mode-map (kbd "C-c <") 'sp-forward-slurp-sexp)
-  (define-key clojure-mode-map (kbd "C-c >") 'sp-forward-barf-sexp)
-
-  (modify-syntax-entry ?> "w" clojure-mode-syntax-table)
-
-  (use-package cider
-    :ensure t
-    :config
-    (setq cider-repl-display-help-banner nil)
-    (evil-define-key 'insert cider-repl-mode-map
-      (kbd "C-p") 'cider-repl-previous-input
-      (kbd "C-n") 'cider-repl-next-input
-      (kbd "TAB") #'cider-repl-tab)))
-
-(use-package dash
-  :ensure t
-  :defer t
-  :config
-  (dash-enable-font-lock))
 
 (use-package which-key
   :commands which-key-mode
@@ -2433,10 +2409,6 @@ With prefix arg, find the previous file."
   :bind (:map evil-normal-state-map
               ("C-a" . evil-numbers/inc-at-pt)
               ("g C-a" . evil-numbers/dec-at-pt)))
-
-(use-package php-mode
-  :straight t
-  :defer t)
 
 (use-package cperl-mode
   :init
@@ -2579,60 +2551,6 @@ With prefix arg, find the previous file."
 
   (beacon-mode))
 
-(use-package dired-sidebar
-  :ensure t
-  :commands dired-sidebar-toggle-sidebar
-  :init
-  (ex! "sidebar" 'dired-sidebar-toggle-sidebar)
-  (ex! "tree" 'dired-sidebar-toggle-sidebar))
-
-(use-package go-mode
-  :ensure t
-  :defer t
-  :config
-
-  (setq gofmt-command "goimports")
-
-  (reformatter-define evgeni-gofmt
-    :program "goimports")
-
-  (add-hook 'go-mode-hook 'evgeni-go-mode-hook)
-  (defun evgeni-go-mode-hook ()
-    (evgeni-gofmt-on-save-mode)
-    (hs-minor-mode)
-    (evgeni-hs-fold-on-first-occurance "^import (")
-    ;; compile command
-    (set (make-local-variable 'compile-command)
-         "go build -o /dev/null"))
-
-  (evil-define-key 'normal go-mode-map
-    (kbd "gm") (lambda () (interactive) (compile "go build -o /dev/null"))
-    (kbd "gM") (lambda () (interactive) (compile "go test")))
-
-  ;; TODO will this become unnecessary with go modules?
-  (defun evgeni-go-strip-vendor-prefix (orig-fun &rest args)
-    (mapcar
-     (lambda (str) (replace-regexp-in-string "^.*/vendor/" "" str))
-     (apply orig-fun args)))
-  (advice-add 'go-packages-native :around #'evgeni-go-strip-vendor-prefix)
-
-  (defun evgeni-go-dump ()
-    (interactive)
-    (let ((word (thing-at-point 'word)))
-      (save-excursion (end-of-line)
-                      (newline)
-                      (indent-according-to-mode)
-                      (insert (concat "fmt.Fprintf(os.Stderr, \"" word ": %v\\n\", litter.Options{HidePrivateFields: false}.Sdump(" word "))")))))
-
-  (with-eval-after-load 'evil
-    (evil-define-key 'normal go-mode-map (kbd "] d") 'evgeni-go-dump))
-
-  (set (make-local-variable 'outline-regexp) "func\\|import\\|type\\|const")
-
-  (use-package go-gen-test
-    :ensure t
-    :defer t))
-
 (use-package eglot
   :straight t
   :init
@@ -2644,10 +2562,13 @@ With prefix arg, find the previous file."
       (eglot-ensure)))
   :custom
   (eglot-sync-connect 30)
-  (eglot-events-buffer-size 0) ;; disable logs
+  ;; (eglot-events-buffer-size 0) ;; disable logs
   (eglot-confirm-server-initiated-edits nil)
   :config
   (setq eglot-stay-out-of '(imenu))
+
+  ;; experiment - speed up eglot
+  (fset #'jsonrpc--log-event #'ignore)
 
   (add-to-list 'eglot-ignored-server-capabilities ':documentHighlightProvider)
 
@@ -2693,8 +2614,10 @@ With prefix arg, find the previous file."
 
 (use-package jq-mode
   :straight t
+  :custom
+  (jq-interactive-font-lock-mode #'json-ts-mode)
   :defer t
-  :config
+  :init
   (ex! "jq" 'jq-interactively))
 
 (use-package deadgrep
@@ -2779,6 +2702,7 @@ With prefix arg, find the previous file."
   (setq mode-line-position '(("L%l/" (:eval (format "%d "total-lines))))))
 
 (use-package so-long
+  :disabled t
   :config
   (setq so-long-target-modes '(yaml-mode json-mode css-mode))
   (setq so-long-max-lines nil)
@@ -2812,8 +2736,14 @@ With prefix arg, find the previous file."
   :straight t
   :if (getenv "TMUX") ;; run only in tmux
   :init
+
+  (defun evgeni-tmux-split-window ()
+    (interactive)
+    (emamux:ensure-ssh-and-cd
+     (emamux:tmux-run-command nil "split-window" "-p" "33")))
+
   (evil-define-key '(normal insert) evgeni-intercept-mode-map
-    (kbd "C-c C-z") 'emamux:split-window)
+    (kbd "C-c C-z") 'evgeni-tmux-split-window)
 
   (evil-define-key 'normal evgeni-intercept-mode-map
     (kbd "!!") (lambda () (interactive) (progn
@@ -2835,3 +2765,110 @@ With prefix arg, find the previous file."
   (dtrt-indent-max-lines 100) ;; try to speed-up this mode
   :config
   (dtrt-indent-global-mode))
+
+(use-package treesit
+  :if (version<= "29" emacs-version)
+  :config
+
+  (use-package treesit-auto
+    :straight t
+    :config
+    (setq treesit-auto-install 'prompt)
+    (global-treesit-auto-mode)
+
+    ;; https://github.com/renzmann/treesit-auto/issues/32
+
+    (with-eval-after-load 'org
+      (add-to-list 'org-src-lang-modes '("json" . json-ts))
+      (add-to-list 'org-src-lang-modes '("go" . go-ts))
+      (add-to-list 'org-src-lang-modes '("bash" . bash-ts)))))
+
+(use-package go-ts-mode
+  :load-path "~/dev/emacs/lisp/progmodes/"
+  :if (version<= "29" emacs-version)
+  :mode "\\.go\\'"
+  :config
+  (setq go-ts-mode-indent-offset 4)
+
+  (defun evgeni-go-ts-mode--goto-imports ()
+    "Jump to end of imports, return the imports treesit node"
+    (interactive)
+    (when-let ((node (car (treesit-query-capture (treesit-buffer-root-node) "(import_declaration) @imports" nil nil t))))
+      (goto-char (treesit-node-end node))))
+
+  (defun evgeni-go-ts-import-add (package &optional alias)
+    "Add PACKAGE if not already added.
+Optionally add it with ALIAS."
+    ;; (interactive (list (string-clean-whitespace (read-from-minibuffer "Import: ")) nil))
+    (interactive (let* ((input (string-clean-whitespace (read-from-minibuffer "Import: ")))
+                        (parts (string-split input " ")))
+                   (if (eq (length parts) 1)
+                       (list (nth 0 parts))
+                     (list (string-trim (nth 1 parts) "\"" "\"") (nth 0 parts)))))
+    (unless package
+      (user-error "Invalid package"))
+    (save-excursion
+      (when-let* ((import-declaration (car (treesit-query-capture (treesit-buffer-root-node) "(import_declaration) @import_declaration" nil nil t)))
+                  (imports (treesit-query-capture import-declaration "(import_spec path: (_) @imports)" nil nil t))
+                  (packages (seq-map (lambda (x) (string-trim (treesit-node-text x t) "\"" "\"")) imports)))
+        (if (seq-contains-p packages package)
+            (when (called-interactively-p)
+              (message "Package already imported"))
+          (goto-char (treesit-node-end import-declaration))
+          (move-beginning-of-line nil)
+          (insert
+           (if alias (concat alias " ") "")
+           "\"" package "\"")
+          (indent-according-to-mode)
+          (newline-and-indent)
+          (when (called-interactively-p)
+            (message "Added"))))))
+
+  (defun evgeni-go-ts-dump ()
+    (interactive)
+    (let ((word (evgeni-word-at-point-or-region)))
+      (save-excursion (end-of-line)
+                      (newline-and-indent)
+                      (insert (concat "fmt.Printf(\"" word ": %+v\\n\", " word ")"))
+                      (evgeni-go-ts-import-add "fmt"))))
+
+  (defun evgeni-go-ts-dump-alt ()
+    (interactive)
+    (let ((word (evgeni-word-at-point-or-region)))
+      (save-excursion (end-of-line)
+                      (newline-and-indent)
+                      (insert (concat "fmt.Printf(\"" word ": %v\\n\", litter.Options{HidePrivateFields: false}.Sdump(" word "))"))
+                      (evgeni-go-ts-import-add "github.com/sanity-io/litter")
+                      (evgeni-go-ts-import-add "fmt"))))
+
+  (defun evgeni-go-ts-dump-json ()
+    (interactive)
+    (let ((word (evgeni-word-at-point-or-region)))
+      (save-excursion (end-of-line)
+                      (newline-and-indent)
+                      (insert (concat "dddd, _ := json.MarshalIndent(" word ", \"\", \"  \")"))
+                      (newline-and-indent)
+                      (insert (concat "fmt.Printf(\"" word ": %+v\\n\", string(dddd))"))
+                      (evgeni-go-ts-import-add "encoding/json")
+                      (evgeni-go-ts-import-add "fmt"))))
+
+  (define-key go-ts-mode-map (kbd "C-c i" )'evgeni-go-ts-mode--goto-imports)
+
+  (with-eval-after-load 'evil
+    (evil-define-key 'normal go-ts-mode-map (kbd "] d") 'evgeni-go-ts-dump)
+    (evil-define-key 'normal go-ts-mode-map (kbd "] D") 'evgeni-go-ts-dump-alt)))
+
+(use-package olivetti
+  :straight t
+  :config
+  (defun evgeni-scratch-olivetti ()
+    (with-current-buffer "*scratch*"
+      (olivetti-mode 1)
+      (goto-char 0)))
+  (add-hook 'emacs-startup-hook 'evgeni-scratch-olivetti))
+
+(use-package breadcrumb
+  :disabled t
+  :load-path "~/dev/breadcrumb"
+  :config
+  (breadcrumb-mode))

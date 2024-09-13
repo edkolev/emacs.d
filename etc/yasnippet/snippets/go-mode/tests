@@ -13,7 +13,9 @@ tests := []struct {
 
 for _, tt := range tests {
 	t.Run(tt.name, func(t *testing.T) {
-		// ...
+		// got, err := funcUnderTest(tt.input)
+		// assert.NoError(t, err)
+		// assert.Equal(t, tt.want, got)
 	})
 }
 
