@@ -1413,159 +1413,289 @@ With prefix arg, find the previous file."
   (setq xref-after-jump-hook (delete 'xref-pulse-momentarily xref-after-jump-hook))
   (setq xref-after-return-hook (delete 'xref-pulse-momentarily xref-after-return-hook)))
 
-(use-package ivy-xref
-  :ensure t
-  :defer t
-  :init (setq xref-show-xrefs-function #'ivy-xref-show-xrefs)
-  :config)
-
-(use-package! ivy
-  :ensure t
-  :defer t
-  :bind (:map evil-normal-state-map
-              ("C-c r" . ivy-resume))
+(use-package vertico
+  :straight (:files (:defaults "extensions/*.el"))
   :init
-  :config
-  (ivy-mode 1)
-  (setq ivy-use-virtual-buffers t)
-  (setq ivy-virtual-abbreviate 'full)
-  (define-key ivy-minibuffer-map (kbd "C-w") 'backward-kill-word)
-  (define-key ivy-minibuffer-map (kbd "C-u") (lambda () (interactive) (kill-region (point) (point-at-bol))))
-  (define-key ivy-minibuffer-map [escape] 'minibuffer-keyboard-quit)
-  (define-key ivy-minibuffer-map (kbd "C-c o") 'ivy-occur)
+  (vertico-mode)
 
-  (evil-define-key 'normal ivy-occur-mode-map (kbd "RET") 'ivy-occur-press) ;; default is 'ivy-occur-press-and-switch
+  (use-package vertico-repeat
+    :init
+    (add-hook 'minibuffer-setup-hook #'vertico-repeat-save)
+    :bind (:map evil-normal-state-map
+                ("C-c r" . vertico-repeat)
+                ("C-c R" . vertico-repeat-select)))
 
-  (modify-syntax-entry ?$ "." ivy-occur-grep-mode-syntax-table)
+  ;; Different scroll margin
+  ;; (setq vertico-scroll-margin 0)
 
-  ;; unbind keys which conflict with evil
-  (unbind-key "C-d" ivy-occur-grep-mode-map)
-  (unbind-key "f" ivy-occur-grep-mode-map)
-  (define-key ivy-occur-grep-mode-map (kbd "C-c C-d") 'ivy-occur-delete-candidate)
-  (define-key ivy-occur-grep-mode-map (kbd "C-c d") 'ivy-occur-delete-candidate)
+  ;; Show more candidates
+  ;; (setq vertico-count 20)
 
-  ;; C-r C-w to read word at point
-  (unbind-key "C-r" ivy-minibuffer-map)
-  (define-key ivy-minibuffer-map (kbd "C-r C-w") 'ivy-next-history-element)
+  ;; Grow and shrink the Vertico minibuffer
+  ;; (setq vertico-resize t)
 
-  ;; use different colors in ivy-switch-buffer
-  (setq ivy-switch-buffer-faces-alist
-        '((emacs-lisp-mode . ivy-minibuffer-match-face-1)
-          (dired-mode . ivy-subdir)
-          (org-mode . org-level-4)))
+  ;; Optionally enable cycling for `vertico-next' and `vertico-previous'.
+  ;; (setq vertico-cycle t)
 
-  ;; push/pop view
-  (evil-global-set-key 'normal (kbd "C-c v") 'ivy-push-view)
-  (evil-global-set-key 'normal (kbd "C-c V") 'ivy-pop-view))
+  ;; Optionally use the `orderless' completion style.
+  (use-package orderless
+    :straight t
+    :init
+    ;; Configure a custom style dispatcher (see the Consult wiki)
+    ;; (setq orderless-style-dispatchers '(+orderless-dispatch)
+    ;;       orderless-component-separator #'orderless-escapable-split-on-space)
+    (setq completion-styles '(orderless basic)
+          completion-category-defaults nil
+          completion-category-overrides '((file (styles partial-completion)))))
 
-(use-package! swiper
-  :ensure t
-  :bind (:map evil-motion-state-map
-              ("/" . swiper)
-              :map evil-normal-state-map
-              (", /" . swiper-all))
-  :config
-  (setq swiper-goto-start-of-match t)
-  (evil-set-command-properties 'swiper :jump t)
-  (define-key swiper-map (kbd "C-r") 'evil-paste-from-register))
+  ;; Enable rich annotations using the Marginalia package
+  (use-package marginalia
+    :straight t
+    :init
+    (marginalia-mode))
 
-(use-package! counsel
-  :ensure t
-  :init
-  (ex! "faces" 'counsel-faces)
-  (ex! "find-lib" 'counsel-find-library)
-  (ex! "set[-variable]" 'counsel-set-variable)
+  (use-package consult
+    :straight t
+    :bind (
+           :map evil-motion-state-map
+           ("K" . evgeni-consult-ripgrep-current-word)
+           (", f" . consult-imenu)
+           (", *" . evgeni-consult-line)
+           :map evil-normal-state-map
+           ;; ("SPC" . consult-project-buffer)
+           (", f" . consult-imenu)
+           ("/" . consult-line)
+           ("g SPC" . consult-buffer)
+           ("g /" . evgeni-consult-ripgrep)
+           ("g P" . consult-yank-pop)
+           ;; ("M-g e" . consult-compile-error)
+           ;; ("M-g f" . consult-flymake)               ;; Alternative: consult-flycheck
+           ;; ("M-g g" . consult-goto-line)             ;; orig. goto-line
+           ;; ("M-g M-g" . consult-goto-line)           ;; orig. goto-line
+           ;; ("M-g o" . consult-outline)               ;; Alternative: consult-org-heading
+           ;; ("M-g m" . consult-mark)
+           ;; ("M-g k" . consult-global-mark)
+           ;; ("M-g i" . consult-imenu)
+           ;; ("M-g I" . consult-imenu-multi)
+           ;; ;; M-s bindings (search-map)
+           ;; ("M-s d" . consult-find)
+           ;; ("M-s D" . consult-locate)
+           ;; ("M-s g" . consult-grep)
+           ;; ("M-s G" . consult-git-grep)
+           ;; ("M-s r" . consult-ripgrep)
+           ;; ("M-s l" . consult-line)
+           ;; ("M-s L" . consult-line-multi)
+           ;; ("M-s k" . consult-keep-lines)
+           ;; ("M-s u" . consult-focus-lines)
+           ;; ;; Isearch integration
+           ;; ("M-s e" . consult-isearch-history)
+           ;; :map isearch-mode-map
+           ;; ("M-e" . consult-isearch-history)         ;; orig. isearch-edit-string
+           ;; ("M-s e" . consult-isearch-history)       ;; orig. isearch-edit-string
+           ;; ("M-s l" . consult-line)                  ;; needed by consult-line to detect isearch
+           ;; ("M-s L" . consult-line-multi)            ;; needed by consult-line to detect isearch
+           ;; Minibuffer history
+           ;; :map minibuffer-local-map
+           ;; ("M-s" . consult-history)
+           ;; orig. next-matching-history-element
+           ;; ("M-r" . consult-history)                 ;; orig. previous-matching-history-element
+           )
 
-  (evil-define-key '(normal visual) evgeni-intercept-mode-map
-    (kbd "K") 'evgeni-counsel-git-grep)
+    ;; Enable automatic preview at point in the *Completions* buffer. This is
+    ;; relevant when you use the default completion UI.
+    :hook (completion-list-mode . consult-preview-at-point-mode)
 
-  :bind (([remap find-file] . counsel-find-file)
-         ([remap execute-extended-command] . counsel-M-x)
-         ([remap describe-function] . counsel-describe-function)
-         ([remap describe-key] . describe-key)
-         ([remap describe-variable] . counsel-describe-variable)
-         :map evil-normal-state-map
-         ("K" . evgeni-counsel-git-grep)
-         ("/" . counsel-grep-or-swiper)
-         (", f"   . counsel-imenu)
-         ("g P" . counsel-yank-pop)
-         ("g p" . counsel-evil-registers))
-  :config
-  (evil-set-command-properties 'counsel-grep-or-swiper :jump t)
-  (setq counsel-grep-base-command "rg --smart-case %s %s") ;; use rg --smart-case to mimic swiper's `auto' case search
+    ;; The :init configuration is always executed (Not lazy)
+    :init
 
-  (setq counsel-git-cmd "git ls-files --cached --others --exclude-standard")
-  (setq counsel-rg-base-command "rg --no-ignore-messages -i -M 120 --no-heading --line-number --color never %s .")
-  (setq counsel-org-goto-face-style 'org)
+    ;; Optionally configure the register formatting. This improves the register
+    ;; preview for `consult-register', `consult-register-load',
+    ;; `consult-register-store' and the Emacs built-ins.
+    (setq register-preview-delay 0.5
+          register-preview-function #'consult-register-format)
 
-  (setq counsel-git-grep-skip-counting-lines t)
-  (setq counsel-yank-pop-after-point t)
+    ;; Optionally tweak the register preview window.
+    ;; This adds thin lines, sorting and hides the mode line of the window.
+    (advice-add #'register-preview :override #'consult-register-window)
 
-  (define-key counsel-describe-map (kbd "C-]") 'counsel-find-symbol)
-  (define-key counsel-git-grep-map (kbd "C-c C-c") 'ivy-occur)
-  (define-key ivy-occur-grep-mode-map (kbd "C-c C-c") 'wgrep-change-to-wgrep-mode)
-  (define-key counsel-ag-map (kbd "C-r") 'evil-paste-from-register)
+    ;; Use Consult to select xref locations with preview
+    (setq xref-show-xrefs-function #'consult-xref
+          xref-show-definitions-function #'consult-xref)
 
-  (define-key counsel-ag-map (kbd "C-c C-c") ;; WIP
-    (defhydra evgeni-rg-hydra ()
-      ("s" (progn (move-end-of-line nil) (insert " -- -g !\*_test.go")) "-g !*_test.go")))
+    :config
+    (defun evgeni-consult-ripgrep (&optional initial-input)
+      (interactive)
+      (if (eq major-mode 'dired-mode)
+          (consult-ripgrep default-directory initial-input)
+        (consult-ripgrep (project-root (project-current)) initial-input)))
 
-  ;; TODO maybe drop the "rg" support in here - always use git grep
-  (setq evgeni-counsel-git-grep-rigpreg-found (executable-find "rg"))
+    (defun evgeni-consult-ripgrep-current-word ()
+      (interactive)
+      (evgeni-consult-ripgrep (evgeni-word-at-point-or-region)))
 
-  (when evgeni-counsel-git-grep-rigpreg-found
-    (setq counsel-rg-base-command "rg --no-ignore-messages -S -M 500 --no-heading --hidden -g '!.git' --line-number --color never %s ."))
+    (defun evgeni-consult-line ()
+      (interactive)
+      (consult-line (evgeni-word-at-point-or-region)))
 
-  (evil-define-key 'normal evgeni-intercept-mode-map
-    (kbd "g /") (if evgeni-counsel-git-grep-rigpreg-found
-                    'evgeni-counsel-rg
-                  'counsel-git-grep))
+    ;; evil n/N integration
+    (defun evgeni-consult-line-evil-history (&rest _)
+      "Add latest `consult-line' search pattern to the evil search history ring.
+This only works with orderless and for the first component of the search."
+      (when (and (bound-and-true-p evil-mode)
+                 (eq evil-search-module 'evil-search))
+        (let ((pattern (car (orderless-pattern-compiler (car consult--line-history)))))
+          (add-to-history 'evil-ex-search-history pattern)
+          (setq evil-ex-search-pattern (list pattern t t))
+          (setq evil-ex-search-direction 'forward)
+          (when evil-ex-search-persistent-highlight
+            (evil-ex-search-activate-highlight evil-ex-search-pattern)))))
+    (advice-add #'consult-line :after #'evgeni-consult-line-evil-history)
 
-  (defun evgeni-counsel-rg ()
-    (interactive)
-    (if (eq major-mode 'dired-mode)
-        (counsel-rg nil default-directory "--no-ignore" "rg <dir>: ")
-      (counsel-rg nil (projectile-project-root))))
+    ;; (delete 'consult--source-bookmark consult-buffer-sources)
+    (consult-customize
+     consult--source-bookmark
+     :hidden t)
 
-  (require 'projectile)
-  (defun evgeni-counsel-git-grep ()
-    (interactive)
-    (let ((word (substring-no-properties
-                 (if (region-active-p)
-                     (buffer-substring (region-beginning) (region-end))
-                   (thing-at-point 'word)))))
-      (if evgeni-counsel-git-grep-rigpreg-found
-          (counsel-rg word (projectile-project-root nil))
-        (counsel-git-grep nil word))))
+    ;; configure preview
+    (consult-customize
+     consult-theme :preview-key '(:debounce 0.2 any)
+     consult-buffer :require-match t
+     consult-ripgrep consult-git-grep consult-grep
+     consult-project-buffer consult-recent-file consult-xref
+     evgeni-consult-ripgrep consult-buffer
+     :preview-key nil)
 
-  (evil-set-command-properties 'counsel-imenu :jump t)
-  (evil-set-command-properties 'counsel-find-file :jump t)
-  (evil-set-command-properties 'counsel-git-grep :jump t)
-  (evil-set-command-properties 'evgeni-counsel-git-grep :jump t)
+    ;; Optionally configure the narrowing key.
+    ;; Both < and C-+ work reasonably well.
+    (setq consult-narrow-key "<") ;; "C-+"
 
-  ;; copy of `counsel-faces' using standard faces only
-  (ex! "standard-faces" 'evgeni-standard-faces)
-  (defun evgeni-standard-faces ()
-    (interactive)
-    (let* ((face-list '(default bold italic bold-italic underline fixed-pitch fixed-pitch-serif variable-pitch shadow highlight isearch query-replace lazy-highlight region secondary-selection trailing-whitespace escape-glyph homoglyph nobreak-space nobreak-hyphen mode-line mode-line-inactive mode-line-highlight mode-line-buffer-id header-line header-line-highlight vertical-border minibuffer-prompt fringe cursor tooltip mouse scroll-bar tool-bar menu tty-menu-enabled-face tty-menu-disabled-face tty-menu-selected-face))
-           (names (mapcar #'symbol-name face-list))
-           (ivy-format-function
-            (counsel--faces-format-function
-             (format "%%-%ds %%s"
-                     (apply #'max 0 (mapcar #'string-width names))))))
-      (ivy-read "Standard face: " names
-                :require-match t
-                :history 'face-name-history
-                :preselect (counsel--face-at-point)
-                :action counsel-describe-face-function
-                :caller 'counsel-faces))))
+    ;; https://github.com/minad/consult/wiki#orderless-style-dispatchers-ensure-that-the--regexp-works-with-consult-buffer
+    (defun fix-dollar (args)
+      (if (string-suffix-p "$" (car args))
+          (list (format "%s[%c-%c]*$"
+                        (substring (car args) 0 -1)
+                        consult--tofu-char
+                        (+ consult--tofu-char consult--tofu-range -1)))
+        args))
+    (advice-add #'orderless-regexp :filter-args #'fix-dollar)
+    (advice-add #'prescient-regexp-regexp :filter-args #'fix-dollar)
 
-(use-package! imenu-anywhere
-  :ensure t
-  :bind (:map evil-normal-state-map
-              (", F"  . imenu-anywhere))
-  :config
-  (evil-set-command-properties 'imenu-anywhere :jump t))
+    ;; Optionally make narrowing help available in the minibuffer.
+    ;; You may want to use `embark-prefix-help-command' or which-key instead.
+    ;; (define-key consult-narrow-map (vconcat consult-narrow-key "?") #'consult-narrow-help)
+
+    ;; By default `consult-project-function' uses `project-root' from project.el.
+    ;; Optionally configure a different project root function.
+  ;;;; 1. project.el (the default)
+    ;; (setq consult-project-function #'consult--default-project--function)
+  ;;;; 2. vc.el (vc-root-dir)
+    ;; (setq consult-project-function (lambda (_) (vc-root-dir)))
+  ;;;; 3. locate-dominating-file
+    ;; (setq consult-project-function (lambda (_) (locate-dominating-file "." ".git")))
+  ;;;; 4. projectile.el (projectile-project-root)
+    ;; (autoload 'projectile-project-root "projectile")
+    ;; (setq consult-project-function (lambda (_) (projectile-project-root)))
+  ;;;; 5. No project support
+    ;; (setq consult-project-function nil)
+    )
+
+  (use-package embark
+    :straight t
+
+    :bind (
+           ("C-c e" . embark-act)
+           :map minibuffer-local-map
+           ("C-c o" . embark-export)
+           ("C-c e" . embark-act))
+    ;;  ("C-;" . embark-dwim)        ;; good alternative: M-.
+    ;;  ("C-h B" . embark-bindings)) ;; alternative for `describe-bindings'
+
+    :init
+
+    ;; Optionally replace the key help with a completing-read interface
+    (setq prefix-help-command #'embark-prefix-help-command)
+
+    :config
+
+    ;; Hide the mode line of the Embark live/completions buffers
+    (add-to-list 'display-buffer-alist
+                 '("\\`\\*Embark Collect \\(Live\\|Completions\\)\\*"
+                   nil
+                   (window-parameters (mode-line-format . none)))))
+
+  ;; Consult users will also want the embark-consult package.
+  (use-package embark-consult
+    :straight t ; only need to install it, embark loads it after consult if found
+    :hook
+    (embark-collect-mode . consult-preview-at-point-mode))
+
+  ;; A few more useful configurations...
+  (use-package emacs
+    :init
+    ;; Add prompt indicator to `completing-read-multiple'.
+    ;; We display [CRM<separator>], e.g., [CRM,] if the separator is a comma.
+    (defun crm-indicator (args)
+      (cons (format "[CRM%s] %s"
+                    (replace-regexp-in-string
+                     "\\`\\[.*?]\\*\\|\\[.*?]\\*\\'" ""
+                     crm-separator)
+                    (car args))
+            (cdr args)))
+    (advice-add #'completing-read-multiple :filter-args #'crm-indicator)
+
+    ;; Do not allow the cursor in the minibuffer prompt
+    (setq minibuffer-prompt-properties
+          '(read-only t cursor-intangible t face minibuffer-prompt))
+    (add-hook 'minibuffer-setup-hook #'cursor-intangible-mode)
+
+    ;; Emacs 28: Hide commands in M-x which do not work in the current mode.
+    ;; Vertico commands are hidden in normal buffers.
+    (setq read-extended-command-predicate
+          #'command-completion-default-include-p))
+
+  (use-package corfu
+    :straight t
+    :custom
+    ;; (corfu-cycle t)                ;; Enable cycling for `corfu-next/previous'
+    (corfu-auto t)                 ;; Enable auto completion
+    (corfu-auto-delay 0.3)                 ;; Enable auto completion
+    (corfu-separator ?\s)          ;; Orderless field separator
+    ;; (corfu-quit-at-boundary nil)   ;; Never quit at completion boundary
+    ;; (corfu-quit-no-match nil)      ;; Never quit, even if there is no match
+    ;; (corfu-preview-current nil)    ;; Disable current candidate preview
+    ;; (corfu-preselect 'prompt)      ;; Preselect the prompt
+    ;; (corfu-on-exact-match nil)     ;; Configure handling of exact matches
+    ;; (corfu-scroll-margin 5)        ;; Use scroll margin
+
+    ;; Recommended: Enable Corfu globally.
+    ;; This is recommended since Dabbrev can be used globally (M-/).
+    ;; See also `corfu-excluded-modes'.
+    :init
+    (global-corfu-mode)
+
+    (defun corfu-move-to-minibuffer ()
+      (interactive)
+      (let ((completion-extra-properties corfu--extra)
+            completion-cycle-threshold completion-cycling)
+        (apply #'consult-completion-in-region completion-in-region--data)))
+
+    (keymap-set corfu-map "C-c m" #'corfu-move-to-minibuffer))
+
+  (use-package corfu-terminal
+    :straight t
+    :unless (display-graphic-p)
+    :config
+    (corfu-terminal-mode +1))
+
+  ;; A few more useful configurations...
+  (use-package emacs
+    :init
+    ;; TAB cycle if there are only few candidates
+    (setq completion-cycle-threshold 3)
+
+    ;; Enable indentation+completion using the TAB key.
+    ;; `completion-at-point' is often bound to M-TAB.
+    (setq tab-always-indent 'complete)))
 
 (use-package! winner
   :defer .5
@@ -1578,108 +1708,20 @@ With prefix arg, find the previous file."
     ("C-r" winner-redo "redo" :exit t)
     ("r" winner-redo "redo" :exit t)))
 
-(use-package projectile
-  :ensure t
-  :init
-  (setq projectile-dynamic-mode-line nil)
-
-  (with-eval-after-load 'evil
-    (evil-define-key 'normal evgeni-intercept-mode-map
-      (kbd "g SPC") 'ivy-switch-buffer
-      (kbd ", SPC") 'evgeni-projectile-switch-project
-      (kbd "SPC") 'evgeni-project-files))
-  (ex! "proj[ectile]" 'projectile-switch-project)
-  (ex! "prj" 'projectile-switch-project)
+(use-package project
+  :demand
+  :bind (:map evil-normal-state-map
+              (", SPC" . project-switch-project)
+              ("SPC" . project-find-file))
   :config
-  (require 'counsel)
-
-  (defun evgeni-projectile-switch-project ()
-    (interactive)
-    (let ((projects (projectile-relevant-known-projects)))
-      (if projects
-          (ivy-read
-           "Switch to project: " projects
-           :caller 'evgeni-projectile-switch-project
-           :require-match t
-           :action (lambda (project)
-                     (projectile-switch-project-by-name project)))
-        (user-error "There are no known projects"))))
-
-  (defvar evgeni-project-files-map
-    (let ((map (make-sparse-keymap)))
-      (define-key map (kbd "C-r") 'evil-paste-from-register)
-      map))
-
-  ;; TODO use projectile-project-buffers, or something else to make recent-files also include the project buffers
-  (defun evgeni-project-files()
-    (interactive)
-    (if (projectile-project-p)
-        (let* ((prj-p (projectile-project-p))
-               (recent-files (projectile-recently-active-files))
-               (prj-files (projectile-current-project-files))
-               (rest-prj-files (projectile-difference prj-files recent-files))
-               (shadowed-rest-prj-files (mapcar (lambda (f) (propertize f 'face 'ivy-virtual)) rest-prj-files))
-               (candidates (funcall (if buffer-file-name 'cdr 'identity) (append recent-files shadowed-rest-prj-files))))
-          (ivy-read "Project files: " candidates
-                    :require-match t
-                    :preselect (counsel--face-at-point)
-                    :action (lambda (x) (find-file (projectile-expand-root x)))))
-      (ivy-read "No project " nil)))
-
-  (setq projectile-switch-project-action
-        (lambda ()
-          (dired (projectile-project-root))))
-  (setq projectile-completion-system 'ivy)
-  (setq projectile-git-submodule-command nil)
-  (projectile-global-mode)
-
-  ;; bridge projectile and project together
-  (defun evgeni-projectile-project-find-function (dir)
-    (let ((root (projectile-project-root dir)))
-      (and root (cons 'transient root))))
-
-  (require 'project)
-  (add-to-list 'project-find-functions 'evgeni-projectile-project-find-function))
-
-(use-package! company
-  :ensure t
-  :defer .5
-  :config
-
-  (setq company-minimum-prefix-length 2
-        company-tooltip-limit 20
-        company-idle-delay .3 ;; .05
-        company-echo-delay 0 ;; remove annoying blinking
-        company-begin-commands '(self-insert-command)
-        company-dabbrev-downcase nil
-        company-dabbrev-ignore-case nil
-        company-dabbrev-code-other-buffers t
-        company-tooltip-align-annotations t
-        company-backends '(company-capf company-dabbrev company-ispell)
-        company-transformers '(company-sort-by-occurrence))
-
-  (with-eval-after-load 'yasnippet
-          (nconc company-backends '(company-yasnippet)))
-
-  ;; with company's tab-and-go feature, allow snippet/template expansion with RET
-  (define-key company-active-map [return] 'company-complete-selection)
-  (define-key company-active-map (kbd "RET") 'company-complete-selection)
-
-  (unbind-key "\C-w" company-active-map)
-  (unbind-key "\C-u" company-active-map)
-  (define-key company-active-map (kbd "C-/") 'company-search-candidates)
-
-  (global-company-mode +1))
+  (setq project-vc-extra-root-markers '(".projectile" ".project"))
+  (setq project-switch-commands 'project-dired))
 
 (use-package! yasnippet
-  :ensure t
-  :defer .5
+  :straight t
   :config
   (setq yas-verbosity 2)
   (yas-global-mode)
-  ;; (evil-define-minor-mode-key 'insert yas-minor-mode (kbd "C-c y") 'yas-expand)
-  (evil-define-minor-mode-key 'insert yas-minor-mode (kbd "C-c y") 'company-yasnippet)
-  (define-key yas-keymap (kbd "RET") 'yas-next-field-or-maybe-expand)
   (ex! "yas-new" 'yas-new-snippet))
 
 (use-package evil-expat
@@ -2091,6 +2133,7 @@ With prefix arg, find the previous file."
   (add-to-list 'exec-path-from-shell-variables "GOPATH" t)
   (add-to-list 'exec-path-from-shell-variables "LC_ALL" t)
   (add-to-list 'exec-path-from-shell-variables "GOBIN" t)
+  (add-to-list 'exec-path-from-shell-variables "MONOREPO_GOPATH_MODE" t)
   (add-to-list 'exec-path-from-shell-variables "UBER_USER_UUID" t)
   (add-to-list 'exec-path-from-shell-variables "SSH_AUTH_SOCK" t)
   (exec-path-from-shell-initialize))
