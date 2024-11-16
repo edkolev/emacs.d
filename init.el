@@ -40,8 +40,10 @@
 
 ;; graphic settings
 (when (display-graphic-p)
-  ;; (set-frame-font (font-spec :family "DejaVu Sans Mono" :size 13 :weight 'regular) nil t)
-  (set-frame-font (font-spec :family "Fira Code" :size 13 :weight 'regular) nil t)
+  (let ((font-name "Droid Sans Mono"))
+    (if (member font-name (font-family-list))
+        (set-frame-font (font-spec :family font-name :size 13 :weight 'regular) nil t)
+      (user-error "Error, font %s is not available" font-name)))
   (setq-default line-spacing 3))
 
  ;; emacs mac https://github.com/railwaycat/homebrew-emacsmacport
@@ -1709,6 +1711,7 @@ This only works with orderless and for the first component of the search."
     ("r" winner-redo "redo" :exit t)))
 
 (use-package project
+  :straight (:type built-in)
   :demand
   :bind (:map evil-normal-state-map
               (", SPC" . project-switch-project)
@@ -2542,8 +2545,6 @@ This only works with orderless and for the first component of the search."
   :straight t
   :if (display-graphic-p)
   :config
-  (when (eq window-system 'ns)
-    (setq moody-slant-function #'moody-slant-apple-rgb))
 
   (setq x-underline-at-descent-line t)
   (moody-replace-mode-line-buffer-identification)
@@ -2650,10 +2651,6 @@ This only works with orderless and for the first component of the search."
                       (insert "print \"" word ": \" + pprint.pformat(" word ")"))))
   (with-eval-after-load 'evil
     (evil-define-key 'normal python-mode-map (kbd "] d") 'evgeni-python-dump)))
-
-(use-package thrift
-  :straight t
-  :defer t)
 
 (use-package jq-mode
   :straight t
