@@ -1545,7 +1545,7 @@ With prefix arg, find the previous file."
 This only works with orderless and for the first component of the search."
       (when (and (bound-and-true-p evil-mode)
                  (eq evil-search-module 'evil-search))
-        (let ((pattern (car (orderless-pattern-compiler (car consult--line-history)))))
+        (let ((pattern (nth 1 (orderless-compile (car consult--line-history)))))
           (add-to-history 'evil-ex-search-history pattern)
           (setq evil-ex-search-pattern (list pattern t t))
           (setq evil-ex-search-direction 'forward)
