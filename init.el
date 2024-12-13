@@ -426,19 +426,6 @@ If WHEN is specified, pass it like so `date -d WHEN'"
 
   (restore-frame-position))
 
-;; load mail.el if any
-(when (file-readable-p (concat user-emacs-directory "mail.el"))
-  (run-with-idle-timer 2 nil 'load-file (concat user-emacs-directory "mail.el")))
-
-;; workaround for OSX https://emacs.stackexchange.com/questions/18045/how-can-i-retrieve-an-https-url-on-mac-os-x-without-warnings-about-an-untrusted
-;; the .pem file is installed with brew install libresll
-(use-package gnutls
-  :defer t
-  :if (file-readable-p "/usr/local/etc/libressl/cert.pem")
-  :config
-  (add-to-list
-   'gnutls-trustfiles "/usr/local/etc/libressl/cert.pem"))
-
 ;; use M-u instaed of C-u for universal argument
 (define-key global-map (kbd "C-u") 'kill-whole-line)
 (define-key global-map (kbd "M-u") 'universal-argument)
