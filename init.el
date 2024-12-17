@@ -167,13 +167,6 @@ Return nil if not in a project"
   `(with-eval-after-load 'evil
      (use-package ,name ,@plist)))
 
-;; imenu should recognize `use-package!`
-(with-eval-after-load 'lisp-mode
-  (add-to-list 'lisp-imenu-generic-expression
-               (list "Packages" (concat (concat "^\\s-*(" (regexp-opt '("use-package!") t) "\\s-+\\(")
-                                        (or (bound-and-true-p lisp-mode-symbol-regexp)
-                                            "\\(?:\\sw\\|\\s_\\|\\\\.\\)+") "\\)") 2)))
-
 ;; use-package
 (setq use-package-enable-imenu-support t)
 (unless (package-installed-p 'use-package)
