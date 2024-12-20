@@ -162,11 +162,6 @@ Return nil if not in a project"
   `(with-eval-after-load 'evil
      (evil-ex-define-cmd ,cmd ,func)))
 
-(defmacro use-package! (name &rest plist)
-  (declare (indent 1))
-  `(with-eval-after-load 'evil
-     (use-package ,name ,@plist)))
-
 ;; use-package
 (setq use-package-enable-imenu-support t)
 (unless (package-installed-p 'use-package)
@@ -231,16 +226,7 @@ Return nil if not in a project"
                                         ,code)))))
 
 (setq custom-safe-themes t)
-(use-package habamax-theme :straight t :defer t
-  :config
-  (let ((color-bg-highlight "#ececef")
-        (color-dim-bg "#f5f9fe"))
-    (custom-theme-set-faces
-     'habamax
-     `(dired-directory ((t (:inherit default :background ,color-dim-bg))))
-     `(company-tooltip-selection ((t (:inherit ivy-current-match))))
-     `(company-tooltip ((t (:background "#f5f5f5"))))
-     `(company-scrollbar-bg ((t (:background ,color-bg-highlight)))))))
+(use-package habamax-theme :straight t :defer t)
 (use-package one-themes :straight t :defer t)        ;; ok
 (use-package greymatters-theme :straight t :defer t
   :config
@@ -1040,8 +1026,9 @@ With prefix arg, find the previous file."
 
   (message "Loading evil-mode...done (%.3fs)" (float-time (time-subtract (current-time) emacs-start-time))))
 
-(use-package! dired
+(use-package dired
   :demand
+  :after evil
   :bind (
          :map dired-mode-map
          (" " . evgeni-find-file-recursively)
@@ -1083,7 +1070,7 @@ With prefix arg, find the previous file."
        "." "." nil
        (lambda (dir) (not (string-equal (file-name-nondirectory dir) ".git"))))))))
 
-(use-package! dired-subtree
+(use-package dired-subtree
   :straight t
   :commands dired-subtree-toggle
   :init
@@ -1104,8 +1091,9 @@ With prefix arg, find the previous file."
     :config
     (setq auto-revert-verbose nil))
 
-(use-package! magit
+(use-package magit
   :straight t
+  :after evil
   :bind (:map evil-normal-state-map
               ("U U" . magit-status)
               (", u" . magit-file-dispatch)
@@ -1167,8 +1155,9 @@ With prefix arg, find the previous file."
   :disabled t
   :after magit)
 
-(use-package! smerge-mode
+(use-package smerge-mode
   :defer t
+  :after evil
   :config
   (evil-define-minor-mode-key 'normal 'smerge-mode
     (kbd "] n")     'smerge-next
@@ -1179,9 +1168,10 @@ With prefix arg, find the previous file."
     (kbd "C-c C-b") 'smerge-keep-all
     (kbd "C-c C-a") 'smerge-keep-all))
 
-(use-package! vdiff
+(use-package vdiff
   :straight t
   :defer t
+  :after evil
   :init
   (ex! "vdiff" 'evgeni-vdiff-visible-buffers)
   (defun evgeni-vdiff-visible-buffers ()
@@ -1250,7 +1240,7 @@ With prefix arg, find the previous file."
   (evil-define-minor-mode-key 'normal 'vdiff-mode "q" 'vdiff-quit)
   (evil-define-minor-mode-key 'normal 'vdiff-3way-mode "q" 'vdiff-quit))
 
-(use-package! vdiff-magit
+(use-package vdiff-magit
   :straight t
   :after magit
   :init
@@ -1262,8 +1252,9 @@ With prefix arg, find the previous file."
   (define-key magit-mode-map "e" 'vdiff-magit-dwim)
   (define-key magit-mode-map "E" 'vdiff-magit))
 
-(use-package! org
+(use-package org
   :commands evgeni-journal
+  :after evil
   :init
   (ex! "journal" 'evgeni-journal)
   :config
@@ -1365,7 +1356,8 @@ With prefix arg, find the previous file."
 
   (add-hook 'org-mode-hook (lambda () (org-bullets-mode 1))))
 
-(use-package! xref
+(use-package xref
+  :after evil
   :bind (:map evil-normal-state-map
               ("C-]" . xref-find-definitions)
               ("C-t" . xref-go-back)
@@ -1672,9 +1664,10 @@ This only works with orderless and for the first component of the search."
     ;; `completion-at-point' is often bound to M-TAB.
     (setq tab-always-indent 'complete)))
 
-(use-package! winner
+(use-package winner
   :defer .5
   :bind (:map evil-normal-state-map ("z u" . hydra-winner/winner-undo))
+  :after evil
   :config
   (winner-mode)
   (defhydra hydra-winner ()
@@ -1693,7 +1686,7 @@ This only works with orderless and for the first component of the search."
   (setq project-vc-extra-root-markers '(".projectile" ".project"))
   (setq project-switch-commands 'project-dired))
 
-(use-package! yasnippet
+(use-package yasnippet
   :straight t
   :config
   (setq yas-verbosity 2)
@@ -1742,8 +1735,9 @@ This only works with orderless and for the first component of the search."
    savehist-autosave-interval 60)
   (savehist-mode t))
 
-(use-package! dired-single
+(use-package dired-single
   :straight t
+  :after evil
   :commands dired-single-buffer
   :init
   (evil-define-key 'normal dired-mode-map (kbd "RET") 'dired-single-buffer))
@@ -1754,7 +1748,7 @@ This only works with orderless and for the first component of the search."
   (evil-set-initial-state 'wdired-mode 'normal)
   (ex! "wdired" 'wdired-change-to-wdired-mode))
 
-(use-package! flymake
+(use-package flymake
   :defer t
   :config
   (setq flymake-start-syntax-check-on-newline nil)
@@ -1835,7 +1829,8 @@ This only works with orderless and for the first component of the search."
   (modify-syntax-entry ?. "w" emacs-lisp-mode-syntax-table)
   (modify-syntax-entry ?! "w" emacs-lisp-mode-syntax-table))
 
-(use-package! whitespace
+(use-package whitespace
+  :after evil
   :config
   (ex! "clean-whitespace" 'whitespace-cleanup)
   :init
@@ -2087,10 +2082,6 @@ This only works with orderless and for the first component of the search."
   :straight t
   :mode ("\\.restclient\\'" . restclient-mode))
 
-(use-package company-restclient
-  :straight t
-  :after (company restclient))
-
 (use-package conf-mode
   :defer t
   :config
@@ -2144,7 +2135,8 @@ This only works with orderless and for the first component of the search."
   :config
   (add-hook 'diff-mode-hook 'diff-auto-refine-mode))
 
-(use-package! diff-hl
+(use-package diff-hl
+  :after evil
   :straight t
   :defer 1.5
   :custom
@@ -2213,7 +2205,8 @@ This only works with orderless and for the first component of the search."
                                   (format "L%s-%s" start end)
                                 (format "L%s" start))))))))
 
-(use-package! shell-pop
+(use-package shell-pop
+  :after evil
   :straight t
   :commands shell-pop
   :unless (getenv "TMUX") ;; don't run in tmux
@@ -2268,7 +2261,8 @@ This only works with orderless and for the first component of the search."
         (when number-from-branch
           (insert number-from-branch))))))
 
-(use-package! hydra
+(use-package hydra
+  :after evil
   :straight t
   :defer t
   :functions defhydra
@@ -2332,15 +2326,15 @@ This only works with orderless and for the first component of the search."
   :straight t
   :after ox)
 
-(use-package! comint
+(use-package comint
+  :after evil
   :defer t
   :config
   (evil-define-key 'insert comint-mode-map
-    (kbd "TAB") #'company-complete-common-or-cycle
     (kbd "C-p") #'comint-previous-matching-input-from-input
     (kbd "C-n") #'comint-next-matching-input-from-input))
 
-(use-package! eshell
+(use-package eshell
   :after shell-pop
   :init
   (add-hook 'eshell-mode-hook 'evgeni-eshell-setup-keys)
@@ -2420,8 +2414,9 @@ This only works with orderless and for the first component of the search."
         (eshell/cd (cdr prj))
       (user-error "Not in a project"))))
 
-(use-package! evil-numbers
+(use-package evil-numbers
   :straight t
+  :after evil
   :bind (:map evil-normal-state-map
               ("C-a" . evil-numbers/inc-at-pt)
               ("g C-a" . evil-numbers/dec-at-pt)))
@@ -2673,7 +2668,8 @@ This only works with orderless and for the first component of the search."
   :config
   (modify-syntax-entry ?- "w" makefile-mode-syntax-table))
 
-(use-package! hideshow
+(use-package hideshow
+  :after evil
   :defer t
   :config
 
@@ -2742,8 +2738,9 @@ This only works with orderless and for the first component of the search."
   :straight t
   :defer)
 
-(use-package! emamux
+(use-package emamux
   :straight t
+  :after evil
   :if (getenv "TMUX") ;; run only in tmux
   :init
 
