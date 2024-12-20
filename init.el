@@ -1735,13 +1735,6 @@ This only works with orderless and for the first component of the search."
    savehist-autosave-interval 60)
   (savehist-mode t))
 
-(use-package dired-single
-  :straight t
-  :after evil
-  :commands dired-single-buffer
-  :init
-  (evil-define-key 'normal dired-mode-map (kbd "RET") 'dired-single-buffer))
-
 (use-package wdired
   :commands wdired-change-to-wdired-mode
   :init
