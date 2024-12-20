@@ -42,7 +42,7 @@
 (when (display-graphic-p)
   (let ((font-name "Droid Sans Mono"))
     (if (member font-name (font-family-list))
-        (set-frame-font (font-spec :family font-name :size 13 :weight 'regular) nil t)
+        (set-frame-font (font-spec :family font-name :size 14 :weight 'regular) nil t)
       (user-error "Error, font %s is not available" font-name)))
   (setq-default line-spacing 3))
 
@@ -170,11 +170,9 @@ Return nil if not in a project"
 ;; use-package
 (setq use-package-enable-imenu-support t)
 (unless (package-installed-p 'use-package)
-  ;; (package-initialize)
-  (package-refresh-contents)
+  (unless package-archive-contents
+    (package-refresh-contents))
   (package-install 'use-package))
-(eval-when-compile
-  (require 'use-package))
 
 (if debug-on-error
     (setq use-package-verbose t
@@ -182,6 +180,11 @@ Return nil if not in a project"
           use-package-compute-statistics t)
   (setq use-package-verbose nil
         use-package-expand-minimally t))
+
+(use-package straight
+  :config
+  (defalias 'try 'straight-use-package)
+  (ex! "upgrade-packages" 'straight-pull-all))
 
 (use-package no-littering
   :straight t
@@ -199,33 +202,14 @@ Return nil if not in a project"
   (add-hook 'after-init-hook 'dashboard-refresh-buffer)
   (add-hook 'dashboard-mode-hook 'evgeni-dashboard-banner)
   :config
-  (setq dashboard-items '((projects . 5) (recents  . 5)))
+  (setq dashboard-items '((projects . 5)
+                          (recents . 5)
+                          (bookmarks . 5)))
   (setq dashboard-startup-banner 'logo)
   (setq dashboard-footer-messages '(""))
   (setq dashboard-projects-backend 'project-el)
   (setq dashboard-set-init-info nil)
   (dashboard-setup-startup-hook))
-
-;; upgrade installed packages
-(defun evgeni-upgrade-packages ()
-  (interactive)
-  (save-window-excursion
-    (package-refresh-contents)
-    (package-list-packages t)
-    (package-menu-mark-upgrades)
-    (package-menu-execute t)))
-
-(defun evgeni-refresh-packages ()
-  (interactive)
-  (package-refresh-contents))
-
-(defun evgeni-native-compile-packages ()
-  (interactive)
-  (native-compile-async package-user-dir t))
-
-(ex! "upgrade-packages" 'evgeni-upgrade-packages)
-(ex! "refresh-packages" 'evgeni-refresh-packages)
-(ex! "compile-packages-async" 'evgeni-native-compile-packages)
 
 ;;; themes
 
@@ -298,6 +282,8 @@ Return nil if not in a project"
 (use-package dracula-theme :straight t :defer t)
 
 (use-package emacs
+  :custom
+  (fill-column 95)
   :config
   ;; load theme
   (load-theme (if (display-graphic-p)
@@ -310,6 +296,8 @@ Return nil if not in a project"
     (define-key global-map (kbd "M-s-˙") 'ns-do-hide-others))
 
   (setq long-line-threshold nil)
+
+  (setq read-process-output-max (* 64 1024)) ;; 64k, instead of 4K (the default)
 
   (defun evgeni-make-frame ()
     (interactive)
@@ -382,6 +370,9 @@ If WHEN is specified, pass it like so `date -d WHEN'"
 ;; restore frame position - https://github.com/aaronjensen/restore-frame-position
 (when (display-graphic-p)
   (setq restore-frame-position-file (expand-file-name "frame-position.el" no-littering-var-directory))
+
+  ;; smooth scrolling, i.e. scroll by pixels, instead of lines
+  (pixel-scroll-precision-mode)
 
   (defun restore-frame-position--number-or-zero (maybe-number)
     "Return 0 if MAYBE-NUMBER is a non-number."
@@ -1108,11 +1099,16 @@ With prefix arg, find the previous file."
    '(dired-subtree-depth-5-face ((t (:background unspecified))))
    '(dired-subtree-depth-6-face ((t (:background unspecified))))))
 
+(use-package autorevert
+    :hook (after-init . global-auto-revert-mode)
+    :config
+    (setq auto-revert-verbose nil))
+
 (use-package! magit
   :straight t
   :bind (:map evil-normal-state-map
               ("U U" . magit-status)
-              (", u" . magit-file-edispatch)
+              (", u" . magit-file-dispatch)
               (", U" . magit-dispatch)
               ("U u" . magit-file-dispatch)
               ("U w" . magit-stage-buffer-file)
@@ -1142,10 +1138,6 @@ With prefix arg, find the previous file."
     :config
     (setq transient-save-history nil
           transient-show-popup 1))
-
-  (use-package autorevert
-    :config
-    (setq auto-revert-verbose nil))
 
   (defun evgeni-magit-file-checkout ()
     (interactive)
@@ -1301,13 +1293,9 @@ With prefix arg, find the previous file."
     (let ((current-prefix-arg (if bang nil '(4)) ))
       (call-interactively 'org-babel-tangle)))
 
-  (evil-define-key '(insert) org-mode-map
-    (kbd "TAB") 'indent-for-tab-command)
-
   (evil-define-key 'normal org-mode-map
     "o" (kbd "A RET")
-    (kbd "TAB") 'org-cycle
-    (kbd "gx") 'org-open-at-point
+    (kbd "C-]") 'org-open-at-point
     (kbd "] m") 'org-next-visible-heading
     (kbd "[ m") 'org-previous-visible-heading)
 
@@ -1351,8 +1339,6 @@ With prefix arg, find the previous file."
   (defun evgeni-babellib ()
     (interactive)
     (org-babel-lob-ingest "~/org/snippets.org"))
-
-  (use-package org-tempo)
 
   (use-package org-autolist
     :straight t
@@ -1494,6 +1480,7 @@ With prefix arg, find the previous file."
     ;; preview for `consult-register', `consult-register-load',
     ;; `consult-register-store' and the Emacs built-ins.
     (setq register-preview-delay 0.5
+          consult-line-start-from-top t
           register-preview-function #'consult-register-format)
 
     ;; Optionally tweak the register preview window.
@@ -1579,7 +1566,9 @@ This only works with orderless and for the first component of the search."
     ;; (setq consult-project-function (lambda (_) (projectile-project-root)))
   ;;;; 5. No project support
     ;; (setq consult-project-function nil)
-    )
+
+    (evil-define-key '(normal) org-mode-map
+      (kbd ", f") 'consult-org-heading))
 
   (use-package embark
     :straight t
@@ -1655,13 +1644,17 @@ This only works with orderless and for the first component of the search."
     :init
     (global-corfu-mode)
 
+    ;; Transfer completion to the minibuffer
+    ;; https://github.com/minad/corfu?tab=readme-ov-file#transfer-completion-to-the-minibuffer
     (defun corfu-move-to-minibuffer ()
       (interactive)
-      (let ((completion-extra-properties corfu--extra)
-            completion-cycle-threshold completion-cycling)
-        (apply #'consult-completion-in-region completion-in-region--data)))
-
-    (keymap-set corfu-map "C-c m" #'corfu-move-to-minibuffer))
+      (pcase completion-in-region--data
+        (`(,beg ,end ,table ,pred ,extras)
+         (let ((completion-extra-properties extras)
+               completion-cycle-threshold completion-cycling)
+           (consult-completion-in-region beg end table pred)))))
+    (keymap-set corfu-map "C-c m" #'corfu-move-to-minibuffer)
+    (add-to-list 'corfu-continue-commands #'corfu-move-to-minibuffer))
 
   (use-package corfu-terminal
     :straight t
@@ -2140,10 +2133,6 @@ This only works with orderless and for the first component of the search."
     '(("done" "done" indent-according-to-mode :system t)
       ("fi"  "fi"    indent-according-to-mode :system t))))
 
-(use-package try
-  :straight t
-  :commands try)
-
 (use-package hl-todo
   :straight t
   :defer 1.5
@@ -2311,7 +2300,8 @@ This only works with orderless and for the first component of the search."
     "toggles"
     ("c" global-hl-line-mode "global-hl-line-mode")
     ("y" global-hl-line-mode "global-hl-line-mode")
-    ("w" visual-line-mode "visual-line-mode")
+    ("w" visual-line-mode "visual-line-mode") ;; visually wrap lines
+    ("h" auto-fill-mode "auto-fill-mode") ;; hard wrap lines
     ("k" toggle-input-method "toggle-input-method")
     ("n" display-line-numbers-mode "display-line-numbers-mode")
     ("s" (progn
@@ -2321,16 +2311,16 @@ This only works with orderless and for the first component of the search."
     ("r" (progn
            (display-line-numbers-mode +1)
            (setq display-line-numbers-type (if (eq display-line-numbers-type 'relative) t 'relative))
-           (display-line-numbers-mode +1)) "relative line numbers")
-    ("h" auto-fill-mode "auto-fill-mode")))
+           (display-line-numbers-mode +1)) "relative line numbers")))
 
-(use-package! goto-chg
+(use-package goto-chg
+  :after evil
   :bind (:map evil-normal-state-map ("g ;" . hydra-goto-last-change/goto-last-change))
   :config
   (defhydra hydra-goto-last-change ()
     "Change List"
-    (";" goto-last-change "undo")
-    ("." goto-last-change-reverse "redo")))
+    (";" goto-last-change "Back")
+    ("." goto-last-change-reverse "Forward")))
 
 (use-package which-key
   :commands which-key-mode
@@ -2340,7 +2330,7 @@ This only works with orderless and for the first component of the search."
 
 (use-package ox-hugo
   :straight t
-  :defer t)
+  :after ox)
 
 (use-package! comint
   :defer t
@@ -2443,7 +2433,6 @@ This only works with orderless and for the first component of the search."
          ("\\.pm$"   . perl-mode)
          ("\\.psgi$" . perl-mode)
          ("\\.t$"    . perl-mode)
-         ("\\.html$" . perl-mode)
 
  ;; `cperl-continued-statement-offset'
  ;;    Extra indentation given to a substatement, such as the
@@ -2617,6 +2606,12 @@ This only works with orderless and for the first component of the search."
                            (gofumpt . t)
                            (usePlaceholders . t))))))
 
+
+(use-package dape
+  :ensure t
+  :defer t
+  :straight t)
+
 (use-package python
   :defer t
   :config
@@ -2692,15 +2687,10 @@ This only works with orderless and for the first component of the search."
       (when (ignore-errors (re-search-forward regex))
         (hs-hide-block))))))
 
-(use-package! disable-mouse
+(use-package inhibit-mouse
   :straight t
   :config
-  (global-disable-mouse-mode)
-  (mapc #'disable-mouse-in-keymap
-        (list evil-motion-state-map
-              evil-normal-state-map
-              evil-visual-state-map
-              evil-insert-state-map)))
+  (inhibit-mouse-mode))
 
 (use-package protobuf-mode
   :straight t
@@ -2804,7 +2794,6 @@ This only works with orderless and for the first component of the search."
       (add-to-list 'org-src-lang-modes '("bash" . bash-ts)))))
 
 (use-package go-ts-mode
-  :load-path "~/dev/emacs/lisp/progmodes/"
   :if (version<= "29" emacs-version)
   :mode "\\.go\\'"
   :config
@@ -2892,3 +2881,37 @@ Optionally add it with ALIAS."
   :load-path "~/dev/breadcrumb"
   :config
   (breadcrumb-mode))
+
+(use-package kkp
+  :straight t
+  :unless (display-graphic-p)
+  :config
+  (global-kkp-mode))
+
+(use-package gptel
+  :straight t
+  :defer t)
+
+(use-package pulsar
+  :straight t
+  :defer .5
+  :if (display-graphic-p)
+  :init
+  (setq pulsar-pulse-on-window-change t
+        pulsar-pulse-functions '(evil-window-top
+                                 evil-window-middle
+                                 evil-window-bottom
+                                 evil-window-left
+                                 evil-window-right
+                                 evil-window-up
+                                 evil-window-down
+                                 evil-forward-paragraph
+                                 evil-backward-paragraph
+                                 org-backward-paragraph
+                                 org-forward-paragraph
+                                 org-previous-visible-heading
+                                 org-next-visible-heading
+                                 beginning-of-defun
+                                 end-of-defun))
+  :config
+  (pulsar-global-mode))
