@@ -1043,7 +1043,8 @@ With prefix arg, find the previous file."
   (evil-define-key 'normal dired-mode-map
     "-" 'dired-up-directory
     "U" 'evgeni-dired-unmark-all-marks
-    " " 'evgeni-find-file-recursively)
+    " " 'evgeni-find-file-recursively
+    (kbd "g RET") 'dired-find-file-other-window)
 
   (add-hook 'dired-mode-hook 'dired-hide-details-mode)
 
@@ -1141,6 +1142,9 @@ With prefix arg, find the previous file."
 
   ;; `gx' should work in magit revision mode map
   (evil-define-key 'normal magit-revision-mode-map (kbd "gx") 'browse-url-at-point)
+
+  (evil-define-key 'normal magit-status-mode-map
+    (kbd "g RET") 'magit-diff-visit-file-other-window)
 
   ;; no ediff mappings
   (define-key magit-status-mode-map "e" nil)
