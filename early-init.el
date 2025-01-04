@@ -5,10 +5,12 @@
 
 (setq package-enable-at-startup nil)
 
-(when (fboundp 'startup-redirect-eln-cache)
+(when (and (fboundp 'startup-redirect-eln-cache)
+           (fboundp 'native-comp-available-p)
+           (native-comp-available-p))
   (startup-redirect-eln-cache
    (convert-standard-filename
-	  (expand-file-name  "var/eln-cache/" user-emacs-directory))))
+    (expand-file-name  "var/eln-cache/" user-emacs-directory))))
 
 (when (display-graphic-p)
   ;; Prevent the glimpse of un-styled Emacs by disabling these UI elements early.
