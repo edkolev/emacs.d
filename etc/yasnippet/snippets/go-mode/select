@@ -1,5 +1,4 @@
 # -*- mode: snippet -*-
-# name: select
 # key: select
 # expand-env: ((yas-indent-line 'fixed))
 # --

@@ -1,7 +1,6 @@
 # -*- mode: snippet -*-
-# name: test
-# id: test
+# key: test
 # --
-func Test${1:Name}(t *testing.T) {
+`(unless (search-backward "testing" 0 t) "import \"testing\"\n\n")`func Test${1:Name}(t *testing.T) {
 	$0
 }

@@ -1,5 +1,5 @@
 # -*- mode: snippet -*-
-# name: newe
 # key: newe
 # --
-errors.Errorf("$0")
+
+errors.New("$0")

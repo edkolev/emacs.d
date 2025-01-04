@@ -1,7 +1,7 @@
 # -*- mode: snippet -*-
-# name: for
-# _: for
+# key: for
 # --
+
 for ${3:_}, ${2:value} := range ${1:target} {
 	$0
 }
