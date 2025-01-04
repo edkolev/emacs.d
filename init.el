@@ -179,11 +179,21 @@ Return nil if not in a project"
 (use-package straight
   :config
   (defalias 'try 'straight-use-package)
-  (ex! "upgrade-packages" 'straight-pull-all))
+  (ex! "upgrade-packages" 'straight-pull-all)
+
+  (with-eval-after-load 'recentf
+    (add-to-list 'recentf-exclude
+                 (recentf-expand-file-name "straight"))))
 
 (use-package no-littering
   :straight t
-  :demand t)
+  :demand t
+  :config
+  (with-eval-after-load 'recentf
+    (add-to-list 'recentf-exclude
+                 (recentf-expand-file-name no-littering-var-directory))
+    (add-to-list 'recentf-exclude
+                 (recentf-expand-file-name no-littering-etc-directory))))
 
 (use-package dashboard
   :straight t
@@ -204,6 +214,7 @@ Return nil if not in a project"
   (setq dashboard-footer-messages '(""))
   (setq dashboard-projects-backend 'project-el)
   (setq dashboard-set-init-info nil)
+  (setq dashboard-projects-switch-function 'dired)
   (dashboard-setup-startup-hook))
 
 ;;; themes
@@ -263,9 +274,6 @@ Return nil if not in a project"
   (custom-theme-set-faces
    'oldlace
    `(region ((t (:foreground "#525252" :background "#d0c9bd"))))))
-
-;; dark themes
-(use-package dracula-theme :straight t :defer t)
 
 (use-package emacs
   :custom
@@ -588,6 +596,7 @@ With prefix arg, find the previous file."
       (evil-ex-search-unbounded-word-forward count symbol)))
 
   (define-key evil-motion-state-map "," nil) ;; , is used as a prefix
+  (define-key evil-motion-state-map "\\" nil) ;; disable switching to emacs state for next command
   (define-key evil-motion-state-map "*" 'evgeni-star)
   (define-key evil-motion-state-map "g*" 'evgeni-g-star)
 
@@ -1280,7 +1289,8 @@ With prefix arg, find the previous file."
         org-startup-folded "showall"
         org-confirm-babel-evaluate nil
         org-src-preserve-indentation t
-        org-src-window-setup 'current-window)
+        org-src-window-setup 'current-window
+        org-startup-with-inline-images t)
 
   (evil-ex-define-cmd "tangle" 'evgeni-org-tangle)
   (evil-define-command evgeni-org-tangle (bang)
@@ -1637,9 +1647,12 @@ This only works with orderless and for the first component of the search."
     ;; Recommended: Enable Corfu globally.
     ;; This is recommended since Dabbrev can be used globally (M-/).
     ;; See also `corfu-excluded-modes'.
+    :bind
+    (:map corfu-map
+          ("TAB" . nil) ;; use TAB only for snippet expansion
+          ([tab] . nil))
     :init
     (global-corfu-mode)
-
     ;; Transfer completion to the minibuffer
     ;; https://github.com/minad/corfu?tab=readme-ov-file#transfer-completion-to-the-minibuffer
     (defun corfu-move-to-minibuffer ()
@@ -1869,6 +1882,8 @@ This only works with orderless and for the first component of the search."
 (use-package markdown-mode
   :straight t
   :commands (markdown-mode gfm-mode)
+  :custom
+  (markdown-fontify-code-blocks-natively t)
   :mode (("README\\.md\\'" . gfm-mode)
          ("\\.md\\'" . markdown-mode)
          ("\\.markdown\\'" . markdown-mode))
@@ -2306,9 +2321,9 @@ This only works with orderless and for the first component of the search."
 
 (use-package goto-chg
   :after evil
-  :bind (:map evil-normal-state-map ("g ;" . hydra-goto-last-change/goto-last-change))
+  :bind (:map evil-normal-state-map ("g ;" . evgeni-hydra-goto-last-change/goto-last-change))
   :config
-  (defhydra hydra-goto-last-change ()
+  (defhydra evgeni-hydra-goto-last-change ()
     "Change List"
     (";" goto-last-change "Back")
     ("." goto-last-change-reverse "Forward")))
@@ -2884,7 +2899,9 @@ Optionally add it with ALIAS."
 
 (use-package gptel
   :straight t
-  :defer t)
+  :defer t
+  :config
+  (define-key gptel-mode-map (kbd "C-c C-c") #'gptel-send))
 
 (use-package pulsar
   :straight t
@@ -2901,11 +2918,18 @@ Optionally add it with ALIAS."
                                  evil-window-down
                                  evil-forward-paragraph
                                  evil-backward-paragraph
+                                 evil-goto-last-change
+                                 evil-goto-first-line
+                                 evil-goto-line
+                                 evil-goto-last-change
                                  org-backward-paragraph
                                  org-forward-paragraph
                                  org-previous-visible-heading
                                  org-next-visible-heading
                                  beginning-of-defun
-                                 end-of-defun))
+                                 end-of-defun
+                                 treesit-end-of-defun
+                                 treesit-beginning-of-defun
+                                 evgeni-hydra-goto-last-change/goto-last-change))
   :config
   (pulsar-global-mode))
