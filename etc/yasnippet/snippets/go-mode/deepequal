@@ -1,0 +1,7 @@
+# -*- mode: snippet -*-
+# key: deepequal
+# --
+
+if !reflect.DeepEqual(${1:got}, ${2:want}) {
+	t.Errorf("got %d, want %d", ${1}, ${2})
+}

@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# key: fmte
+# --
+
+fmt.Errorf("$0")

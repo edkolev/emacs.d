@@ -1,0 +1,7 @@
+# -*- mode: snippet -*-
+# key: func
+# --
+
+func (r Receiver) ${1:name}($2) $3 {
+  $0
+}

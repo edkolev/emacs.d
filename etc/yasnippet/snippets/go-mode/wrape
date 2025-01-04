@@ -1,0 +1,5 @@
+# -*- mode: snippet -*-
+# key: wrape
+# --
+
+fmt.Errorf("failed $0: %w", err)
