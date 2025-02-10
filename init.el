@@ -127,6 +127,9 @@
       (thing-at-point 'word))
     "")))
 
+(defun evgeni-childframes-available-p ()
+  (or (> emacs-major-version 31) (display-graphic-p)))
+
 ;; in modeline, show file path, relative to the project root
 (require 'subr-x)
 (defun evgeni-buffer-path (&optional path prj-path-face buffer-id-face)
@@ -198,22 +201,17 @@ Return nil if not in a project"
 (use-package dashboard
   :straight t
   :if (display-graphic-p)
-  :preface
-  (defun evgeni-dashboard-banner ()
-    (setq dashboard-banner-logo-title
-          (format "Started in %.2f seconds"
-                  (float-time (time-subtract after-init-time before-init-time)))))
-  :init
-  (add-hook 'after-init-hook 'dashboard-refresh-buffer)
-  (add-hook 'dashboard-mode-hook 'evgeni-dashboard-banner)
   :config
-  (setq dashboard-items '((projects . 5)
-                          (recents . 5)
-                          (bookmarks . 5)))
+  (setq dashboard-banner-logo-title
+        (format "Started in %.2f seconds"
+                (float-time (time-subtract after-init-time before-init-time))))
+  (setq dashboard-startupify-list (remove 'dashboard-insert-init-info dashboard-startupify-list))
+  (setq dashboard-items nil)
+  (setq dashboard-show-shortcuts nil)
+  (setq dashboard-center-content t)
   (setq dashboard-startup-banner 'logo)
   (setq dashboard-footer-messages '(""))
   (setq dashboard-projects-backend 'project-el)
-  (setq dashboard-set-init-info nil)
   (setq dashboard-projects-switch-function 'dired)
   (dashboard-setup-startup-hook))
 
@@ -256,8 +254,23 @@ Return nil if not in a project"
 (use-package tango-plus-theme :straight t :defer t)
 (use-package plan9-theme :straight t :defer t)
 (use-package tommyh-theme :straight t :defer t)
-(use-package modus-themes :straight t :defer t)
-(use-package ef-themes :straight t :defer t)
+(use-package modus-themes :straight t :defer t
+  :init
+  (setq  modus-themes-headings
+         '((1 . (variable-pitch 1.5))
+           (2 . (1.3))
+           (agenda-date . (1.3))
+           (agenda-structure . (variable-pitch light 1.8))
+           (t . (1.1)))))
+(use-package ef-themes :straight t :defer t
+  :init
+  (setq ef-themes-headings
+        (quote ((1 light variable-pitch 1.5)
+                (2 regular 1.3)
+                (3 1.1)
+                (agenda-date 1.3)
+                (agenda-structure variable-pitch light 1.8)
+                (t variable-pitch)))))
 (use-package paper-theme :straight t :defer t)
 (use-package hydandata-light-theme :straight t :defer t)
 (use-package color-theme-sanityinc-tomorrow :straight t :defer t)
@@ -281,7 +294,7 @@ Return nil if not in a project"
   :config
   ;; load theme
   (load-theme (if (display-graphic-p)
-                  'leuven ;; 'modus-operandi ;; 'leuven ;; 'doom-one-light ;; 'habamax ;; 'dichromacy ;; 'doom-one-light ;; 'twilight-bright ;; 'apropospriate-dark ;;'tango-dark ;; tango-plus flatui
+                  'ef-day ;; 'ef-summer ;; 'ef-tritanopia-light ;; 'leuven ;; 'modus-operandi ;; 'leuven ;; 'doom-one-light ;; 'habamax ;; 'dichromacy ;; 'doom-one-light ;; 'twilight-bright ;; 'apropospriate-dark ;;'tango-dark ;; tango-plus flatui
                 'ef-light ;; 'ef-cyprus ;; 'ef-tritanopia-light ;; 'ef-duo-light ;; 'ef-kassio ;; 'ef-summer ;; 'ef-duo-light ;; 'ef-tritanopia-light ;; 'ef-trio-light ;; 'ef-duo-light
                 )
               t)
@@ -348,8 +361,9 @@ If WHEN is specified, pass it like so `date -d WHEN'"
   ;; https://patorjk.com/software/taag/#p=display&f=Graffiti&t=Type%20Something%20
   (setq-default inhibit-startup-message t)
 
-  (setq initial-scratch-message
-        "
+  (unless (display-graphic-p)
+    (setq initial-scratch-message
+          "
    █████  ███▄ ▄███▓ ▄▄▄       ▄████▄    ██████
  ▓█   ▀ ▓██▒▀█▀ ██▒▒████▄    ▒██▀ ▀█  ▒██    ░
  ▒███   ▓██    ▓██░▒██  ▀█▄  ▒▓█    ▄ ░ ▓██▄▄
@@ -359,7 +373,7 @@ If WHEN is specified, pass it like so `date -d WHEN'"
   ░ ░  ░░  ░      ░  ▒   ▒▒ ░  ░  ▒   ░ ░▒  ░ ░
     ░   ░      ░     ░   ▒   ░        ░  ░  ░
     ░  ░       ░         ░  ░░ ░            ░
-"))
+")))
 
 ;; restore frame position - https://github.com/aaronjensen/restore-frame-position
 (when (display-graphic-p)
@@ -453,6 +467,10 @@ If WHEN is specified, pass it like so `date -d WHEN'"
                     evil-scroll-line-to-top
                     evil-scroll-line-to-bottom
                     evil-ex
+                    pixel-scroll-up
+                    pixel-scroll-down
+                    evgeni-scroll-up
+                    evgeni-scroll-down
                     recenter-top-bottom))
       (remove-hook 'pre-command-hook 'evgeni-nohighlight-hook 'local)
       (evil-ex-nohighlight)))
@@ -1266,6 +1284,7 @@ With prefix arg, find the previous file."
   (define-key magit-mode-map "E" 'vdiff-magit))
 
 (use-package org
+  :straight (:type built-in) ;; required for ox-hugo, owtherwise export to .md is broken https://github.com/kaushalmodi/ox-hugo/issues/740
   :commands evgeni-journal
   :after evil
   :init
@@ -1332,7 +1351,7 @@ With prefix arg, find the previous file."
                 (search-forward "#+TITLE" nil t))
         (save-excursion
           (goto-char (point-min))
-          (insert "#+TITLE: Journal for " (format-time-string "%A, %b %d %Y") "\n")
+          (insert "#+TITLE: Journal for " (format-time-string "%b %d %Y") "\n")
           (save-buffer)))))
 
   (defun evgeni-last-journal()
@@ -1553,7 +1572,6 @@ This only works with orderless and for the first component of the search."
                         (+ consult--tofu-char consult--tofu-range -1)))
         args))
     (advice-add #'orderless-regexp :filter-args #'fix-dollar)
-    (advice-add #'prescient-regexp-regexp :filter-args #'fix-dollar)
 
     ;; Optionally make narrowing help available in the minibuffer.
     ;; You may want to use `embark-prefix-help-command' or which-key instead.
@@ -1627,8 +1645,7 @@ This only works with orderless and for the first component of the search."
 
     ;; Emacs 28: Hide commands in M-x which do not work in the current mode.
     ;; Vertico commands are hidden in normal buffers.
-    (setq read-extended-command-predicate
-          #'command-completion-default-include-p))
+    (setq read-extended-command-predicate #'command-completion-default-include-p))
 
   (use-package corfu
     :straight t
@@ -1667,16 +1684,26 @@ This only works with orderless and for the first component of the search."
 
   (use-package corfu-terminal
     :straight t
-    :unless (display-graphic-p)
+    :unless (evgeni-childframes-available-p)
     :config
     (corfu-terminal-mode +1))
+
+  (use-package cape
+    :straight t
+    :after evil
+    :bind (:map evil-insert-state-map
+                ("C-x C-l" . cape-line)
+                ("C-x C-f" . cape-file)
+                ("C-x C-k" . cape-dict))
+    :init
+    ;; complete git commit words using dictionary
+    (defun evgeni-git-commit-setup-hook ()
+      (setq-local completion-at-point-functions `(cape-dict)))
+    (add-hook 'git-commit-setup-hook #'evgeni-git-commit-setup-hook))
 
   ;; A few more useful configurations...
   (use-package emacs
     :init
-    ;; TAB cycle if there are only few candidates
-    (setq completion-cycle-threshold 3)
-
     ;; Enable indentation+completion using the TAB key.
     ;; `completion-at-point' is often bound to M-TAB.
     (setq tab-always-indent 'complete)))
@@ -2150,7 +2177,6 @@ This only works with orderless and for the first component of the search."
 (use-package diff-hl
   :after evil
   :straight t
-  :defer 1.5
   :custom
   (diff-hl-margin-symbols-alist '((insert . "+") (delete . "-") (change . "|") (unknown . "?") (ignored . "i")))
   :config
@@ -2229,49 +2255,6 @@ This only works with orderless and for the first component of the search."
   (setq shell-pop-shell-type '("eshell" "*eshell*" (lambda () (eshell))))
   :config
   (setq shell-pop-full-span t))
-
-(use-package git-commit
-  :straight t
-  :disabled t
-  :defer t
-  :config
-
-  (use-package git-commit-insert-issue
-    :straight t
-    :config
-
-    (use-package gitlab
-      :straight t
-      :config
-      ;; load gitlab.el if any
-      (when (file-readable-p (concat user-emacs-directory "gitlab.el"))
-        (load-file (concat user-emacs-directory "gitlab.el"))))
-
-    (defun git-commit-insert-issue-gitlab-issues (&optional projectname username)
-      "Return a list of the opened issues on gitlab."
-      (or (gitlab--get-host)
-          (error "We can't find your gitlab host. Did you set gitlab-[host, username, password] ?"))
-      (when (s-blank? gitlab-token-id)
-        (gitlab-login))
-
-      ;; edkolev has assignee_id 15
-      (gitlab-list-project-issues (git-commit-insert-issue-project-id) 1 100 '((state . "opened") (assignee_id . 15))))
-
-    (evil-define-key 'insert git-commit-mode-map
-      (kbd "C-x C-x") 'evgeni-insert-ticket-number-from-git-branch
-      (kbd "C-x x") 'evgeni-insert-ticket-number-from-git-branch)
-
-    (defun evgeni-insert-ticket-number-from-git-branch ()
-      (interactive)
-      (let ((number-from-branch (or
-                                 (let ((str (shell-command-to-string "git rev-parse --abbrev-ref HEAD")))
-                                   (when (string-match "\\([0-9]+\\)" str)
-                                     (match-string-no-properties 0 str)))
-                                 (let ((str (completing-read "issue: " (git-commit-insert-issue-get-issues-github-or-gitlab-or-bitbucket-format))))
-                                   (when (string-match "\\([0-9]+\\)" str)
-                                     (match-string-no-properties 0 str))))))
-        (when number-from-branch
-          (insert number-from-branch))))))
 
 (use-package hydra
   :after evil
@@ -2613,9 +2596,17 @@ This only works with orderless and for the first component of the search."
                            (gofumpt . t)
                            (usePlaceholders . t))))))
 
+(use-package eldoc-box
+  :straight t
+  :if (evgeni-childframes-available-p)
+  :init
+  (with-eval-after-load 'eglot
+    (defhydra+ evgeni-eglot-hydra (:color blue)
+      ("k" eldoc-box-help-at-point "Doc buffer")))
+  :defer t)
 
 (use-package dape
-  :ensure t
+  :straight t
   :defer t
   :straight t)
 
@@ -2877,6 +2868,7 @@ Optionally add it with ALIAS."
     (evil-define-key 'normal go-ts-mode-map (kbd "] D") 'evgeni-go-ts-dump-alt)))
 
 (use-package olivetti
+  :unless (display-graphic-p)
   :straight t
   :config
   (defun evgeni-scratch-olivetti ()
