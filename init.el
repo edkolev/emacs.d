@@ -489,40 +489,14 @@ If WHEN is specified, pass it like so `date -d WHEN'"
     (advice-add f :after #'evgeni-add-nohighlight-hook))
 
   (evil-define-command evgeni-save-file ()
-    "Save file, unless there's a widget/button at point. Press it if there's one."
+    "Save file."
     :motion nil
     :move-point nil
     :repeat nil
     (interactive)
-    (let* ((field  (get-char-property (point) 'field))
-           (button (get-char-property (point) 'button))
-           (doc    (get-char-property (point) 'widget-doc))
-           (widget (or field button doc)))
-      (cond
-       ;; widget
-       ((and widget
-             (fboundp 'widget-type)
-             (fboundp 'widget-button-press)
-             (or (and (symbolp widget)
-                      (get widget 'widget-type))
-                 (and (consp widget)
-                      (get (widget-type widget) 'widget-type))))
-        (when (evil-operator-state-p)
-          (setq evil-inhibit-operator t))
-        (when (fboundp 'widget-button-press)
-          (widget-button-press (point))))
-       ;; button
-       ((and (fboundp 'button-at)
-             (fboundp 'push-button)
-             (button-at (point)))
-        (when (evil-operator-state-p)
-          (setq evil-inhibit-operator t))
-        (push-button))
-       ;; save-file
-       (t
-        (if (or buffer-file-name (buffer-base-buffer))
-            (call-interactively 'save-buffer)
-          (user-error "No file"))))))
+    (if (or buffer-file-name (buffer-base-buffer))
+        (call-interactively 'save-buffer)
+      (user-error "No file")))
 
   (defun evgeni-window-vsplit ()
     (interactive)
@@ -911,8 +885,6 @@ With prefix arg, find the previous file."
       (with-current-buffer buf
         (narrow-to-region start end))
       (switch-to-buffer buf)))
-
-  ;; (require 'evil-development)
 
   ;; expeirmental smooth scroll on C-d / C-u
   (when (display-graphic-p)
