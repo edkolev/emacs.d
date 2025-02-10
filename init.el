@@ -1146,12 +1146,6 @@ With prefix arg, find the previous file."
     (interactive)
     (magit-diff-unstaged nil (list (magit-file-relative-name))))
 
-  (use-package transient
-    :defer
-    :config
-    (setq transient-save-history nil
-          transient-show-popup 1))
-
   (defun evgeni-magit-file-checkout ()
     (interactive)
     (magit-file-checkout "HEAD" (magit-file-relative-name)))
@@ -1177,6 +1171,12 @@ With prefix arg, find the previous file."
   (define-key magit-diff-mode-map "e" nil) ;; no ediff
 
   (add-hook 'git-commit-mode-hook 'git-commit-turn-on-flyspell))
+
+(use-package transient
+  :defer
+  :config
+  (setq transient-save-history nil
+        transient-show-popup 1))
 
 (use-package magit-libgit
   :ensure
@@ -1359,13 +1359,14 @@ With prefix arg, find the previous file."
   (ex! "babellib" 'evgeni-babellib)
   (defun evgeni-babellib ()
     (interactive)
-    (org-babel-lob-ingest "~/org/snippets.org"))
+    (org-babel-lob-ingest "~/org/snippets.org")))
 
-  (use-package org-autolist
-    :straight t
-    :hook (org-mode . org-autolist-mode)
-    :config
-    (setq org-autolist-enable-delete nil)))
+(use-package org-autolist
+  :straight t
+  :after org
+  :hook (org-mode . org-autolist-mode)
+  :config
+  (setq org-autolist-enable-delete nil))
 
 (use-package ob-async
   :straight t
@@ -2720,13 +2721,14 @@ This only works with orderless and for the first component of the search."
   :custom
   (evil-undo-system 'undo-fu)
   :config
-  (global-undo-tree-mode -1)
+  (global-undo-tree-mode -1))
 
-  (use-package undo-fu-session
-    :straight t
-    :config
-    (setq undo-fu-session-incompatible-files '("/COMMIT_EDITMSG\\'" "/git-rebase-todo\\'"))
-    (global-undo-fu-session-mode)))
+(use-package undo-fu-session
+  :straight t
+  :after undo-fu
+  :config
+  (setq undo-fu-session-incompatible-files '("/COMMIT_EDITMSG\\'" "/git-rebase-todo\\'"))
+  (global-undo-fu-session-mode))
 
 (use-package gcmh
   :straight t
@@ -2775,20 +2777,21 @@ This only works with orderless and for the first component of the search."
 
 (use-package treesit
   :if (version<= "29" emacs-version)
+  :config)
+
+(use-package treesit-auto
+  :straight t
+  :after treesit
   :config
+  (setq treesit-auto-install 'prompt)
+  (global-treesit-auto-mode)
 
-  (use-package treesit-auto
-    :straight t
-    :config
-    (setq treesit-auto-install 'prompt)
-    (global-treesit-auto-mode)
+  ;; https://github.com/renzmann/treesit-auto/issues/32
 
-    ;; https://github.com/renzmann/treesit-auto/issues/32
-
-    (with-eval-after-load 'org
-      (add-to-list 'org-src-lang-modes '("json" . json-ts))
-      (add-to-list 'org-src-lang-modes '("go" . go-ts))
-      (add-to-list 'org-src-lang-modes '("bash" . bash-ts)))))
+  (with-eval-after-load 'org
+    (add-to-list 'org-src-lang-modes '("json" . json-ts))
+    (add-to-list 'org-src-lang-modes '("go" . go-ts))
+    (add-to-list 'org-src-lang-modes '("bash" . bash-ts))))
 
 (use-package go-ts-mode
   :if (version<= "29" emacs-version)
