@@ -912,144 +912,165 @@ With prefix arg, find the previous file."
         (narrow-to-region start end))
       (switch-to-buffer buf)))
 
-  (require 'evil-development)
+  ;; (require 'evil-development)
 
-  (use-package evil-collection
-    :straight t
-    :init
-    (setq evil-collection-outline-bind-tab-p nil
-          evil-collection-want-find-usages-bindings nil)
-    :config
-    (delete 'outline evil-collection-mode-list)
-    (delete 'eglot evil-collection-mode-list)
-    (delete 'markdown-mode evil-collection-mode-list)
-    (evil-collection-init))
-
-  (use-package evil-surround
-    :straight t
-    :commands
-    (evil-surround-edit
-     evil-Surround-edit
-     evil-surround-region
-     evil-Surround-region)
-    :init
-    (evil-define-key 'operator global-map "s" 'evil-surround-edit)
-    (evil-define-key 'operator global-map "S" 'evil-Surround-edit)
-    (evil-define-key 'visual global-map "S" 'evil-surround-region)
-    (evil-define-key 'visual global-map "gS" 'evil-Surround-region))
-
-  (use-package evil-lion
-    :straight t
-    :bind (:map evil-normal-state-map
-                ("g l " . evil-lion-left)
-                ("g L " . evil-lion-right)
-                :map evil-visual-state-map
-                ("g l " . evil-lion-left)
-                ("g L " . evil-lion-right)))
-
-  (use-package evil-commentary
-    :straight t
-    :bind (:map evil-normal-state-map
-                ("gc" . evil-commentary))
-    :config
-    (defun evil-commentary/ensure-in-comment-block (beg end forward)
-      (save-excursion
-        (beginning-of-line)
-        (if (not (or (looking-at-p (concat "^\s*" (regexp-quote comment-start)))
-                     (looking-at-p (concat "^\s*$"))))
-            (list beg end)
-          (let ((saved-beg (point))
-                (saved-end (point-at-eol)))
-            (catch 'bound
-              (when (<= saved-beg (point-min))
-                (throw 'bound (list saved-beg end)))
-              (when (>= saved-end (point-max))
-                (throw 'bound (list beg saved-end)))
-              (if forward
-                  (next-line)
-                (previous-line))
-              (apply #'evil-commentary/ensure-in-comment-block
-                     (if forward
-                         (list beg saved-end forward)
-                       (list saved-beg end forward))))))))
-
-    (defun evgeni-commentary-uncomment-adjacent ()
+  ;; expeirmental smooth scroll on C-d / C-u
+  (when (display-graphic-p)
+    (define-key evil-motion-state-map (kbd "C-y") 'pixel-scroll-down)
+    (define-key evil-motion-state-map (kbd "C-e") 'pixel-scroll-up)
+    (define-key evil-motion-state-map (kbd "C-d") 'evgeni-scroll-down)
+    (define-key evil-motion-state-map (kbd "C-u") 'evgeni-scroll-up)
+    (defun evgeni-scroll-down ()
       (interactive)
-      (when (and (eq evil-this-operator 'evil-commentary))
-        (setq evil-inhibit-operator t)
-        (let ((beg (evil-commentary/ensure-in-comment-block (point) (point) nil))
-              (end (evil-commentary/ensure-in-comment-block (point) (point) t)))
-          (evil-commentary (car beg) (cadr end)))))
-
-    (evil-define-key 'operator global-map
-      "u" '(menu-item
-            ""
-            nil
-            :filter (lambda (&optional _)
-                      (when (eq evil-this-operator 'evil-commentary)
-                        (evgeni-inhibit-operator #'evgeni-commentary-uncomment-adjacent))))))
-
-  (use-package evil-exchange
-    :straight t
-    :commands (evil-exchange evil-exchange-cancel)
-    :init
-    (defmacro evgeni-inhibit-operator (command)
-      "Return a command that inhibits evil operator code."
-      `(lambda ()
-         (interactive)
-         (setq evil-inhibit-operator t)
-         (call-interactively ,command)))
-
-    (evil-define-key 'operator global-map
-      "x" '(menu-item
-            ""
-            nil
-            :filter (lambda (&optional _)
-                      (when (eq evil-this-operator 'evil-change)
-                        (evgeni-inhibit-operator #'evil-exchange)))))
-
-    (evil-define-key 'operator global-map
-      "X" '(menu-item
-            ""
-            nil
-            :filter (lambda (&optional _)
-                      (when (eq evil-this-operator 'evil-change)
-                        (evgeni-inhibit-operator #'evil-exchange-cancel)))))
-
-    (evil-define-key 'visual global-map "X" 'evil-exchange))
-
-  (use-package evil-replace-with-register
-    :straight t
-    :bind (:map evil-normal-state-map
-                ("gr" . evil-replace-with-register)
-                :map evil-visual-state-map
-                ("gr" . evil-replace-with-register))
-    :config
-    (setq evil-replace-with-register-indent t))
-
-  (use-package evil-visualstar
-    :straight t
-    :bind (:map evil-visual-state-map
-                ("*" . evil-visualstar/begin-search-forward)
-                ("#" . evil-visualstar/begin-search-backward))
-    :config
-    (advice-add 'evil-visualstar/begin-search-forward :around #'evgeni-save-excursion-advice))
-
-  (use-package evil-indent-plus
-    :straight t
-    :defer t
-    :init
-    (define-key evil-inner-text-objects-map "i" 'evil-indent-plus-i-indent)
-    (define-key evil-outer-text-objects-map "i" 'evil-indent-plus-a-indent)
-    (define-key evil-inner-text-objects-map "I" 'evil-indent-plus-i-indent-up)
-    :config
-    ;; temprorary fix until this is addressed https://github.com/TheBB/evil-indent-plus/pull/4
-    (defun evil-indent-plus--linify (range)
-      (let ((nbeg (save-excursion (goto-char (cl-first range)) (point-at-bol)))
-            (nend (save-excursion (goto-char (cl-second range)) (+ (point-at-eol) (if (evil-visual-state-p) 0 1)))))
-        (evil-range nbeg nend 'line))))
+      (pixel-scroll-precision-interpolate (- (/ (window-body-height nil t) 2)) nil 1))
+    (defun evgeni-scroll-up ()
+      (interactive)
+      (pixel-scroll-precision-interpolate (/ (window-body-height nil t) 2) nil 1)))
 
   (message "Loading evil-mode...done (%.3fs)" (float-time (time-subtract (current-time) emacs-start-time))))
+
+(use-package evil-collection
+  :straight t
+  :after evil
+  :init
+  (setq evil-collection-outline-bind-tab-p nil
+        evil-collection-want-find-usages-bindings nil)
+  :config
+  (delete 'outline evil-collection-mode-list)
+  (delete 'eglot evil-collection-mode-list)
+  (delete 'markdown-mode evil-collection-mode-list)
+  (evil-collection-init))
+
+(use-package evil-surround
+  :straight t
+  :after evil
+  :commands
+  (evil-surround-edit
+   evil-Surround-edit
+   evil-surround-region
+   evil-Surround-region)
+  :init
+  (evil-define-key 'operator global-map "s" 'evil-surround-edit)
+  (evil-define-key 'operator global-map "S" 'evil-Surround-edit)
+  (evil-define-key 'visual global-map "S" 'evil-surround-region)
+  (evil-define-key 'visual global-map "gS" 'evil-Surround-region))
+
+(use-package evil-lion
+  :straight t
+  :after evil
+  :bind (:map evil-normal-state-map
+              ("g l " . evil-lion-left)
+              ("g L " . evil-lion-right)
+              :map evil-visual-state-map
+              ("g l " . evil-lion-left)
+              ("g L " . evil-lion-right)))
+
+(use-package evil-commentary
+  :straight t
+  :after evil
+  :bind (:map evil-normal-state-map
+              ("gc" . evil-commentary))
+  :config
+  (defun evil-commentary/ensure-in-comment-block (beg end forward)
+    (save-excursion
+      (beginning-of-line)
+      (if (not (or (looking-at-p (concat "^\s*" (regexp-quote comment-start)))
+                   (looking-at-p (concat "^\s*$"))))
+          (list beg end)
+        (let ((saved-beg (point))
+              (saved-end (point-at-eol)))
+          (catch 'bound
+            (when (<= saved-beg (point-min))
+              (throw 'bound (list saved-beg end)))
+            (when (>= saved-end (point-max))
+              (throw 'bound (list beg saved-end)))
+            (if forward
+                (next-line)
+              (previous-line))
+            (apply #'evil-commentary/ensure-in-comment-block
+                   (if forward
+                       (list beg saved-end forward)
+                     (list saved-beg end forward))))))))
+
+  (defun evgeni-commentary-uncomment-adjacent ()
+    (interactive)
+    (when (and (eq evil-this-operator 'evil-commentary))
+      (setq evil-inhibit-operator t)
+      (let ((beg (evil-commentary/ensure-in-comment-block (point) (point) nil))
+            (end (evil-commentary/ensure-in-comment-block (point) (point) t)))
+        (evil-commentary (car beg) (cadr end)))))
+
+  (evil-define-key 'operator global-map
+    "u" '(menu-item
+          ""
+          nil
+          :filter (lambda (&optional _)
+                    (when (eq evil-this-operator 'evil-commentary)
+                      (evgeni-inhibit-operator #'evgeni-commentary-uncomment-adjacent))))))
+
+(use-package evil-exchange
+  :straight t
+  :after evil
+  :commands (evil-exchange evil-exchange-cancel)
+  :init
+  (defmacro evgeni-inhibit-operator (command)
+    "Return a command that inhibits evil operator code."
+    `(lambda ()
+       (interactive)
+       (setq evil-inhibit-operator t)
+       (call-interactively ,command)))
+
+  (evil-define-key 'operator global-map
+    "x" '(menu-item
+          ""
+          nil
+          :filter (lambda (&optional _)
+                    (when (eq evil-this-operator 'evil-change)
+                      (evgeni-inhibit-operator #'evil-exchange)))))
+
+  (evil-define-key 'operator global-map
+    "X" '(menu-item
+          ""
+          nil
+          :filter (lambda (&optional _)
+                    (when (eq evil-this-operator 'evil-change)
+                      (evgeni-inhibit-operator #'evil-exchange-cancel)))))
+
+  (evil-define-key 'visual global-map "X" 'evil-exchange))
+
+(use-package evil-replace-with-register
+  :straight t
+  :after evil
+  :bind (:map evil-normal-state-map
+              ("gr" . evil-replace-with-register)
+              :map evil-visual-state-map
+              ("gr" . evil-replace-with-register))
+  :config
+  (setq evil-replace-with-register-indent t))
+
+(use-package evil-visualstar
+  :straight t
+  :after evil
+  :bind (:map evil-visual-state-map
+              ("*" . evil-visualstar/begin-search-forward)
+              ("#" . evil-visualstar/begin-search-backward))
+  :config
+  (advice-add 'evil-visualstar/begin-search-forward :around #'evgeni-save-excursion-advice))
+
+(use-package evil-indent-plus
+  :straight t
+  :after evil
+  :defer t
+  :init
+  (define-key evil-inner-text-objects-map "i" 'evil-indent-plus-i-indent)
+  (define-key evil-outer-text-objects-map "i" 'evil-indent-plus-a-indent)
+  (define-key evil-inner-text-objects-map "I" 'evil-indent-plus-i-indent-up)
+  :config
+  ;; temprorary fix until this is addressed https://github.com/TheBB/evil-indent-plus/pull/4
+  (defun evil-indent-plus--linify (range)
+    (let ((nbeg (save-excursion (goto-char (cl-first range)) (point-at-bol)))
+          (nend (save-excursion (goto-char (cl-second range)) (+ (point-at-eol) (if (evil-visual-state-p) 0 1)))))
+      (evil-range nbeg nend 'line))))
 
 (use-package dired
   :demand
