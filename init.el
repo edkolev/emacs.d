@@ -683,9 +683,6 @@ With prefix arg, find the previous file."
       (when (= orig-point (point))
         (move-beginning-of-line 1))))
 
-  ;; expand lines
-  (define-key evil-insert-state-map (kbd "C-x C-l") 'evil-complete-next-line)
-
   ;; completion
   ;; (define-key evil-insert-state-map (kbd "C-x C-x") 'completion-at-point)
   ;; (define-key evil-insert-state-map (kbd "C-k") 'completion-at-point)
@@ -2925,3 +2922,14 @@ Optionally add it with ALIAS."
                                  evgeni-hydra-goto-last-change/goto-last-change))
   :config
   (pulsar-global-mode))
+
+(use-package devdocs
+  :straight t
+  :defer t
+  :custom
+  (devdocs-window-select t))
+
+(use-package lua-mode
+  :straight t
+  :defer t)
+
