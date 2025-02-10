@@ -79,6 +79,7 @@
 (setq require-final-newline t)
 (setq ring-bell-function 'ignore)
 (setq visual-line-fringe-indicators '(left-arrow right-arrow))
+(setq tab-always-indent 'complete)
 
 ;; (setq initial-buffer-choice (lambda ()
 ;;                               (interactive)
@@ -1416,212 +1417,6 @@ With prefix arg, find the previous file."
                 ("C-c r" . vertico-repeat)
                 ("C-c R" . vertico-repeat-select)))
 
-  ;; Different scroll margin
-  ;; (setq vertico-scroll-margin 0)
-
-  ;; Show more candidates
-  ;; (setq vertico-count 20)
-
-  ;; Grow and shrink the Vertico minibuffer
-  ;; (setq vertico-resize t)
-
-  ;; Optionally enable cycling for `vertico-next' and `vertico-previous'.
-  ;; (setq vertico-cycle t)
-
-  ;; Optionally use the `orderless' completion style.
-  (use-package orderless
-    :straight t
-    :init
-    ;; Configure a custom style dispatcher (see the Consult wiki)
-    ;; (setq orderless-style-dispatchers '(+orderless-dispatch)
-    ;;       orderless-component-separator #'orderless-escapable-split-on-space)
-    (setq completion-styles '(orderless basic)
-          completion-category-defaults nil
-          completion-category-overrides '((file (styles partial-completion)))))
-
-  ;; Enable rich annotations using the Marginalia package
-  (use-package marginalia
-    :straight t
-    :init
-    (marginalia-mode))
-
-  (use-package consult
-    :straight t
-    :bind (
-           :map evil-motion-state-map
-           ("K" . evgeni-consult-ripgrep-current-word)
-           (", f" . consult-imenu)
-           (", *" . evgeni-consult-line)
-           :map evil-normal-state-map
-           ;; ("SPC" . consult-project-buffer)
-           (", f" . consult-imenu)
-           ("/" . consult-line)
-           ("g SPC" . consult-buffer)
-           ("g /" . evgeni-consult-ripgrep)
-           ("g P" . consult-yank-pop)
-           ;; ("M-g e" . consult-compile-error)
-           ;; ("M-g f" . consult-flymake)               ;; Alternative: consult-flycheck
-           ;; ("M-g g" . consult-goto-line)             ;; orig. goto-line
-           ;; ("M-g M-g" . consult-goto-line)           ;; orig. goto-line
-           ;; ("M-g o" . consult-outline)               ;; Alternative: consult-org-heading
-           ;; ("M-g m" . consult-mark)
-           ;; ("M-g k" . consult-global-mark)
-           ;; ("M-g i" . consult-imenu)
-           ;; ("M-g I" . consult-imenu-multi)
-           ;; ;; M-s bindings (search-map)
-           ;; ("M-s d" . consult-find)
-           ;; ("M-s D" . consult-locate)
-           ;; ("M-s g" . consult-grep)
-           ;; ("M-s G" . consult-git-grep)
-           ;; ("M-s r" . consult-ripgrep)
-           ;; ("M-s l" . consult-line)
-           ;; ("M-s L" . consult-line-multi)
-           ;; ("M-s k" . consult-keep-lines)
-           ;; ("M-s u" . consult-focus-lines)
-           ;; ;; Isearch integration
-           ;; ("M-s e" . consult-isearch-history)
-           ;; :map isearch-mode-map
-           ;; ("M-e" . consult-isearch-history)         ;; orig. isearch-edit-string
-           ;; ("M-s e" . consult-isearch-history)       ;; orig. isearch-edit-string
-           ;; ("M-s l" . consult-line)                  ;; needed by consult-line to detect isearch
-           ;; ("M-s L" . consult-line-multi)            ;; needed by consult-line to detect isearch
-           ;; Minibuffer history
-           ;; :map minibuffer-local-map
-           ;; ("M-s" . consult-history)
-           ;; orig. next-matching-history-element
-           ;; ("M-r" . consult-history)                 ;; orig. previous-matching-history-element
-           )
-
-    ;; Enable automatic preview at point in the *Completions* buffer. This is
-    ;; relevant when you use the default completion UI.
-    :hook (completion-list-mode . consult-preview-at-point-mode)
-
-    ;; The :init configuration is always executed (Not lazy)
-    :init
-
-    ;; Optionally configure the register formatting. This improves the register
-    ;; preview for `consult-register', `consult-register-load',
-    ;; `consult-register-store' and the Emacs built-ins.
-    (setq register-preview-delay 0.5
-          consult-line-start-from-top t
-          register-preview-function #'consult-register-format)
-
-    ;; Optionally tweak the register preview window.
-    ;; This adds thin lines, sorting and hides the mode line of the window.
-    (advice-add #'register-preview :override #'consult-register-window)
-
-    ;; Use Consult to select xref locations with preview
-    (setq xref-show-xrefs-function #'consult-xref
-          xref-show-definitions-function #'consult-xref)
-
-    :config
-    (defun evgeni-consult-ripgrep (&optional initial-input)
-      (interactive)
-      (if (eq major-mode 'dired-mode)
-          (consult-ripgrep default-directory initial-input)
-        (consult-ripgrep (project-root (project-current)) initial-input)))
-
-    (defun evgeni-consult-ripgrep-current-word ()
-      (interactive)
-      (evgeni-consult-ripgrep (evgeni-word-at-point-or-region)))
-
-    (defun evgeni-consult-line ()
-      (interactive)
-      (consult-line (evgeni-word-at-point-or-region)))
-
-    ;; evil n/N integration
-    (defun evgeni-consult-line-evil-history (&rest _)
-      "Add latest `consult-line' search pattern to the evil search history ring.
-This only works with orderless and for the first component of the search."
-      (when (and (bound-and-true-p evil-mode)
-                 (eq evil-search-module 'evil-search))
-        (let ((pattern (nth 1 (orderless-compile (car consult--line-history)))))
-          (add-to-history 'evil-ex-search-history pattern)
-          (setq evil-ex-search-pattern (list pattern t t))
-          (setq evil-ex-search-direction 'forward)
-          (when evil-ex-search-persistent-highlight
-            (evil-ex-search-activate-highlight evil-ex-search-pattern)))))
-    (advice-add #'consult-line :after #'evgeni-consult-line-evil-history)
-
-    ;; (delete 'consult--source-bookmark consult-buffer-sources)
-    (consult-customize
-     consult--source-bookmark
-     :hidden t)
-
-    ;; configure preview
-    (consult-customize
-     consult-theme :preview-key '(:debounce 0.2 any)
-     consult-buffer :require-match t
-     consult-ripgrep consult-git-grep consult-grep
-     consult-project-buffer consult-recent-file consult-xref
-     evgeni-consult-ripgrep consult-buffer
-     :preview-key nil)
-
-    ;; Optionally configure the narrowing key.
-    ;; Both < and C-+ work reasonably well.
-    (setq consult-narrow-key "<") ;; "C-+"
-
-    ;; https://github.com/minad/consult/wiki#orderless-style-dispatchers-ensure-that-the--regexp-works-with-consult-buffer
-    (defun fix-dollar (args)
-      (if (string-suffix-p "$" (car args))
-          (list (format "%s[%c-%c]*$"
-                        (substring (car args) 0 -1)
-                        consult--tofu-char
-                        (+ consult--tofu-char consult--tofu-range -1)))
-        args))
-    (advice-add #'orderless-regexp :filter-args #'fix-dollar)
-
-    ;; Optionally make narrowing help available in the minibuffer.
-    ;; You may want to use `embark-prefix-help-command' or which-key instead.
-    ;; (define-key consult-narrow-map (vconcat consult-narrow-key "?") #'consult-narrow-help)
-
-    ;; By default `consult-project-function' uses `project-root' from project.el.
-    ;; Optionally configure a different project root function.
-  ;;;; 1. project.el (the default)
-    ;; (setq consult-project-function #'consult--default-project--function)
-  ;;;; 2. vc.el (vc-root-dir)
-    ;; (setq consult-project-function (lambda (_) (vc-root-dir)))
-  ;;;; 3. locate-dominating-file
-    ;; (setq consult-project-function (lambda (_) (locate-dominating-file "." ".git")))
-  ;;;; 4. projectile.el (projectile-project-root)
-    ;; (autoload 'projectile-project-root "projectile")
-    ;; (setq consult-project-function (lambda (_) (projectile-project-root)))
-  ;;;; 5. No project support
-    ;; (setq consult-project-function nil)
-
-    (evil-define-key '(normal) org-mode-map
-      (kbd ", f") 'consult-org-heading))
-
-  (use-package embark
-    :straight t
-
-    :bind (
-           ("C-c e" . embark-act)
-           :map minibuffer-local-map
-           ("C-c o" . embark-export)
-           ("C-c e" . embark-act))
-    ;;  ("C-;" . embark-dwim)        ;; good alternative: M-.
-    ;;  ("C-h B" . embark-bindings)) ;; alternative for `describe-bindings'
-
-    :init
-
-    ;; Optionally replace the key help with a completing-read interface
-    (setq prefix-help-command #'embark-prefix-help-command)
-
-    :config
-
-    ;; Hide the mode line of the Embark live/completions buffers
-    (add-to-list 'display-buffer-alist
-                 '("\\`\\*Embark Collect \\(Live\\|Completions\\)\\*"
-                   nil
-                   (window-parameters (mode-line-format . none)))))
-
-  ;; Consult users will also want the embark-consult package.
-  (use-package embark-consult
-    :straight t ; only need to install it, embark loads it after consult if found
-    :hook
-    (embark-collect-mode . consult-preview-at-point-mode))
-
   ;; A few more useful configurations...
   (use-package emacs
     :init
@@ -1643,68 +1438,229 @@ This only works with orderless and for the first component of the search."
 
     ;; Emacs 28: Hide commands in M-x which do not work in the current mode.
     ;; Vertico commands are hidden in normal buffers.
-    (setq read-extended-command-predicate #'command-completion-default-include-p))
+    (setq read-extended-command-predicate #'command-completion-default-include-p)))
 
-  (use-package corfu
-    :straight t
-    :custom
-    ;; (corfu-cycle t)                ;; Enable cycling for `corfu-next/previous'
-    (corfu-auto t)                 ;; Enable auto completion
-    (corfu-auto-delay 0.3)                 ;; Enable auto completion
-    (corfu-separator ?\s)          ;; Orderless field separator
-    ;; (corfu-quit-at-boundary nil)   ;; Never quit at completion boundary
-    ;; (corfu-quit-no-match nil)      ;; Never quit, even if there is no match
-    ;; (corfu-preview-current nil)    ;; Disable current candidate preview
-    ;; (corfu-preselect 'prompt)      ;; Preselect the prompt
-    ;; (corfu-on-exact-match nil)     ;; Configure handling of exact matches
-    ;; (corfu-scroll-margin 5)        ;; Use scroll margin
+(use-package consult
+  :straight t
+  :after evil
+  :bind (
+         :map evil-motion-state-map
+         ("K" . evgeni-consult-ripgrep-current-word)
+         (", f" . consult-imenu)
+         (", *" . evgeni-consult-line)
+         :map evil-normal-state-map
+         ;; ("SPC" . consult-project-buffer)
+         (", f" . consult-imenu)
+         ("/" . consult-line)
+         ("g SPC" . consult-buffer)
+         ("g /" . evgeni-consult-ripgrep)
+         ("g P" . consult-yank-pop)
+         ;; ("M-g e" . consult-compile-error)
+         ;; ("M-g f" . consult-flymake)               ;; Alternative: consult-flycheck
+         ;; ("M-g g" . consult-goto-line)             ;; orig. goto-line
+         ;; ("M-g M-g" . consult-goto-line)           ;; orig. goto-line
+         ;; ("M-g o" . consult-outline)               ;; Alternative: consult-org-heading
+         ;; ("M-g m" . consult-mark)
+         ;; ("M-g k" . consult-global-mark)
+         ;; ("M-g i" . consult-imenu)
+         ;; ("M-g I" . consult-imenu-multi)
+         ;; ;; M-s bindings (search-map)
+         ;; ("M-s d" . consult-find)
+         ;; ("M-s D" . consult-locate)
+         ;; ("M-s g" . consult-grep)
+         ;; ("M-s G" . consult-git-grep)
+         ;; ("M-s r" . consult-ripgrep)
+         ;; ("M-s l" . consult-line)
+         ;; ("M-s L" . consult-line-multi)
+         ;; ("M-s k" . consult-keep-lines)
+         ;; ("M-s u" . consult-focus-lines)
+         ;; ;; Isearch integration
+         ;; ("M-s e" . consult-isearch-history)
+         ;; :map isearch-mode-map
+         ;; ("M-e" . consult-isearch-history)         ;; orig. isearch-edit-string
+         ;; ("M-s e" . consult-isearch-history)       ;; orig. isearch-edit-string
+         ;; ("M-s l" . consult-line)                  ;; needed by consult-line to detect isearch
+         ;; ("M-s L" . consult-line-multi)            ;; needed by consult-line to detect isearch
+         ;; Minibuffer history
+         ;; :map minibuffer-local-map
+         ;; ("M-s" . consult-history)
+         ;; orig. next-matching-history-element
+         ;; ("M-r" . consult-history)                 ;; orig. previous-matching-history-element
+         )
 
-    ;; Recommended: Enable Corfu globally.
-    ;; This is recommended since Dabbrev can be used globally (M-/).
-    ;; See also `corfu-excluded-modes'.
-    :bind
-    (:map corfu-map
-          ("TAB" . nil) ;; use TAB only for snippet expansion
-          ([tab] . nil))
-    :init
-    (global-corfu-mode)
-    ;; Transfer completion to the minibuffer
-    ;; https://github.com/minad/corfu?tab=readme-ov-file#transfer-completion-to-the-minibuffer
-    (defun corfu-move-to-minibuffer ()
-      (interactive)
-      (pcase completion-in-region--data
-        (`(,beg ,end ,table ,pred ,extras)
-         (let ((completion-extra-properties extras)
-               completion-cycle-threshold completion-cycling)
-           (consult-completion-in-region beg end table pred)))))
-    (keymap-set corfu-map "C-c m" #'corfu-move-to-minibuffer)
-    (add-to-list 'corfu-continue-commands #'corfu-move-to-minibuffer))
+  ;; Enable automatic preview at point in the *Completions* buffer. This is
+  ;; relevant when you use the default completion UI.
+  :hook (completion-list-mode . consult-preview-at-point-mode)
 
-  (use-package corfu-terminal
-    :straight t
-    :unless (evgeni-childframes-available-p)
-    :config
-    (corfu-terminal-mode +1))
+  ;; The :init configuration is always executed (Not lazy)
+  :init
 
-  (use-package cape
-    :straight t
-    :after evil
-    :bind (:map evil-insert-state-map
-                ("C-x C-l" . cape-line)
-                ("C-x C-f" . cape-file)
-                ("C-x C-k" . cape-dict))
-    :init
-    ;; complete git commit words using dictionary
-    (defun evgeni-git-commit-setup-hook ()
-      (setq-local completion-at-point-functions `(cape-dict)))
-    (add-hook 'git-commit-setup-hook #'evgeni-git-commit-setup-hook))
+  ;; Optionally configure the register formatting. This improves the register
+  ;; preview for `consult-register', `consult-register-load',
+  ;; `consult-register-store' and the Emacs built-ins.
+  (setq register-preview-delay 0.5
+        consult-line-start-from-top t
+        register-preview-function #'consult-register-format)
 
-  ;; A few more useful configurations...
-  (use-package emacs
-    :init
-    ;; Enable indentation+completion using the TAB key.
-    ;; `completion-at-point' is often bound to M-TAB.
-    (setq tab-always-indent 'complete)))
+  ;; Optionally tweak the register preview window.
+  ;; This adds thin lines, sorting and hides the mode line of the window.
+  (advice-add #'register-preview :override #'consult-register-window)
+
+  ;; Use Consult to select xref locations with preview
+  (setq xref-show-xrefs-function #'consult-xref
+        xref-show-definitions-function #'consult-xref)
+
+  :config
+  (defun evgeni-consult-ripgrep (&optional initial-input)
+    (interactive)
+    (if (eq major-mode 'dired-mode)
+        (consult-ripgrep default-directory initial-input)
+      (consult-ripgrep (project-root (project-current)) initial-input)))
+
+  (defun evgeni-consult-ripgrep-current-word ()
+    (interactive)
+    (evgeni-consult-ripgrep (evgeni-word-at-point-or-region)))
+
+  (defun evgeni-consult-line ()
+    (interactive)
+    (consult-line (evgeni-word-at-point-or-region)))
+
+  ;; evil n/N integration
+  (defun evgeni-consult-line-evil-history (&rest _)
+    "Add latest `consult-line' search pattern to the evil search history ring.
+This only works with orderless and for the first component of the search."
+    (when (and (bound-and-true-p evil-mode)
+               (eq evil-search-module 'evil-search))
+      (let ((pattern (nth 1 (orderless-compile (car consult--line-history)))))
+        (add-to-history 'evil-ex-search-history pattern)
+        (setq evil-ex-search-pattern (list pattern t t))
+        (setq evil-ex-search-direction 'forward)
+        (when evil-ex-search-persistent-highlight
+          (evil-ex-search-activate-highlight evil-ex-search-pattern)))))
+  (advice-add #'consult-line :after #'evgeni-consult-line-evil-history)
+
+  ;; (delete 'consult--source-bookmark consult-buffer-sources)
+  (consult-customize
+   consult--source-bookmark
+   :hidden t)
+
+  ;; configure preview
+  (consult-customize
+   consult-theme :preview-key '(:debounce 0.2 any)
+   consult-buffer :require-match t
+   consult-ripgrep consult-git-grep consult-grep
+   consult-project-buffer consult-recent-file consult-xref
+   evgeni-consult-ripgrep consult-buffer
+   :preview-key nil)
+
+  ;; Optionally configure the narrowing key.
+  ;; Both < and C-+ work reasonably well.
+  (setq consult-narrow-key "<") ;; "C-+"
+
+  ;; https://github.com/minad/consult/wiki#orderless-style-dispatchers-ensure-that-the--regexp-works-with-consult-buffer
+  (defun fix-dollar (args)
+    (if (string-suffix-p "$" (car args))
+        (list (format "%s[%c-%c]*$"
+                      (substring (car args) 0 -1)
+                      consult--tofu-char
+                      (+ consult--tofu-char consult--tofu-range -1)))
+      args))
+  (advice-add #'orderless-regexp :filter-args #'fix-dollar)
+
+  ;; Optionally make narrowing help available in the minibuffer.
+  ;; You may want to use `embark-prefix-help-command' or which-key instead.
+  ;; (define-key consult-narrow-map (vconcat consult-narrow-key "?") #'consult-narrow-help)
+
+  ;; By default `consult-project-function' uses `project-root' from project.el.
+  ;; Optionally configure a different project root function.
+  ;;;; 1. project.el (the default)
+  ;; (setq consult-project-function #'consult--default-project--function)
+  ;;;; 2. vc.el (vc-root-dir)
+  ;; (setq consult-project-function (lambda (_) (vc-root-dir)))
+  ;;;; 3. locate-dominating-file
+  ;; (setq consult-project-function (lambda (_) (locate-dominating-file "." ".git")))
+  ;;;; 4. projectile.el (projectile-project-root)
+  ;; (autoload 'projectile-project-root "projectile")
+  ;; (setq consult-project-function (lambda (_) (projectile-project-root)))
+  ;;;; 5. No project support
+  ;; (setq consult-project-function nil)
+
+  (evil-define-key '(normal) org-mode-map
+    (kbd ", f") 'consult-org-heading))
+
+(use-package corfu
+  :straight t
+  :custom
+  (corfu-auto t)
+  (corfu-auto-delay 0.3)
+  (corfu-separator ?\s)
+  :bind
+  (:map corfu-map
+        ("TAB" . nil) ;; use TAB only for snippet expansion
+        ([tab] . nil)
+        ("C-c m" . #'evgeni-corfu-move-to-minibuffer))
+  :init
+  (global-corfu-mode)
+  ;; Transfer completion to the minibuffer with "C-c m"
+  ;; https://github.com/minad/corfu?tab=readme-ov-file#transfer-completion-to-the-minibuffer
+  (defun evgeni-corfu-move-to-minibuffer ()
+    (interactive)
+    (pcase completion-in-region--data
+      (`(,beg ,end ,table ,pred ,extras)
+       (let ((completion-extra-properties extras)
+             completion-cycle-threshold completion-cycling)
+         (consult-completion-in-region beg end table pred)))))
+  (add-to-list 'corfu-continue-commands #'corfu-move-to-minibuffer))
+
+(use-package corfu-terminal
+  :straight t
+  :after corfu
+  :unless (evgeni-childframes-available-p)
+  :config
+  (corfu-terminal-mode +1))
+
+(use-package cape
+  :straight t
+  :after evil
+  :bind (:map evil-insert-state-map
+              ("C-x C-l" . cape-line)
+              ("C-x C-f" . cape-file)
+              ("C-x C-k" . cape-dict))
+  :init
+  ;; complete git commit words using dictionary
+  (defun evgeni-git-commit-setup-hook ()
+    (setq-local completion-at-point-functions `(cape-dict)))
+  (add-hook 'git-commit-setup-hook #'evgeni-git-commit-setup-hook))
+
+(use-package embark
+  :straight t
+  :bind (("C-c e" . embark-act)
+         :map minibuffer-local-map
+         ("C-c o" . embark-export)
+         ("C-c e" . embark-act))
+  :init
+  ;; Optionally replace the key help with a completing-read interface
+  (setq prefix-help-command #'embark-prefix-help-command))
+
+(use-package embark-consult
+  :straight t ; only need to install it, embark loads it after consult if found
+  :after embark
+  :hook
+  (embark-collect-mode . consult-preview-at-point-mode))
+
+(use-package orderless
+  :straight t
+  :after vertico
+  :init
+  (setq completion-styles '(orderless basic)
+        completion-category-defaults nil
+        completion-category-overrides '((file (styles partial-completion)))))
+
+(use-package marginalia
+  :straight t
+  :after vertico
+  :init
+  (marginalia-mode))
 
 (use-package winner
   :defer .5
