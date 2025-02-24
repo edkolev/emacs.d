@@ -2,6 +2,6 @@
 # key: func
 # --
 
-func ${1:(${2:$(or (ignore-errors(downcase (substring yas-text 0 1))) "r")} ${2:Receiver}) }${3:funcName}($0) {
+func ${1:(${2:$(or (ignore-errors(downcase (substring (string-trim-left yas-text "*") 0 1))) "r")} ${2:Receiver}) }${3:funcName}($0) {
   
 }

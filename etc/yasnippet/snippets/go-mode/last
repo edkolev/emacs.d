@@ -1,0 +1,6 @@
+# -*- mode: snippet -*-
+# key: last
+# name: pop tail element of slice
+# --
+
+${1:last}, ${2:slice} = ${2}[len(${2})-1], ${2}[:len(${2})-1]

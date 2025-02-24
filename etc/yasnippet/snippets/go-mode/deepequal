@@ -3,5 +3,5 @@
 # --
 
 if !reflect.DeepEqual(${1:got}, ${2:want}) {
-	t.Errorf("got %d, want %d", ${1}, ${2})
+	t.Errorf("got %v, want %v", ${1}, ${2})
 }

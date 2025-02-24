@@ -1,0 +1,6 @@
+# -*- mode: snippet -*-
+# key: head
+# name: pop head element of slice
+# --
+
+${1:head}, ${2:rest} = ${2}[0], ${2}[1:]

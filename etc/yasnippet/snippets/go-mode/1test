@@ -1,0 +1,10 @@
+# -*- mode: snippet -*-
+# key: 1test
+# name: test a function with reflect.DeepEqual()
+# --
+
+${2:got} := `(string-trim-left (treesit-defun-name (treesit-defun-at-point)) "Test_?")`(${1:args})
+${3:want} := ${4:nil}
+if !reflect.DeepEqual(${2}, ${3}) {
+	t.Errorf("got %v, want %v", ${2}, ${3})
+}
