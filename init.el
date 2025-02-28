@@ -2742,6 +2742,10 @@ This only works with orderless and for the first component of the search."
     (add-to-list 'org-src-lang-modes '("go" . go-ts))
     (add-to-list 'org-src-lang-modes '("bash" . bash-ts))))
 
+(use-package rust-ts-mode
+  :mode "\\.rs\\'"
+  :defer t)
+
 (use-package go-ts-mode
   :if (version<= "29" emacs-version)
   :mode "\\.go\\'"
