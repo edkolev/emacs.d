@@ -1550,16 +1550,6 @@ This only works with orderless and for the first component of the search."
   ;; Both < and C-+ work reasonably well.
   (setq consult-narrow-key "<") ;; "C-+"
 
-  ;; https://github.com/minad/consult/wiki#orderless-style-dispatchers-ensure-that-the--regexp-works-with-consult-buffer
-  (defun fix-dollar (args)
-    (if (string-suffix-p "$" (car args))
-        (list (format "%s[%c-%c]*$"
-                      (substring (car args) 0 -1)
-                      consult--tofu-char
-                      (+ consult--tofu-char consult--tofu-range -1)))
-      args))
-  (advice-add #'orderless-regexp :filter-args #'fix-dollar)
-
   ;; Optionally make narrowing help available in the minibuffer.
   ;; You may want to use `embark-prefix-help-command' or which-key instead.
   ;; (define-key consult-narrow-map (vconcat consult-narrow-key "?") #'consult-narrow-help)
@@ -1648,6 +1638,13 @@ This only works with orderless and for the first component of the search."
   (setq completion-styles '(orderless basic)
         completion-category-defaults nil
         completion-category-overrides '((file (styles partial-completion)))))
+
+  (require 'consult)
+  (defun fix-dollar (args)
+    (if (string-suffix-p "$" (car args))
+        (list (concat (substring (car args) 0 -1) consult--tofu-regexp "*$"))
+      args))
+  (advice-add #'orderless-regexp :filter-args #'fix-dollar))
 
 (use-package marginalia
   :straight t
