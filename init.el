@@ -217,24 +217,6 @@ Return nil if not in a project"
   (dashboard-setup-startup-hook))
 
 ;;; themes
-
-(defmacro theme! (thm &rest customizations)
-  (declare (indent 1))
-  `(advice-add 'load-theme :after (lambda (theme &optional no-confirm no-enable)
-                                   (when (eq theme ,thm)
-                                     (custom-theme-set-faces
-                                      ,thm
-                                      ,@customizations)))))
-
-(defmacro with-theme! (thm code)
-  (declare (indent 1))
-  `(progn
-     (when (memq ,thm custom-enabled-themes)
-       (progn ,code))
-     (advice-add 'load-theme :after (lambda (theme &optional no-confirm no-enable)
-                                      (when (eq theme ,thm)
-                                        ,code)))))
-
 (setq custom-safe-themes t)
 (use-package habamax-theme :straight t :defer t)
 (use-package one-themes :straight t :defer t)        ;; ok
@@ -275,12 +257,7 @@ Return nil if not in a project"
 (use-package paper-theme :straight t :defer t)
 (use-package hydandata-light-theme :straight t :defer t)
 (use-package color-theme-sanityinc-tomorrow :straight t :defer t)
-(use-package leuven-theme :defer t
-  :init
-  (theme! 'leuven
-    '(eshell-prompt ((t (:inherit 'font-lock-keyword-face))))
-    '(dired-ignored ((t (:inherit 'shadow :strike-through t))))))
-
+(use-package leuven-theme :defer t)
 (use-package white-sand-theme :straight t :defer t)
 (use-package silkworm-theme :straight t :defer t)
 (use-package oldlace-theme :straight t :defer t
