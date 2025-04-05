@@ -40,7 +40,13 @@
 
 ;; graphic settings
 (when (display-graphic-p)
-  (let ((font-name "Droid Sans Mono"))
+  ;; fonts:
+  ;; - "Hack" ;; S
+  ;; - "Azeret Mono" ;; S
+  ;; - "Droid Sans Mono" ;; A
+  ;; - more: https://www.codingfont.com/
+  (setq frame-title-format "") ;; no title
+  (let ((font-name "Azeret Mono"))
     (if (member font-name (font-family-list))
         (set-frame-font (font-spec :family font-name :size 14 :weight 'regular) nil t)
       (user-error "Error, font %s is not available" font-name)))
@@ -70,8 +76,7 @@
 (setq-default truncate-lines t)
 (setq blink-cursor-mode nil)
 (fset 'yes-or-no-p 'y-or-n-p)
-(setf initial-scratch-message ""
-      initial-major-mode 'emacs-lisp-mode)
+(setf initial-scratch-message "")
 (setq echo-keystrokes 0.02)
 (setq scroll-step 2)
 (setq-default major-mode 'text-mode)
@@ -80,10 +85,6 @@
 (setq ring-bell-function 'ignore)
 (setq visual-line-fringe-indicators '(left-arrow right-arrow))
 (setq tab-always-indent 'complete)
-
-;; (setq initial-buffer-choice (lambda ()
-;;                               (interactive)
-;;                               (get-buffer "*Messages*")))
 
 (defun display-startup-echo-area-message ()
   (message ""))
@@ -96,7 +97,6 @@
 
 (setq-default default-frame-alist '((ns-transparent-titlebar . t) (ns-appearance . dark) (vertical-scroll-bars)))
 (setq ns-use-proxy-icon nil)
-(setq frame-title-format "emacs")
 
 (global-set-key "\C-ch" help-map)
 
@@ -173,12 +173,13 @@ Return nil if not in a project"
     (package-refresh-contents))
   (package-install 'use-package))
 
-(if debug-on-error
-    (setq use-package-verbose t
-          use-package-expand-minimally nil
-          use-package-compute-statistics t)
-  (setq use-package-verbose nil
-        use-package-expand-minimally t))
+;; use "emacs --debug-init" for troubleshooting
+(when init-file-debug
+  (setq use-package-verbose t
+        use-package-expand-minimally nil
+        use-package-compute-statistics t
+        debug-on-error t))
+
 
 (use-package straight
   :config
