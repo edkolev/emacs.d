@@ -1935,12 +1935,12 @@ This only works with orderless and for the first component of the search."
   :init
   (add-hook 'haskell-mode-hook 'hindent-mode))
 
-(use-package smartparens
+(use-package puni
   :straight t
-  :commands sp-forward-slurp-sexp sp-forward-barf-sexp
+  :commands puni-slurp-forward puni-barf-forward
   :init
-  (define-key emacs-lisp-mode-map (kbd "C-c <") 'sp-forward-slurp-sexp)
-  (define-key emacs-lisp-mode-map (kbd "C-c >") 'sp-forward-barf-sexp))
+  (define-key emacs-lisp-mode-map (kbd "C-c <") 'puni-slurp-forward)
+  (define-key emacs-lisp-mode-map (kbd "C-c >") 'puni-barf-forward))
 
 (use-package paren
   :defer .5
