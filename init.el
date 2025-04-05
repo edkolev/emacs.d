@@ -1979,15 +1979,13 @@ This only works with orderless and for the first component of the search."
     "o" 'macrostep-expand
     "c" 'macrostep-collapse))
 
-(use-package yaml-mode
-  :straight t
-  :mode (("\\.yml$" . yaml-mode) ("\\.yab$" . yaml-mode) ("\\.yaml$" . yaml-mode))
+(use-package yaml-ts-mode
+  :straight (:type built-in)
+  :defer
   :config
-  (setq yaml-imenu-generic-expression
-        '((nil  "^[ ]\\{0,2\\}\\(:?[a-zA-Z_-]+\\):"          1)))
-  (modify-syntax-entry ?_ "w" yaml-mode-syntax-table)
-  (modify-syntax-entry ?- "w" yaml-mode-syntax-table)
-  (modify-syntax-entry ?$ "." yaml-mode-syntax-table))
+  (modify-syntax-entry ?_ "w" yaml-ts-mode--syntax-table)
+  (modify-syntax-entry ?- "w" yaml-ts-mode--syntax-table)
+  (modify-syntax-entry ?$ "." yaml-ts-mode--syntax-table))
 
 (use-package package-lint
   :straight t
@@ -2010,10 +2008,6 @@ This only works with orderless and for the first component of the search."
       (json-ts-mode)))
   :config
   (setq json-encoding-object-sort-predicate 'string<))
-
-(use-package rjsx-mode
-  :straight t
-  :mode ("\\.jsx\\'" . rjsx-mode))
 
 (use-package css-mode
   :defer t
@@ -2091,8 +2085,12 @@ This only works with orderless and for the first component of the search."
   (add-hook 'diff-mode-hook 'diff-auto-refine-mode))
 
 (use-package diff-hl
-  :after evil
   :straight t
+  :after evil
+  :defer 0.1
+  :bind (:map evil-normal-state-map
+              ("U s" . diff-hl-stage-current-hunk))
+  :demand
   :custom
   (diff-hl-margin-symbols-alist '((insert . "+") (delete . "-") (change . "|") (unknown . "?") (ignored . "i")))
   :config
@@ -2216,7 +2214,7 @@ This only works with orderless and for the first component of the search."
     ("r" (progn
            (display-line-numbers-mode +1)
            (setq display-line-numbers-type (if (eq display-line-numbers-type 'relative) t 'relative))
-           (display-line-numbers-mode +1)) "relative line numbers")))
+           ) "relative line numbers")))
 
 (use-package goto-chg
   :after evil
@@ -2470,19 +2468,22 @@ This only works with orderless and for the first component of the search."
 
   (beacon-mode))
 
+(use-package eldoc
+  :straight (:type built-in))
+
 (use-package eglot
   :straight t
-  :init
-  (add-hook 'python-mode-hook 'eglot-ensure)
-  (add-hook 'go-mode-hook 'evgeni-eglot-ensure-if-git-repo)
-  (add-hook 'go-ts-mode-hook 'evgeni-eglot-ensure-if-git-repo)
-  (defun evgeni-eglot-ensure-if-git-repo ()
-    (when (project-current)
-      (eglot-ensure)))
+  :hook
+  (python-mode . eglot-ensure)
+  (go-mode . eglot-ensure)
+  (go-ts-mode . eglot-ensure)
+  (rust-ts-mode . eglot-ensure)
+  (typescript-ts-mode . eglot-ensure)
   :custom
   (eglot-sync-connect 30)
-  ;; (eglot-events-buffer-size 0) ;; disable logs
+  (eglot-events-buffer-size 0) ;; disable logs
   (eglot-confirm-server-initiated-edits nil)
+  (eglot-code-action-indications '(eldoc-hint mode-line)) ;; remove 'margin because it causes UI glitches for Rust
   :config
   (setq eglot-stay-out-of '(imenu))
 
@@ -2490,31 +2491,36 @@ This only works with orderless and for the first component of the search."
   (fset #'jsonrpc--log-event #'ignore)
 
   (add-to-list 'eglot-ignored-server-capabilities ':documentHighlightProvider)
+  (add-to-list 'eglot-ignored-server-capabilities ':inlayHintProvider)
 
   (with-eval-after-load 'evil
-    (evil-define-minor-mode-key 'normal 'eglot--managed-mode
-      (kbd ", a") (defhydra evgeni-eglot-hydra (:color blue)
-                    ("a" eglot-code-actions "Code actions")
-                    ("r" eglot-rename "Rename")
-                    ("f" eglot-format "Format")
-                    ("d" eglot-find-declaration "Find declaration")
-                    ("i" eglot-find-implementation "Find implementation")
-                    ("D" eglot-find-typeDefinition "Find type definition")
-                    ("R" xref-find-references "Find references")
-                    ("k" eldoc-doc-buffer "Doc buffer")))
 
+    (defhydra evgeni-eglot-hydra (:color blue)
+      ("a" eglot-code-actions "Code actions")
+      ("r" eglot-rename "Rename")
+      ("f" eglot-format "Format")
+      ("o" eglot-code-action-organize-imports "Organize imports")
+      ("d" eglot-find-declaration "Find declaration")
+      ("i" eglot-find-implementation "Find implementation")
+      ("D" eglot-find-typeDefinition "Find type definition")
+      ("R" xref-find-references "Find references")
+      ("k" eldoc-doc-buffer "Doc buffer"))
+
+    (evil-define-minor-mode-key 'normal 'eglot--managed-mode
+      (kbd ", a") 'evgeni-eglot-hydra/body)
     (evil-define-minor-mode-key 'visual 'eglot--managed-mode
-      (kbd ", a") 'eglot-code-actions))
+      (kbd ", a") 'evgeni-eglot-hydra/body)
 
   (setq-default eglot-workspace-configuration
                 '((:gopls .
                           ((staticcheck . t)
                            (gofumpt . t)
-                           (usePlaceholders . t))))))
+                           (usePlaceholders . t)))))))
 
 (use-package eldoc-box
   :straight t
   :if (evgeni-childframes-available-p)
+  :disabled t ;; TODO, try this out again
   :init
   (with-eval-after-load 'eglot
     (defhydra+ evgeni-eglot-hydra (:color blue)
@@ -2557,6 +2563,7 @@ This only works with orderless and for the first component of the search."
 
 (use-package direnv
   :straight t
+  :defer 0.1
   :custom
   (direnv-show-paths-in-summary nil)
   :config
@@ -2604,6 +2611,7 @@ This only works with orderless and for the first component of the search."
 
 (use-package inhibit-mouse
   :straight t
+  :defer 5
   :config
   (inhibit-mouse-mode))
 
@@ -2662,6 +2670,7 @@ This only works with orderless and for the first component of the search."
   :straight t
   :after evil
   :if (getenv "TMUX") ;; run only in tmux
+  :defer 0.1
   :init
 
   (defun evgeni-tmux-split-window ()
@@ -2785,9 +2794,22 @@ Optionally add it with ALIAS."
 
   (define-key go-ts-mode-map (kbd "C-c i" )'evgeni-go-ts-mode--goto-imports)
 
+  (defun evgeni-go-ts-other-file ()
+    (interactive)
+    (let ((ff-other-file-alist '(("_test\\.go\\'" (".go"))
+                                 ("\\.go\\'" ("_test.go")))))
+      (call-interactively 'ff-find-other-file)))
+
   (with-eval-after-load 'evil
+    (evil-define-key 'normal go-ts-mode-map (kbd "] F") 'evgeni-go-ts-other-file)
+    (evil-define-key 'normal go-ts-mode-map (kbd "[ F") 'evgeni-go-ts-other-file)
     (evil-define-key 'normal go-ts-mode-map (kbd "] d") 'evgeni-go-ts-dump)
     (evil-define-key 'normal go-ts-mode-map (kbd "] D") 'evgeni-go-ts-dump-alt)))
+
+(use-package typescript-ts-mode
+  :mode (("\\.tsx\\'" . tsx-ts-mode)
+         ("\\.ts\\'" . typescript-ts-mode))
+  :defer t)
 
 (use-package olivetti
   :unless (display-graphic-p)
@@ -2805,7 +2827,7 @@ Optionally add it with ALIAS."
   :config
   (breadcrumb-mode))
 
-(use-package kkp
+(use-package kkp ;; kitty keyboard protocol
   :straight t
   :unless (display-graphic-p)
   :config
@@ -2844,7 +2866,8 @@ Optionally add it with ALIAS."
                                  end-of-defun
                                  treesit-end-of-defun
                                  treesit-beginning-of-defun
-                                 evgeni-hydra-goto-last-change/goto-last-change))
+                                 evgeni-hydra-goto-last-change/goto-last-change
+                                 recenter-top-bottom))
   :config
   (pulsar-global-mode))
 
