@@ -403,7 +403,6 @@ If WHEN is specified, pass it like so `date -d WHEN'"
 (use-package evil
   :straight t
   :demand t
-  ;; :load-path "~/dev/evil"
   :init
   (setq evil-want-integration t)
   (setq evil-want-keybinding nil)
@@ -1547,7 +1546,7 @@ This only works with orderless and for the first component of the search."
   :straight t
   :custom
   (corfu-auto t)
-  (corfu-auto-delay 0.3)
+  (corfu-auto-delay 0.15)
   (corfu-separator ?\s)
   :bind
   (:map corfu-map
@@ -1580,12 +1579,7 @@ This only works with orderless and for the first component of the search."
   :bind (:map evil-insert-state-map
               ("C-x C-l" . cape-line)
               ("C-x C-f" . cape-file)
-              ("C-x C-k" . cape-dict))
-  :init
-  ;; complete git commit words using dictionary
-  (defun evgeni-git-commit-setup-hook ()
-    (setq-local completion-at-point-functions `(cape-dict)))
-  (add-hook 'git-commit-setup-hook #'evgeni-git-commit-setup-hook))
+              ("C-x C-k" . cape-dict)))
 
 (use-package embark
   :straight t
@@ -1609,7 +1603,7 @@ This only works with orderless and for the first component of the search."
   :init
   (setq completion-styles '(orderless basic)
         completion-category-defaults nil
-        completion-category-overrides '((file (styles partial-completion)))))
+        completion-category-overrides '((file (styles partial-completion))))
 
   (require 'consult)
   (defun fix-dollar (args)
@@ -1648,20 +1642,18 @@ This only works with orderless and for the first component of the search."
 
 (use-package yasnippet
   :straight t
+  :defer 0.1
   :config
   (setq yas-verbosity 2)
-  (yas-global-mode)
-  (ex! "yas-new" 'yas-new-snippet))
+  (yas-global-mode))
 
 (use-package evil-expat
-  ;; :load-path "~/dev/evil-expat"
   :straight t
   :defer .5)
 
 (use-package evil-goggles
   :defer .5
   :straight t
-  ;; :load-path "~/dev/evil-goggles"
   :config
   (setq evil-goggles-pulse nil)
   (evil-goggles-use-diff-faces)
@@ -1769,6 +1761,7 @@ This only works with orderless and for the first component of the search."
   (defalias 'elisp-mode 'emacs-lisp-mode)
   :config
   (define-key emacs-lisp-mode-map (kbd "C-c C-c") #'eval-defun)
+  (define-key lisp-interaction-mode-map (kbd "C-c C-c") #'eval-defun)
 
   (defun evgeni-elisp-eval ()
     (interactive)
@@ -2133,7 +2126,6 @@ This only works with orderless and for the first component of the search."
 (use-package git-link
   :straight (git-link :branch "v0.8.0")
   :defer t
-  :load-path "~/dev/git-link"
   :init
   (ex! "gitlink" 'git-link)
   (ex! "gitlnk" 'git-link)
