@@ -1248,9 +1248,14 @@ With prefix arg, find the previous file."
   :straight (:type built-in) ;; required for ox-hugo, owtherwise export to .md is broken https://github.com/kaushalmodi/ox-hugo/issues/740
   :commands evgeni-journal
   :after evil
+  :bind (:map evil-normal-state-map
+              ("M-n" . org-metadown)
+              ("M-p" . org-metaup))
   :init
   (ex! "journal" 'evgeni-journal)
   :config
+  (setq org-time-stamp-custom-formats '("%Y-%m-%d" . "%Y-%m-%d %H:%M"))
+
   ;; text-mode-like parapgraph separation
   (add-hook 'org-mode-hook (lambda ()
                              (setq paragraph-start "\\|[ 	]*$"
@@ -1337,19 +1342,16 @@ With prefix arg, find the previous file."
   :disabled t
   :after org)
 
-(use-package org-make-toc
-  :straight t
-  :defer t)
-
-(use-package org-bullets
+(use-package org-modern
   :straight t
   :after org
+  :hook (org-mode . org-modern-mode)
   :config
-
-  (setq org-bullets-bullet-list
-        '("◉" "○" "•" "▸"))
-
-  (add-hook 'org-mode-hook (lambda () (org-bullets-mode 1))))
+  (setq org-modern-todo nil
+        org-modern-checkbox nil
+        org-modern-progress nil
+        org-modern-star 'replace)
+  (setq org-ellipsis "…"))
 
 (use-package xref
   :after evil
