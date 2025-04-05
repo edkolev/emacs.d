@@ -238,6 +238,7 @@ Return nil if not in a project"
 (use-package tango-plus-theme :straight t :defer t)
 (use-package plan9-theme :straight t :defer t)
 (use-package tommyh-theme :straight t :defer t)
+(use-package catppuccin-theme :straight (:local-repo "catppuccin-theme") :defer t :custom (catppuccin-flavor 'latte))
 (use-package modus-themes :straight t :defer t
   :init
   (setq  modus-themes-headings
@@ -261,11 +262,6 @@ Return nil if not in a project"
 (use-package leuven-theme :defer t)
 (use-package white-sand-theme :straight t :defer t)
 (use-package silkworm-theme :straight t :defer t)
-(use-package oldlace-theme :straight t :defer t
-  :config
-  (custom-theme-set-faces
-   'oldlace
-   `(region ((t (:foreground "#525252" :background "#d0c9bd"))))))
 
 (use-package emacs
   :custom
@@ -273,8 +269,8 @@ Return nil if not in a project"
   :config
   ;; load theme
   (load-theme (if (display-graphic-p)
-                  'ef-day ;; 'ef-summer ;; 'ef-tritanopia-light ;; 'leuven ;; 'modus-operandi ;; 'leuven ;; 'doom-one-light ;; 'habamax ;; 'dichromacy ;; 'doom-one-light ;; 'twilight-bright ;; 'apropospriate-dark ;;'tango-dark ;; tango-plus flatui
-                'ef-light ;; 'ef-cyprus ;; 'ef-tritanopia-light ;; 'ef-duo-light ;; 'ef-kassio ;; 'ef-summer ;; 'ef-duo-light ;; 'ef-tritanopia-light ;; 'ef-trio-light ;; 'ef-duo-light
+                  'ef-arbutus ;; 'ef-day ;; 'ef-summer ;; 'ef-tritanopia-light ;; 'leuven ;; 'modus-operandi ;; 'leuven ;; 'doom-one-light ;; 'habamax ;; 'dichromacy ;; 'doom-one-light ;; 'twilight-bright ;; 'apropospriate-dark ;;'tango-dark ;; tango-plus flatui
+                'ef-duo-light ;; 'ef-light ;; 'ef-cyprus ;; 'ef-tritanopia-light ;; 'ef-duo-light ;; 'ef-kassio ;; 'ef-summer ;; 'ef-duo-light ;; 'ef-tritanopia-light ;; 'ef-trio-light ;; 'ef-duo-light
                 )
               t)
   ;; bind command-option-H to hide other windows, just like every other OS X app
@@ -476,12 +472,6 @@ If WHEN is specified, pass it like so `date -d WHEN'"
         (call-interactively 'save-buffer)
       (user-error "No file")))
 
-  (defun evgeni-window-vsplit ()
-    (interactive)
-    (split-window-horizontally)
-    (windmove-right)
-    (balance-windows))
-
 
   (defun evgeni-find-next-file (&optional backward)
     "Find the next file (by name) in the current directory.
@@ -502,13 +492,11 @@ With prefix arg, find the previous file."
     (evgeni-find-next-file t))
 
   (define-key evil-normal-state-map (kbd "RET") 'evgeni-save-file)
-  (define-key evil-normal-state-map (kbd ", w") 'evgeni-window-vsplit)
+  (define-key evil-normal-state-map (kbd ", w") 'evil-window-vsplit)
   (define-key evil-normal-state-map (kbd "g C-g") 'count-words)
 
   (define-key evil-normal-state-map (kbd "] f") 'evgeni-find-next-file)
   (define-key evil-normal-state-map (kbd "[ f") 'evgeni-find-prev-file)
-  (define-key evil-normal-state-map (kbd "] F") 'find-file)
-  (define-key evil-normal-state-map (kbd "[ F") 'find-file)
 
   (define-key evil-normal-state-map (kbd "C-c C-b")'ido-switch-buffer)
 
@@ -620,7 +608,11 @@ With prefix arg, find the previous file."
 
   ;; insert state
   (define-key evil-insert-state-map (kbd "C-e") 'end-of-line)
-  (define-key evil-insert-state-map (kbd "C-u") (lambda () (interactive) (evil-delete (point-at-bol) (point))))
+  (define-key evil-insert-state-map (kbd "C-u") (lambda ()
+                                                  (interactive)
+                                                  (evil-delete (point-at-bol) (point))
+                                                  (evil-end-undo-step)
+                                                  (evil-start-undo-step)))
   (define-key evil-insert-state-map (kbd "C-x s") 'complete-symbol)
   (define-key evil-insert-state-map (kbd "C-a") 'evgeni-beginning-of-line)
   ;; (define-key evil-insert-state-map (kbd "TAB") 'evgeni-tab-or-complete-previous)
