@@ -233,7 +233,6 @@ Return nil if not in a project"
 (use-package flatui-theme :straight t :defer t)
 (use-package twilight-bright-theme :straight t :defer t)
 (use-package espresso-theme :straight t :defer t)
-(use-package apropospriate-theme :straight t :defer t)
 (use-package material-theme :straight t :defer t)
 (use-package tango-plus-theme :straight t :defer t)
 (use-package plan9-theme :straight t :defer t)
