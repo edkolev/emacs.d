@@ -1616,7 +1616,22 @@ This only works with orderless and for the first component of the search."
   :straight t
   :after vertico
   :init
-  (marginalia-mode))
+  (marginalia-mode)
+  :config
+  (defun evgeni-light-theme-p (theme)
+    "Return `t' if the given theme's description contains the text `light'"
+    (let ((case-fold-search t)
+          (theme (if (symbolp theme) (symbol-name theme) theme)))
+      (not (null (string-match-p "\\<light\\>" (marginalia-annotate-theme theme))))))
+
+  (defun evgeni-light-theme ()
+    "Switch to a light theme.
+
+A theme is considered light if its description, obtained with 'marginalia-annotate-theme,
+contains the text `light'."
+    (interactive)
+    (let ((consult-themes (seq-filter #'evgeni-light-theme-p (custom-available-themes))))
+      (call-interactively 'consult-theme))))
 
 (use-package winner
   :defer .5
