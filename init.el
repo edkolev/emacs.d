@@ -249,12 +249,13 @@ Return nil if not in a project"
 (use-package ef-themes :straight t :defer t
   :init
   (setq ef-themes-headings
-        (quote ((1 light variable-pitch 1.5)
+        (quote ((1 light 1.5)
                 (2 regular 1.3)
                 (3 1.1)
                 (agenda-date 1.3)
-                (agenda-structure variable-pitch light 1.8)
-                (t variable-pitch)))))
+                (agenda-structure light 1.8)
+                (t . t)))))
+
 (use-package paper-theme :straight t :defer t)
 (use-package hydandata-light-theme :straight t :defer t)
 (use-package color-theme-sanityinc-tomorrow :straight t :defer t)
