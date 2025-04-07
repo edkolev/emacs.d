@@ -1955,7 +1955,9 @@ contains the text `light'."
   :commands puni-slurp-forward puni-barf-forward
   :init
   (define-key emacs-lisp-mode-map (kbd "C-c <") 'puni-slurp-forward)
-  (define-key emacs-lisp-mode-map (kbd "C-c >") 'puni-barf-forward))
+  (define-key emacs-lisp-mode-map (kbd "C-c >") 'puni-barf-forward)
+  (define-key lisp-interaction-mode-map (kbd "C-c <") 'puni-slurp-forward)
+  (define-key lisp-interaction-mode-map (kbd "C-c >") 'puni-barf-forward))
 
 (use-package paren
   :defer .5
