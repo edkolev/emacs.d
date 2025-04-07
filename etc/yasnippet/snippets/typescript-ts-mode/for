@@ -1,0 +1,7 @@
+# -*- mode: snippet -*-
+# name: for
+# key: for
+# --
+for (var ${1:e} of ${2:iter}) {
+  $0
+}
