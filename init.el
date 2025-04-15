@@ -2166,7 +2166,7 @@ contains the text `light'."
   (add-hook 'prog-mode-hook 'electric-pair-local-mode))
 
 (use-package git-link
-  :straight (git-link :branch "v0.8.0")
+  :straight t
   :defer t
   :init
   (ex! "gitlink" 'git-link)
